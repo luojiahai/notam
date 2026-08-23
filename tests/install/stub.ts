@@ -6,16 +6,13 @@
  * installer's own `notam version` probe works and the test can assert on what
  * it printed.
  */
+import { PLATFORMS } from "../../scripts/entry-module.ts";
+
 export const STUB_REPO = "acme/notam";
 export const STUB_TAG = "v1.2.3";
 export const STUB_BINARY = "#!/bin/sh\necho 1.2.3\n";
 
-export const STUB_PLATFORMS = [
-	"darwin-arm64",
-	"darwin-x64",
-	"linux-x64",
-	"linux-arm64",
-];
+export const STUB_PLATFORMS: readonly string[] = PLATFORMS;
 
 export function sha256(text: string): string {
 	return new Bun.CryptoHasher("sha256").update(text).digest("hex");
