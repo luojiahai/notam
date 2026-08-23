@@ -1,7 +1,9 @@
 import { Hono } from "hono";
-import { AnalysisStateSchema } from "../../shared/api.ts";
+import { queueEntries } from "../../core/analysis/index.ts";
+import { AnalyseRequestSchema, AnalysisStateSchema } from "../../shared/api.ts";
 import { listEntries, listEntriesByState } from "../../store/entries.ts";
 import { countRulesByEntryIds, listRulesByEntry } from "../../store/rules.ts";
+import { readBody } from "../body.ts";
 import type { AppContext } from "../context.ts";
 import { requireEntry, requireRepo } from "../lookup.ts";
 import { matchesEntryQuery } from "../search.ts";
@@ -44,6 +46,31 @@ export function entryRoutes(ctx: AppContext): Hono {
 		return c.json(
 			toEntryDetail(entry, repo, listRulesByEntry(ctx.db, entry.id)),
 		);
+	});
+
+	/**
+	 * The single, multi-select, and row-menu re-analyse actions are all this one
+	 * call — spec section 6 says all three enqueue one job per entry, and giving
+	 * them one endpoint is what keeps that true.
+	 */
+	app.post("/entries/analyse", async (c) => {
+		const body = await readBody(c, AnalyseRequestSchema);
+		// Validate the whole selection before queueing any of it, so a typo in
+		// one id cannot leave half a batch running.
+		for (const id of body.entry_ids) requireEntry(ctx.db, id);
+		const result = queueEntries(ctx.db, ctx.queue, body.entry_ids);
+		ctx.analyseRunner.kick();
+		return c.json(result);
+	});
+
+	app.post("/repos/:repoId/analyse-unanalysed", (c) => {
+		const repo = requireRepo(ctx.db, c.req.param("repoId"));
+		const ids = listEntriesByState(ctx.db, repo.id, "unanalysed").map(
+			(entry) => entry.id,
+		);
+		const result = queueEntries(ctx.db, ctx.queue, ids);
+		ctx.analyseRunner.kick();
+		return c.json(result);
 	});
 
 	return app;

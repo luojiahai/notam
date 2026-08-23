@@ -4,6 +4,7 @@ import { errorResponse, HttpError } from "./errors.ts";
 import { entryRoutes } from "./routes/entries.ts";
 import { metaRoutes } from "./routes/meta.ts";
 import { repoRoutes } from "./routes/repos.ts";
+import { syncRoutes } from "./routes/sync.ts";
 
 /**
  * The whole HTTP surface. Routers are mounted under `/api`; later tasks add
@@ -17,6 +18,7 @@ export function createApp(ctx: AppContext): Hono {
 	api.route("/", metaRoutes(ctx));
 	api.route("/", repoRoutes(ctx));
 	api.route("/", entryRoutes(ctx));
+	api.route("/", syncRoutes(ctx));
 
 	const app = new Hono();
 	app.onError((error) => errorResponse(error));
