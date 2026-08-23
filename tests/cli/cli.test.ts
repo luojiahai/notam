@@ -221,15 +221,20 @@ describe("notam sync", () => {
 		);
 	});
 
-	test("reports a job with no registered handler as failed, without touching the network", async () => {
+	test("reports a sync job targeting an unknown repo as failed, without touching the network", async () => {
 		await writeConfig();
 		const dbPath = defaultDbPath(home);
 
-		// Seed a job of a kind runSync never registers a handler for — as if a
-		// later plan's "analyse" job were left behind. Opened and closed before
-		// runSync's own migrateDatabase call, so there is only ever one writer.
+		// Seed a "sync" job whose target_id names no repo in the store — as if a
+		// Ctrl-C'd run left a job behind for a repository since removed from
+		// config. This still drives the pool's real "sync" handler (the pool
+		// only claims kinds it has a handler for — see notam/jobs/pool.ts), so
+		// the failure comes from createSyncHandler's own unknown-repo guard,
+		// entirely offline, rather than from an unregistered job kind. Opened
+		// and closed before runSync's own migrateDatabase call, so there is only
+		// ever one writer.
 		const seeded = await migrateDatabase(dbPath);
-		new JobQueue(seeded.db).enqueue("analyse", "some-entry-id");
+		new JobQueue(seeded.db).enqueue("sync", "no-such-repo-id");
 		seeded.db.close();
 
 		const lines: string[] = [];
@@ -242,14 +247,18 @@ describe("notam sync", () => {
 			}),
 		);
 
-		// Exactly the pre-seeded "analyse" job fails; the real "sync" job (run
-		// against the fake, offline client) succeeds. main() maps failed > 0 to
-		// exit code 1, so this is the offline equivalent of that exit code.
+		// Exactly the pre-seeded job (unknown repo id) fails; the real "sync" job
+		// for the configured repo (run against the fake, offline client)
+		// succeeds. main() maps failed > 0 to exit code 1, so this is the
+		// offline equivalent of that exit code.
 		expect(failed).toBe(1);
 		expect(failed > 0 ? 1 : 0).toBe(1);
 		expect(
 			lines.some(
-				(line) => line.includes("FAILED") && line.includes("no handler"),
+				(line) =>
+					line.includes("FAILED") &&
+					line.includes("no-such-repo-id") &&
+					line.includes("unknown repo"),
 			),
 		).toBe(true);
 	});

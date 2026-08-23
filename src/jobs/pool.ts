@@ -38,9 +38,11 @@ export async function runPool(options: PoolOptions): Promise<PoolResult> {
 	const backoffMs = options.backoffMs ?? ((attempts: number) => 500 * attempts);
 	const result: PoolResult = { succeeded: 0, failed: 0, retried: 0 };
 
+	const kinds = Object.keys(handlers) as JobKind[];
+
 	async function worker(): Promise<void> {
 		while (!signal?.aborted) {
-			const job = queue.claim();
+			const job = queue.claim(kinds);
 			if (!job) return;
 			onEvent?.({ type: "started", job });
 

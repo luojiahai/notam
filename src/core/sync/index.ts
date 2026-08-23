@@ -4,14 +4,28 @@ import type { HostRow, RepoRow } from "../../shared/types.ts";
 import { upsertEntry } from "../../store/entries.ts";
 import { getHost } from "../../store/hosts.ts";
 import { getRepo, setWatermark } from "../../store/repos.ts";
-import { type GitHubClient, parseRepoName } from "../github/types.ts";
+// GitHubError is a type/class import, not a network call: syncRepo still
+// never calls fetch itself, which stays github/'s job alone. It is needed
+// here to discriminate "this PR is gone" (404/410, a counted skip) from every
+// other failure (still fatal) — see finding I5.
+import { GitHubError } from "../github/client.ts";
+import {
+	type GitHubClient,
+	type PRDetail,
+	parseRepoName,
+} from "../github/types.ts";
 import { matchesGlobs } from "./globs.ts";
 import { normalisePR } from "./normalise.ts";
 
 export type SyncEvent =
 	| { type: "page"; scanned: number }
 	| { type: "stored"; number: number; created: boolean }
-	| { type: "skipped"; number: number; reason: "globs" };
+	| { type: "skipped"; number: number; reason: "globs" }
+	| {
+			type: "missing";
+			number: number;
+			reason: "not-found" | "malformed-timestamp";
+	  };
 
 export type SyncSummary = {
 	repo: string;
@@ -20,6 +34,14 @@ export type SyncSummary = {
 	updated: number;
 	skipped: number;
 	truncated: number;
+	/**
+	 * PRs GitHub listed but could not be hydrated or dated: a 404/410 from
+	 * fetchPRDetail (deleted or made inaccessible between the list call and the
+	 * detail call) or a listing node with a timestamp that fails to parse.
+	 * Counted separately from `skipped` — that's the user's own glob filter
+	 * excluding a PR, a different fact from a PR having vanished. See finding I5.
+	 */
+	missing: number;
 	watermark: string | null;
 };
 
@@ -76,6 +98,7 @@ export async function syncRepo(
 		updated: 0,
 		skipped: 0,
 		truncated: 0,
+		missing: 0,
 		watermark: repo.sync_watermark,
 	};
 
@@ -91,7 +114,24 @@ export async function syncRepo(
 		deps.onProgress?.({ type: "page", scanned: page.nodes.length });
 
 		for (const node of page.nodes) {
-			const updatedAt = iso(node.updatedAt);
+			let updatedAt: string;
+			try {
+				updatedAt = iso(node.updatedAt);
+			} catch (error) {
+				// A malformed timestamp on one listing node must not wedge the
+				// whole repository (finding I5): skip just this node, counted, and
+				// keep walking the rest of the page.
+				if (error instanceof RangeError) {
+					summary.missing++;
+					deps.onProgress?.({
+						type: "missing",
+						number: node.number,
+						reason: "malformed-timestamp",
+					});
+					continue;
+				}
+				throw error;
+			}
 			if (updatedAt < floor) {
 				reachedFloor = true;
 				break;
@@ -99,7 +139,30 @@ export async function syncRepo(
 			summary.scanned++;
 			if (!highest || updatedAt > highest) highest = updatedAt;
 
-			const detail = await client.fetchPRDetail(ref, node.number);
+			let detail: PRDetail;
+			try {
+				detail = await client.fetchPRDetail(ref, node.number);
+			} catch (error) {
+				// A PR deleted or made inaccessible between the list call and the
+				// detail call is a counted skip, not a fatal error (finding I5) —
+				// otherwise this one PR would wedge the repository's sync forever,
+				// since the watermark never advances past a thrown job. Every other
+				// status, and every non-GitHubError, still throws: a bad token must
+				// not become a silent no-op.
+				if (
+					error instanceof GitHubError &&
+					(error.status === 404 || error.status === 410)
+				) {
+					summary.missing++;
+					deps.onProgress?.({
+						type: "missing",
+						number: node.number,
+						reason: "not-found",
+					});
+					continue;
+				}
+				throw error;
+			}
 			const entry = normalisePR(detail);
 
 			if (!matchesGlobs(entry.changed_paths, repo.path_globs)) {
@@ -123,7 +186,19 @@ export async function syncRepo(
 			});
 		}
 
-		if (reachedFloor || !page.hasNextPage || !page.endCursor) break;
+		if (reachedFloor) break;
+		if (!page.hasNextPage) break;
+		if (!page.endCursor) {
+			// The client already treats this identical malformed shape as fatal on
+			// the files side (github/client.ts). Silently breaking here would
+			// commit `highest` — page 1's maximum — as the watermark, and every
+			// PR the aborted pagination never reached would be skipped
+			// *permanently* on every future run (finding I4). Throwing leaves the
+			// watermark unmoved, exactly as the doc comment above promises.
+			throw new GitHubError(
+				`${repo.name}: pagination reported another page but returned no cursor`,
+			);
+		}
 		cursor = page.endCursor;
 	}
 

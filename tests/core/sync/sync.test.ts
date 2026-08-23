@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { beforeEach, describe, expect, test } from "bun:test";
+import { GitHubError } from "../../../src/core/github/client.ts";
 import type {
 	GitHubClient,
 	PRDetail,
@@ -362,5 +363,166 @@ describe("createSyncHandler", () => {
 		expect(summaries).toHaveLength(1);
 		expect(summaries[0]?.repo).toBe("acme/mono");
 		expect(summaries[0]?.created).toBe(1);
+	});
+});
+
+describe("syncRepo — malformed pagination (I4)", () => {
+	test("rejects when a page reports hasNextPage with no cursor, and leaves the watermark unmoved", async () => {
+		const repo = makeRepo();
+		const fixture = pr(3, "2026-08-20T00:00:00Z", ["a.ts"]);
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return { nodes: [fixture.ref], endCursor: null, hasNextPage: true };
+			},
+			async fetchPRDetail(_repo: RepoRef, number: number): Promise<PRDetail> {
+				if (number !== fixture.ref.number)
+					throw new Error(`unexpected fetchPRDetail(${number})`);
+				return fixture.detail;
+			},
+		};
+
+		await expect(syncRepo(deps(client), repo)).rejects.toThrow(GitHubError);
+		// The important assertion: an aborted, malformed page must not commit
+		// page 1's maximum as the watermark — that would permanently skip every
+		// PR the pagination never reached.
+		expect(getRepo(db, repo.id)?.sync_watermark).toBeNull();
+	});
+});
+
+describe("syncRepo — missing PRs (I5)", () => {
+	test("a 404 from fetchPRDetail counts as missing, completes the run, and advances the watermark past it", async () => {
+		const repo = makeRepo();
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return {
+					nodes: [
+						{
+							number: 5,
+							updatedAt: "2026-08-20T00:00:00Z",
+							mergedAt: "2026-08-20T00:00:00Z",
+						},
+					],
+					endCursor: null,
+					hasNextPage: false,
+				};
+			},
+			async fetchPRDetail(): Promise<PRDetail> {
+				throw new GitHubError("pull request not found", 404);
+			},
+		};
+
+		const summary = await syncRepo(deps(client), repo);
+		expect(summary.missing).toBe(1);
+		expect(summary.created).toBe(0);
+		expect(summary.updated).toBe(0);
+		// The whole point: the repo unwedges. A wedged repo would leave this null.
+		expect(summary.watermark).toBe("2026-08-20T00:00:00.000Z");
+		expect(getRepo(db, repo.id)?.sync_watermark).toBe(
+			"2026-08-20T00:00:00.000Z",
+		);
+	});
+
+	test("a 410 from fetchPRDetail counts as missing too", async () => {
+		const repo = makeRepo();
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return {
+					nodes: [
+						{
+							number: 5,
+							updatedAt: "2026-08-20T00:00:00Z",
+							mergedAt: "2026-08-20T00:00:00Z",
+						},
+					],
+					endCursor: null,
+					hasNextPage: false,
+				};
+			},
+			async fetchPRDetail(): Promise<PRDetail> {
+				throw new GitHubError("gone", 410);
+			},
+		};
+
+		const summary = await syncRepo(deps(client), repo);
+		expect(summary.missing).toBe(1);
+	});
+
+	test("a 500 from fetchPRDetail still throws rather than being swallowed as missing", async () => {
+		const repo = makeRepo();
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return {
+					nodes: [
+						{
+							number: 5,
+							updatedAt: "2026-08-20T00:00:00Z",
+							mergedAt: "2026-08-20T00:00:00Z",
+						},
+					],
+					endCursor: null,
+					hasNextPage: false,
+				};
+			},
+			async fetchPRDetail(): Promise<PRDetail> {
+				throw new GitHubError("server exploded", 500);
+			},
+		};
+
+		await expect(syncRepo(deps(client), repo)).rejects.toThrow(GitHubError);
+		expect(getRepo(db, repo.id)?.sync_watermark).toBeNull();
+	});
+
+	test("a non-GitHubError from fetchPRDetail still throws rather than being swallowed as missing", async () => {
+		const repo = makeRepo();
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return {
+					nodes: [
+						{
+							number: 5,
+							updatedAt: "2026-08-20T00:00:00Z",
+							mergedAt: "2026-08-20T00:00:00Z",
+						},
+					],
+					endCursor: null,
+					hasNextPage: false,
+				};
+			},
+			async fetchPRDetail(): Promise<PRDetail> {
+				throw new Error("a plain network hiccup");
+			},
+		};
+
+		await expect(syncRepo(deps(client), repo)).rejects.toThrow(
+			"a plain network hiccup",
+		);
+	});
+
+	test("a malformed listing timestamp skips just that node, counted, while the rest of the page still syncs", async () => {
+		const repo = makeRepo();
+		const good = pr(3, "2026-08-20T00:00:00Z", ["a.ts"]);
+		const client: GitHubClient = {
+			async listMergedPRs(): Promise<PRPage> {
+				return {
+					nodes: [
+						{ number: 99, updatedAt: "not-a-real-timestamp", mergedAt: null },
+						good.ref,
+					],
+					endCursor: null,
+					hasNextPage: false,
+				};
+			},
+			async fetchPRDetail(_repo: RepoRef, number: number): Promise<PRDetail> {
+				if (number !== good.ref.number)
+					throw new Error(`unexpected fetchPRDetail(${number})`);
+				return good.detail;
+			},
+		};
+
+		const summary = await syncRepo(deps(client), repo);
+		expect(summary.missing).toBe(1);
+		expect(summary.scanned).toBe(1);
+		expect(summary.created).toBe(1);
+		expect(getEntryByNumber(db, repo.id, good.ref.number)).not.toBeNull();
 	});
 });

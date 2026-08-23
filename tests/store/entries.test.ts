@@ -37,6 +37,7 @@ function entry(overrides: Partial<NormalisedEntry> = {}): NormalisedEntry {
 			updated_at: "2026-08-21T10:00:00.000Z",
 			changed_paths: ["services/payments/round.ts"],
 			paths_truncated: false,
+			conversation_truncated: false,
 			reviews: [],
 			review_threads: [],
 			comments: [],
@@ -83,6 +84,7 @@ describe("upsertEntry", () => {
 		upsertEntry(db, repoId, entry(), NOW);
 		const row = getEntryByNumber(db, repoId, 4821);
 		expect(row?.payload.labels).toEqual(["bug"]);
+		expect(row?.payload.conversation_truncated).toBe(false);
 		expect(row?.changed_paths).toEqual(["services/payments/round.ts"]);
 		expect(row?.paths_truncated).toBe(false);
 		expect(row?.kind).toBe("pr");
@@ -124,6 +126,22 @@ describe("upsertEntry", () => {
 	test("stores paths_truncated as a real boolean", () => {
 		upsertEntry(db, repoId, entry({ paths_truncated: true }), NOW);
 		expect(getEntryByNumber(db, repoId, 4821)?.paths_truncated).toBe(true);
+	});
+
+	test("round-trips a true conversation_truncated flag inside the payload", () => {
+		const withTruncation = entry();
+		upsertEntry(
+			db,
+			repoId,
+			{
+				...withTruncation,
+				payload: { ...withTruncation.payload, conversation_truncated: true },
+			},
+			NOW,
+		);
+		expect(
+			getEntryByNumber(db, repoId, 4821)?.payload.conversation_truncated,
+		).toBe(true);
 	});
 
 	test("keeps entries from different repos separate", () => {

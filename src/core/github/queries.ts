@@ -1,4 +1,15 @@
 /**
+ * Per-PR conversation caps. `normalisePR` sets `EntryPayload.conversation_truncated`
+ * when any of the corresponding arrays reaches its cap, so under-capture is
+ * recorded rather than silently dropped. Pagination past these caps is a later
+ * plan's job — see the truncation flag's own doc comment in shared/types.ts.
+ */
+export const MAX_REVIEWS = 50;
+export const MAX_COMMENTS = 50;
+export const MAX_REVIEW_THREADS = 50;
+export const MAX_LABELS = 20;
+
+/**
  * Listing is deliberately thin — number and timestamps only. Hydration is a
  * separate query per PR, which is what keeps a several-hundred-PR backfill near
  * one API call per PR instead of the four or five REST would need.
@@ -25,9 +36,9 @@ query PullRequestDetail($owner: String!, $name: String!, $number: Int!) {
 			updatedAt
 			mergedAt
 			author { login }
-			labels(first: 20) { nodes { name } }
-			reviews(first: 50) { nodes { author { login } state body url submittedAt } }
-			reviewThreads(first: 50) {
+			labels(first: ${MAX_LABELS}) { nodes { name } }
+			reviews(first: ${MAX_REVIEWS}) { nodes { author { login } state body url submittedAt } }
+			reviewThreads(first: ${MAX_REVIEW_THREADS}) {
 				nodes {
 					isResolved
 					path
@@ -35,7 +46,7 @@ query PullRequestDetail($owner: String!, $name: String!, $number: Int!) {
 					comments(first: 50) { nodes { author { login } body url createdAt } }
 				}
 			}
-			comments(first: 50) { nodes { author { login } body url createdAt } }
+			comments(first: ${MAX_COMMENTS}) { nodes { author { login } body url createdAt } }
 			files(first: 100) {
 				pageInfo { hasNextPage endCursor }
 				nodes { path }

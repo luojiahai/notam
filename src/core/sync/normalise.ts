@@ -4,6 +4,12 @@ import type {
 	PayloadReview,
 	PayloadThread,
 } from "../../shared/types.ts";
+import {
+	MAX_COMMENTS,
+	MAX_LABELS,
+	MAX_REVIEW_THREADS,
+	MAX_REVIEWS,
+} from "../github/queries.ts";
 import type {
 	PRDetail,
 	RawActor,
@@ -70,6 +76,18 @@ export function normalisePR(detail: PRDetail): NormalisedEntry {
 	const updated_at = isoOf(pr.updatedAt);
 	const merged_at = isoOrNull(pr.mergedAt);
 
+	const labels = nodesOf<{ name: string }>(pr.labels).map(
+		(label) => label.name,
+	);
+	const reviews = nodesOf<RawReview>(pr.reviews).map(review);
+	const review_threads = nodesOf<RawThread>(pr.reviewThreads).map(thread);
+	const comments = nodesOf<RawComment>(pr.comments).map(comment);
+	const conversation_truncated =
+		reviews.length >= MAX_REVIEWS ||
+		comments.length >= MAX_COMMENTS ||
+		review_threads.length >= MAX_REVIEW_THREADS ||
+		labels.length >= MAX_LABELS;
+
 	return {
 		number: pr.number,
 		title: pr.title,
@@ -86,14 +104,15 @@ export function normalisePR(detail: PRDetail): NormalisedEntry {
 			body: pr.body ?? "",
 			url: pr.url,
 			author,
-			labels: nodesOf<{ name: string }>(pr.labels).map((label) => label.name),
+			labels,
 			merged_at,
 			updated_at,
 			changed_paths: detail.changedPaths,
 			paths_truncated: detail.pathsTruncated,
-			reviews: nodesOf<RawReview>(pr.reviews).map(review),
-			review_threads: nodesOf<RawThread>(pr.reviewThreads).map(thread),
-			comments: nodesOf<RawComment>(pr.comments).map(comment),
+			conversation_truncated,
+			reviews,
+			review_threads,
+			comments,
 		},
 	};
 }

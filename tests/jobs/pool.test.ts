@@ -167,11 +167,27 @@ describe("runPool", () => {
 		expect(queue.get(queue.list("failed")[0]?.id ?? "")?.attempts).toBe(2);
 	});
 
-	test("fails a job whose kind has no handler instead of hanging", async () => {
+	test("never claims a job whose kind has no registered handler, leaving it queued", async () => {
 		queue.enqueue("promote", "p1");
 		const result = await runPool({ queue, concurrency: 1, handlers: {} });
-		expect(result.failed).toBe(1);
-		expect(queue.list("failed")[0]?.error).toContain("no handler");
+		expect(result).toEqual({ succeeded: 0, failed: 0, retried: 0 });
+		expect(queue.count("queued")).toBe(1);
+		expect(queue.list("queued")[0]?.target_id).toBe("p1");
+	});
+
+	test("a pool with only a sync handler leaves a queued analyse job untouched", async () => {
+		queue.enqueue("analyse", "e1");
+		queue.enqueue("sync", "r1");
+		const result = await runPool({
+			queue,
+			concurrency: 1,
+			handlers: { sync: async () => {} },
+		});
+		expect(result).toEqual({ succeeded: 1, failed: 0, retried: 0 });
+		const remaining = queue.list("queued");
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0]?.kind).toBe("analyse");
+		expect(remaining[0]?.target_id).toBe("e1");
 	});
 
 	test("emits an event per transition", async () => {

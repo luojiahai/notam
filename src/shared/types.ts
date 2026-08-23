@@ -65,6 +65,14 @@ export type EntryPayload = {
 	updated_at: string;
 	changed_paths: string[];
 	paths_truncated: boolean;
+	/**
+	 * True when `reviews`, `review_threads`, `comments`, or `labels` hit its
+	 * GraphQL page cap (see the MAX_* constants in core/github/queries.ts) and
+	 * so may be missing conversation GitHub actually has. Real pagination past
+	 * the caps is a later plan's job; this flag exists so a row synced before
+	 * that plan lands is never mistaken for a complete one — see finding I3.
+	 */
+	conversation_truncated: boolean;
 	reviews: PayloadReview[];
 	review_threads: PayloadThread[];
 	comments: PayloadComment[];

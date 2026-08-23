@@ -1,4 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import {
+	MAX_COMMENTS,
+	MAX_LABELS,
+	MAX_REVIEW_THREADS,
+	MAX_REVIEWS,
+} from "../../../src/core/github/queries.ts";
 import type {
 	PRDetail,
 	RawPullRequest,
@@ -173,5 +179,70 @@ describe("normalisePR", () => {
 	test("produces a payload that survives a JSON round trip unchanged", () => {
 		const { payload } = normalisePR(detail());
 		expect(JSON.parse(JSON.stringify(payload))).toEqual(payload);
+	});
+
+	describe("conversation_truncated", () => {
+		test("is false when every conversation array is below its cap", () => {
+			const { payload } = normalisePR(detail());
+			expect(payload.reviews.length).toBeLessThan(MAX_REVIEWS);
+			expect(payload.comments.length).toBeLessThan(MAX_COMMENTS);
+			expect(payload.review_threads.length).toBeLessThan(MAX_REVIEW_THREADS);
+			expect(payload.labels.length).toBeLessThan(MAX_LABELS);
+			expect(payload.conversation_truncated).toBe(false);
+		});
+
+		test("is true when reviews reach their cap", () => {
+			const reviews = Array.from({ length: MAX_REVIEWS }, (_, i) => ({
+				author: { login: "kim" },
+				state: "APPROVED",
+				body: `review ${i}`,
+				url: `https://github.com/acme/mono/pull/4821#pullrequestreview-${i}`,
+				submittedAt: "2026-08-19T09:00:00Z",
+			}));
+			const { payload } = normalisePR(
+				detail({ pullRequest: pullRequest({ reviews: { nodes: reviews } }) }),
+			);
+			expect(payload.conversation_truncated).toBe(true);
+		});
+
+		test("is true when comments reach their cap", () => {
+			const comments = Array.from({ length: MAX_COMMENTS }, (_, i) => ({
+				author: { login: "dana" },
+				body: `comment ${i}`,
+				url: `https://github.com/acme/mono/pull/4821#issuecomment-${i}`,
+				createdAt: "2026-08-19T10:00:00Z",
+			}));
+			const { payload } = normalisePR(
+				detail({
+					pullRequest: pullRequest({ comments: { nodes: comments } }),
+				}),
+			);
+			expect(payload.conversation_truncated).toBe(true);
+		});
+
+		test("is true when review threads reach their cap", () => {
+			const threads = Array.from({ length: MAX_REVIEW_THREADS }, (_, i) => ({
+				isResolved: false,
+				path: `a${i}.ts`,
+				line: i,
+				comments: { nodes: [] },
+			}));
+			const { payload } = normalisePR(
+				detail({
+					pullRequest: pullRequest({ reviewThreads: { nodes: threads } }),
+				}),
+			);
+			expect(payload.conversation_truncated).toBe(true);
+		});
+
+		test("is true when labels reach their cap", () => {
+			const labels = Array.from({ length: MAX_LABELS }, (_, i) => ({
+				name: `label-${i}`,
+			}));
+			const { payload } = normalisePR(
+				detail({ pullRequest: pullRequest({ labels: { nodes: labels } }) }),
+			);
+			expect(payload.conversation_truncated).toBe(true);
+		});
 	});
 });

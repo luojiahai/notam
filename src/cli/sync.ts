@@ -87,6 +87,7 @@ export async function runSync(options: SyncOptions): Promise<number> {
 					summaries.push(summary);
 					log(
 						`${summary.repo}: ${summary.created} new, ${summary.updated} updated, ${summary.skipped} skipped` +
+							(summary.missing > 0 ? `, ${summary.missing} missing` : "") +
 							(summary.truncated > 0
 								? `, ${summary.truncated} with a truncated file list`
 								: ""),
