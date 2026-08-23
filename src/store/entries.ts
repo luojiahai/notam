@@ -132,3 +132,73 @@ export function countEntries(db: Database, repoId: string): number {
 		.get(repoId);
 	return row?.c ?? 0;
 }
+
+const ANALYSIS_STATES: AnalysisState[] = [
+	"unanalysed",
+	"queued",
+	"running",
+	"analysed",
+	"failed",
+];
+
+/**
+ * `analysed_at` and `last_error` are written only when the caller names them.
+ * Writing both unconditionally would erase "last analysed at" every time an
+ * entry is re-queued, which the entries table is the UI's only source for.
+ * The column names come from this file's own allowlist, never from a caller.
+ */
+export function setAnalysisState(
+	db: Database,
+	entryId: string,
+	state: AnalysisState,
+	patch: { analysedAt?: string | null; error?: string | null } = {},
+): boolean {
+	const assignments = ["analysis_state = $state"];
+	const params: Record<string, string | null> = {
+		$state: state,
+		$id: entryId,
+	};
+	if ("analysedAt" in patch) {
+		assignments.push("analysed_at = $analysed_at");
+		params.$analysed_at = patch.analysedAt ?? null;
+	}
+	if ("error" in patch) {
+		assignments.push("last_error = $error");
+		params.$error = patch.error ?? null;
+	}
+	return (
+		db
+			.query(`UPDATE entries SET ${assignments.join(", ")} WHERE id = $id`)
+			.run(params).changes > 0
+	);
+}
+
+export function listEntriesByState(
+	db: Database,
+	repoId: string,
+	state: AnalysisState,
+): EntryRow[] {
+	return db
+		.query<RawEntry, [string, string]>(
+			"SELECT * FROM entries WHERE repo_id = ? AND analysis_state = ? ORDER BY updated_at DESC, number DESC",
+		)
+		.all(repoId, state)
+		.map(hydrate);
+}
+
+/** Zero-filled, so the UI's filter chips can render a count for every state. */
+export function countEntriesByState(
+	db: Database,
+	repoId: string,
+): Record<AnalysisState, number> {
+	const counts = Object.fromEntries(
+		ANALYSIS_STATES.map((state) => [state, 0]),
+	) as Record<AnalysisState, number>;
+	const rows = db
+		.query<{ analysis_state: string; c: number }, [string]>(
+			"SELECT analysis_state, COUNT(*) AS c FROM entries WHERE repo_id = ? GROUP BY analysis_state",
+		)
+		.all(repoId);
+	for (const row of rows) counts[row.analysis_state as AnalysisState] = row.c;
+	return counts;
+}

@@ -4,8 +4,11 @@ import type { NormalisedEntry } from "../../src/shared/types.ts";
 import { openDatabase } from "../../src/store/db.ts";
 import {
 	countEntries,
+	countEntriesByState,
 	getEntryByNumber,
 	listEntries,
+	listEntriesByState,
+	setAnalysisState,
 	upsertEntry,
 } from "../../src/store/entries.ts";
 import { upsertHost } from "../../src/store/hosts.ts";
@@ -202,5 +205,63 @@ describe("setWatermark", () => {
 			.get(repoId);
 		expect(row?.sync_watermark).toBe("2026-08-21T10:00:00.000Z");
 		expect(row?.window_days).toBe(90);
+	});
+});
+
+describe("analysis state", () => {
+	test("setAnalysisState writes the state and only the fields it is given", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+
+		expect(setAnalysisState(db, id, "queued", { error: null })).toBe(true);
+		expect(getEntryByNumber(db, repoId, 4821)?.analysis_state).toBe("queued");
+
+		setAnalysisState(db, id, "analysed", {
+			analysedAt: "2026-08-24T00:00:00.000Z",
+			error: null,
+		});
+		let row = getEntryByNumber(db, repoId, 4821);
+		expect(row?.analysis_state).toBe("analysed");
+		expect(row?.analysed_at).toBe("2026-08-24T00:00:00.000Z");
+
+		// Re-queueing must not erase when it was last analysed: the UI shows it.
+		setAnalysisState(db, id, "queued", { error: null });
+		row = getEntryByNumber(db, repoId, 4821);
+		expect(row?.analysed_at).toBe("2026-08-24T00:00:00.000Z");
+	});
+
+	test("setAnalysisState stores a failure message and clears it on the next run", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "failed", { error: "claude exited 1" });
+		expect(getEntryByNumber(db, repoId, 4821)?.last_error).toBe(
+			"claude exited 1",
+		);
+		setAnalysisState(db, id, "running", { error: null });
+		expect(getEntryByNumber(db, repoId, 4821)?.last_error).toBeNull();
+	});
+
+	test("setAnalysisState reports false for an unknown id", () => {
+		expect(setAnalysisState(db, "e_nope", "failed", { error: "x" })).toBe(
+			false,
+		);
+	});
+
+	test("listEntriesByState and countEntriesByState partition the repo", () => {
+		const first = upsertEntry(db, repoId, entry({ number: 1 }), NOW).id;
+		upsertEntry(db, repoId, entry({ number: 2 }), NOW);
+		setAnalysisState(db, first, "failed", { error: "boom" });
+
+		expect(
+			listEntriesByState(db, repoId, "failed").map((e) => e.number),
+		).toEqual([1]);
+		expect(
+			listEntriesByState(db, repoId, "unanalysed").map((e) => e.number),
+		).toEqual([2]);
+		expect(countEntriesByState(db, repoId)).toEqual({
+			unanalysed: 1,
+			queued: 0,
+			running: 0,
+			analysed: 0,
+			failed: 1,
+		});
 	});
 });
