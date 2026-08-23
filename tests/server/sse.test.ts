@@ -3,18 +3,9 @@ import { EventBus } from "../../src/server/events.ts";
 import { sseResponse } from "../../src/server/sse.ts";
 import { testContext } from "./helpers.ts";
 
-/**
- * Reads exactly one `data:` frame off the stream.
- *
- * Typed against `node:stream/web`'s reader rather than the bare global:
- * with `lib: ["ESNext"]` (no `"DOM"`) bun-types' global `ReadableStream`
- * itself resolves to `node:stream/web`'s, so `.getReader()` returns that
- * module's reader — which the bare global `ReadableStreamDefaultReader`
- * identifier (bun-types' own, wider, DOM-shaped interface) does not
- * structurally match. Runtime behaviour is identical either way.
- */
+/** Reads exactly one `data:` frame off the stream. */
 async function readFrame(
-	reader: import("node:stream/web").ReadableStreamDefaultReader<Uint8Array>,
+	reader: ReadableStreamDefaultReader<Uint8Array>,
 ): Promise<string> {
 	const { value, done } = await reader.read();
 	if (done || !value) throw new Error("the stream ended early");
