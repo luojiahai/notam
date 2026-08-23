@@ -30,7 +30,7 @@ server:
 let outDir: string;
 let home: string;
 let binary: string;
-let child: ReturnType<typeof Bun.spawn> | undefined;
+const children: ReturnType<typeof Bun.spawn>[] = [];
 
 async function run(command: string[]): Promise<void> {
 	const proc = Bun.spawn(command, {
@@ -96,7 +96,7 @@ beforeAll(async () => {
 }, 180_000);
 
 afterAll(async () => {
-	child?.kill("SIGTERM");
+	for (const child of children) child.kill("SIGTERM");
 	if (outDir) await rm(outDir, { recursive: true, force: true });
 	if (home) await rm(home, { recursive: true, force: true });
 });
@@ -113,20 +113,24 @@ describe("the compiled binary", () => {
 
 	test("serves the embedded single-page app with no web/dist in sight", async () => {
 		const port = await freePort();
-		child = Bun.spawn([binary, "run", "--port", String(port), "--no-open"], {
-			// A curated environment. NOTAM_WEB_DIST is deliberately absent and the
-			// working directory is not the repository, so a pass here can only mean
-			// the assets came out of the binary itself.
-			cwd: home,
-			env: {
-				PATH: process.env.PATH ?? "",
-				HOME: home,
-				NOTAM_HOME: home,
-				NOTAM_BINARY_TEST_TOKEN: "t0ken",
+		const child = Bun.spawn(
+			[binary, "run", "--port", String(port), "--no-open"],
+			{
+				// A curated environment. NOTAM_WEB_DIST is deliberately absent and the
+				// working directory is not the repository, so a pass here can only mean
+				// the assets came out of the binary itself.
+				cwd: home,
+				env: {
+					PATH: process.env.PATH ?? "",
+					HOME: home,
+					NOTAM_HOME: home,
+					NOTAM_BINARY_TEST_TOKEN: "t0ken",
+				},
+				stdout: "inherit",
+				stderr: "inherit",
 			},
-			stdout: "inherit",
-			stderr: "inherit",
-		});
+		);
+		children.push(child);
 
 		const baseUrl = `http://127.0.0.1:${port}`;
 		await waitForServer(baseUrl);
@@ -157,5 +161,43 @@ describe("the compiled binary", () => {
 			"public, max-age=31536000, immutable",
 		);
 		expect((await asset.text()).length).toBeGreaterThan(1000);
+	}, 60_000);
+
+	test("an explicit NOTAM_WEB_DIST beats the embedded copy, in the binary too", async () => {
+		const marker =
+			"<!doctype html><title>NOTAM_WEB_DIST MARKER, NOT THE REAL SPA</title>";
+		const webDist = await mkdtemp(join(tmpdir(), "notam-binary-webdist-"));
+		try {
+			await Bun.write(join(webDist, "index.html"), marker);
+
+			const port = await freePort();
+			const child = Bun.spawn(
+				[binary, "run", "--port", String(port), "--no-open"],
+				{
+					cwd: home,
+					env: {
+						PATH: process.env.PATH ?? "",
+						HOME: home,
+						NOTAM_HOME: home,
+						NOTAM_BINARY_TEST_TOKEN: "t0ken",
+						NOTAM_WEB_DIST: webDist,
+					},
+					stdout: "inherit",
+					stderr: "inherit",
+				},
+			);
+			children.push(child);
+
+			const baseUrl = `http://127.0.0.1:${port}`;
+			await waitForServer(baseUrl);
+
+			const index = await fetch(`${baseUrl}/`);
+			expect(index.status).toBe(200);
+			const html = await index.text();
+			expect(html).toBe(marker);
+			expect(html).not.toContain('<div id="root"></div>');
+		} finally {
+			await rm(webDist, { recursive: true, force: true });
+		}
 	}, 60_000);
 });
