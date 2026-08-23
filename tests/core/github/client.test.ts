@@ -510,3 +510,69 @@ describe("rate limiting", () => {
 		expect(page.nodes).toHaveLength(2);
 	});
 });
+
+describe("cancellation", () => {
+	test("passes the caller's signal to fetch, so a request in flight is abortable", async () => {
+		const stub = stubFetch([json(await fixture("pr-list-github.json"))]);
+		const controller = new AbortController();
+		const seen: (AbortSignal | null | undefined)[] = [];
+		const spying = (async (url: string | URL | Request, init?: RequestInit) => {
+			seen.push(init?.signal);
+			return await stub.impl(url as string, init);
+		}) as unknown as typeof fetch;
+		const { instance } = client(spying);
+		await instance.listMergedPRs(REPO, { signal: controller.signal });
+		expect(seen).toEqual([controller.signal]);
+	});
+
+	test("abandons a rate-limit pause instead of sitting it out", async () => {
+		const limited = new Response("slow down", {
+			status: 429,
+			headers: { "retry-after": "600" },
+		});
+		const stub = stubFetch([
+			limited,
+			json(await fixture("pr-list-github.json")),
+		]);
+		const controller = new AbortController();
+		// A sleep that never settles: only the abort can end this pause, which
+		// is what a ten-minute reset window looks like to a user pressing Stop.
+		const { instance } = client(stub.impl, {
+			sleep: () =>
+				new Promise<void>(() => {
+					controller.abort();
+				}),
+		});
+		await expect(
+			instance.listMergedPRs(REPO, { signal: controller.signal }),
+		).rejects.toThrow();
+		expect(stub.calls).toHaveLength(1);
+	});
+
+	test("never retries an aborted request, however much budget is left", async () => {
+		const controller = new AbortController();
+		let attempts = 0;
+		const aborting = (async () => {
+			attempts++;
+			controller.abort();
+			throw controller.signal.reason;
+		}) as unknown as typeof fetch;
+		const { instance, sleeps } = client(aborting, { maxRetries: 5 });
+		await expect(
+			instance.listMergedPRs(REPO, { signal: controller.signal }),
+		).rejects.toThrow();
+		expect(attempts).toBe(1);
+		expect(sleeps).toEqual([]);
+	});
+
+	test("still retries an ordinary network failure when no signal is aborted", async () => {
+		const stub = stubFetchWithFailures(
+			1,
+			json(await fixture("pr-list-github.json")),
+		);
+		const controller = new AbortController();
+		const { instance, sleeps } = client(stub.impl);
+		await instance.listMergedPRs(REPO, { signal: controller.signal });
+		expect(sleeps).toHaveLength(1);
+	});
+});

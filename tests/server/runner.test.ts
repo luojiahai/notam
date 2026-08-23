@@ -219,3 +219,164 @@ describe("JobRunner", () => {
 		db.close();
 	});
 });
+
+describe("JobRunner cancellation", () => {
+	/** A promise plus its resolver, so a test can hold a handler open on purpose. */
+	function gate() {
+		let open!: () => void;
+		const promise = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		return { promise, open };
+	}
+
+	test("cancels a job that is already running", async () => {
+		const { db, queue } = queueOf();
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		const running = gate();
+		const runner = new JobRunner({
+			queue,
+			concurrency: 1,
+			handlers: {
+				sync: async (_job, signal) => {
+					running.open();
+					await new Promise((_resolve, reject) => {
+						signal.addEventListener("abort", () => reject(signal.reason));
+					});
+				},
+			},
+		});
+		runner.kick();
+		await running.promise;
+
+		expect(runner.cancel(job.id)).toBe(true);
+		await runner.idle();
+		expect(queue.get(job.id)?.state).toBe("cancelled");
+		db.close();
+	});
+
+	test("cancels a job still queued behind another, without ever claiming it", async () => {
+		const { db, queue } = queueOf();
+		queue.enqueue("sync", "first");
+		// Ids tie-break on random characters within a millisecond, so the two
+		// jobs need distinct `created_at` values for the claim order to be the
+		// enqueue order.
+		await Bun.sleep(2);
+		const second = queue.enqueue("sync", "second");
+		if (!second) throw new Error("expected a job");
+		const held = gate();
+		const claimed: string[] = [];
+		const runner = new JobRunner({
+			queue,
+			concurrency: 1,
+			handlers: {
+				sync: async (job) => {
+					claimed.push(job.target_id);
+					await held.promise;
+				},
+			},
+		});
+		runner.kick();
+		await Bun.sleep(10);
+
+		expect(runner.cancel(second.id)).toBe(true);
+		held.open();
+		await runner.idle();
+		expect(claimed).toEqual(["first"]);
+		expect(queue.get(second.id)?.state).toBe("cancelled");
+		db.close();
+	});
+
+	test("refuses to cancel a job that already settled", async () => {
+		const { db, queue } = queueOf();
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		const runner = new JobRunner({
+			queue,
+			concurrency: 1,
+			handlers: { sync: async () => {} },
+		});
+		runner.kick();
+		await runner.idle();
+		expect(runner.cancel(job.id)).toBe(false);
+		expect(queue.get(job.id)?.state).toBe("done");
+		db.close();
+	});
+
+	test("cancelling one repository leaves another mid-sync alone", async () => {
+		const { db, queue } = queueOf();
+		const doomed = queue.enqueue("sync", "doomed");
+		const other = queue.enqueue("sync", "other");
+		if (!doomed || !other) throw new Error("expected jobs");
+		const bothRunning = gate();
+		const release = gate();
+		let started = 0;
+		const runner = new JobRunner({
+			queue,
+			concurrency: 2,
+			handlers: {
+				sync: async (job, signal) => {
+					if (++started === 2) bothRunning.open();
+					if (job.target_id === "other") {
+						await release.promise;
+						return;
+					}
+					await new Promise((_resolve, reject) => {
+						signal.addEventListener("abort", () => reject(signal.reason));
+					});
+				},
+			},
+		});
+		runner.kick();
+		await bothRunning.promise;
+
+		runner.cancel(doomed.id);
+		release.open();
+		await runner.idle();
+		expect(queue.get(doomed.id)?.state).toBe("cancelled");
+		expect(queue.get(other.id)?.state).toBe("done");
+		db.close();
+	});
+
+	test("stop() aborts a sync already in flight rather than waiting it out", async () => {
+		const { db, queue } = queueOf();
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		const running = gate();
+		const runner = new JobRunner({
+			queue,
+			concurrency: 1,
+			handlers: {
+				sync: async (_job, signal) => {
+					running.open();
+					await new Promise((_resolve, reject) => {
+						signal.addEventListener("abort", () => reject(signal.reason));
+					});
+				},
+			},
+		});
+		runner.kick();
+		await running.promise;
+
+		runner.stop();
+		await runner.idle();
+		expect(queue.get(job.id)?.state).toBe("cancelled");
+		db.close();
+	});
+
+	test("forgets a job's controller once it settles", async () => {
+		const { db, queue } = queueOf();
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		const runner = new JobRunner({
+			queue,
+			concurrency: 1,
+			handlers: { sync: async () => {} },
+		});
+		runner.kick();
+		await runner.idle();
+		expect(runner.inFlight).toBe(0);
+		db.close();
+	});
+});

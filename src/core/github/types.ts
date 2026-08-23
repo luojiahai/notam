@@ -74,9 +74,13 @@ export type PRDetail = {
 export interface GitHubClient {
 	listMergedPRs(
 		repo: RepoRef,
-		options: { cursor?: string; pageSize?: number },
+		options: { cursor?: string; pageSize?: number; signal?: AbortSignal },
 	): Promise<PRPage>;
-	fetchPRDetail(repo: RepoRef, number: number): Promise<PRDetail>;
+	fetchPRDetail(
+		repo: RepoRef,
+		number: number,
+		options?: { signal?: AbortSignal },
+	): Promise<PRDetail>;
 }
 
 /** One file in a promotion commit, at a repo-relative path. */

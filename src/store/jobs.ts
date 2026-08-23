@@ -91,6 +91,24 @@ export function markQueued(db: Database, id: string): boolean {
 	);
 }
 
+/**
+ * Only a pending job can be cancelled, and both pending states qualify: a
+ * queued job cancels without ever being claimed. Returns false if it had
+ * already settled (or the id is unknown).
+ *
+ * `cancelled` is outside the `jobs_pending_target` partial index, so cancelling
+ * frees the target for a new job immediately.
+ */
+export function markCancelled(db: Database, id: string, now: string): boolean {
+	return (
+		db
+			.query(
+				"UPDATE jobs SET state = 'cancelled', finished_at = ? WHERE id = ? AND state IN ('queued', 'running')",
+			)
+			.run(now, id).changes > 0
+	);
+}
+
 export function resetRunning(db: Database): number {
 	return db
 		.query(
@@ -124,4 +142,39 @@ export function countJobs(db: Database, state: JobState): number {
 		)
 		.get(state);
 	return row?.c ?? 0;
+}
+
+export type JobStatus = {
+	/** The `queued` or `running` job for this target. The pending index makes it single-valued. */
+	pending: JobRow | null;
+	/** The most recently settled job for this target, whatever its outcome. */
+	last: JobRow | null;
+};
+
+/**
+ * Both halves of "what is happening to this target, and how did the last
+ * attempt end". Settled rows are ordered by `finished_at` rather than by id,
+ * because a job that was queued first can settle last.
+ */
+export function selectJobStatus(
+	db: Database,
+	kind: JobKind,
+	targetId: string,
+): JobStatus {
+	const pending = db
+		.query<RawJob, [string, string]>(
+			`SELECT * FROM jobs WHERE kind = ? AND target_id = ? AND state IN ('queued', 'running')
+			 ORDER BY created_at, id LIMIT 1`,
+		)
+		.get(kind, targetId);
+	const last = db
+		.query<RawJob, [string, string]>(
+			`SELECT * FROM jobs WHERE kind = ? AND target_id = ? AND state IN ('done', 'failed', 'cancelled')
+			 ORDER BY finished_at DESC, id DESC LIMIT 1`,
+		)
+		.get(kind, targetId);
+	return {
+		pending: pending ? hydrate(pending) : null,
+		last: last ? hydrate(last) : null,
+	};
 }

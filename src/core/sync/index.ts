@@ -50,6 +50,12 @@ export type SyncDeps = {
 	clientFor: (host: HostRow) => GitHubClient;
 	now: () => Date;
 	pageSize?: number;
+	/**
+	 * Aborts the run. Entries already upserted stay — the sync is interrupted,
+	 * not undone — and the watermark is left where it was, so the next run
+	 * re-covers the ground this one abandoned.
+	 */
+	signal?: AbortSignal;
 	onProgress?: (event: SyncEvent) => void;
 };
 
@@ -107,13 +113,19 @@ export async function syncRepo(
 	let reachedFloor = false;
 
 	while (!reachedFloor) {
+		deps.signal?.throwIfAborted();
 		const page = await client.listMergedPRs(ref, {
 			cursor,
 			pageSize: deps.pageSize,
+			signal: deps.signal,
 		});
 		deps.onProgress?.({ type: "page", scanned: page.nodes.length });
 
 		for (const node of page.nodes) {
+			// Checked per PR rather than per page: a page is up to fifty
+			// hydration round trips, and a stop press should not have to wait
+			// out the rest of them.
+			deps.signal?.throwIfAborted();
 			let updatedAt: string;
 			try {
 				updatedAt = iso(node.updatedAt);
@@ -141,7 +153,9 @@ export async function syncRepo(
 
 			let detail: PRDetail;
 			try {
-				detail = await client.fetchPRDetail(ref, node.number);
+				detail = await client.fetchPRDetail(ref, node.number, {
+					signal: deps.signal,
+				});
 			} catch (error) {
 				// A PR deleted or made inaccessible between the list call and the
 				// detail call is a counted skip, not a fatal error —
@@ -214,12 +228,17 @@ export function createSyncHandler(
 	deps: SyncDeps,
 	onSummary?: (summary: SyncSummary) => void,
 ): JobHandler {
-	return async (job) => {
+	return async (job, signal) => {
 		const repo = getRepo(deps.db, job.target_id);
 		if (!repo)
 			throw new Error(
 				`sync job ${job.id} targets unknown repo ${job.target_id}`,
 			);
-		onSummary?.(await syncRepo(deps, repo));
+		// Awaited into a binding rather than passed straight into `onSummary?.()`:
+		// an optional call does not evaluate its arguments, so a handler built
+		// without a summary callback would silently skip the sync entirely and
+		// still report the job done.
+		const summary = await syncRepo({ ...deps, signal }, repo);
+		onSummary?.(summary);
 	};
 }

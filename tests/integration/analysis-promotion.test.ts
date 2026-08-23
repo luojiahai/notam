@@ -157,7 +157,12 @@ describe("analyse a repository and promote what it found", () => {
 			concurrency: 3,
 			handlers: { analyse: createAnalyseHandler(analysisDeps(runner)) },
 		});
-		expect(result).toEqual({ succeeded: 3, failed: 0, retried: 0 });
+		expect(result).toEqual({
+			succeeded: 3,
+			failed: 0,
+			retried: 0,
+			cancelled: 0,
+		});
 		expect(runner.peak()).toBeGreaterThan(1);
 		expect(countEntriesByState(db, repo.id)).toEqual({
 			unanalysed: 0,

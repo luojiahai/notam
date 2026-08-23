@@ -34,7 +34,12 @@ describe("runPool", () => {
 				},
 			},
 		});
-		expect(result).toEqual({ succeeded: 3, failed: 0, retried: 0 });
+		expect(result).toEqual({
+			succeeded: 3,
+			failed: 0,
+			retried: 0,
+			cancelled: 0,
+		});
 		expect(seen.sort()).toEqual(["e1", "e2", "e3"]);
 		expect(queue.count("done")).toBe(3);
 	});
@@ -114,7 +119,12 @@ describe("runPool", () => {
 			},
 		});
 		expect(calls).toBe(3);
-		expect(result).toEqual({ succeeded: 1, failed: 0, retried: 2 });
+		expect(result).toEqual({
+			succeeded: 1,
+			failed: 0,
+			retried: 2,
+			cancelled: 0,
+		});
 		expect(queue.count("done")).toBe(1);
 	});
 
@@ -170,7 +180,12 @@ describe("runPool", () => {
 	test("never claims a job whose kind has no registered handler, leaving it queued", async () => {
 		queue.enqueue("promote", "p1");
 		const result = await runPool({ queue, concurrency: 1, handlers: {} });
-		expect(result).toEqual({ succeeded: 0, failed: 0, retried: 0 });
+		expect(result).toEqual({
+			succeeded: 0,
+			failed: 0,
+			retried: 0,
+			cancelled: 0,
+		});
 		expect(queue.count("queued")).toBe(1);
 		expect(queue.list("queued")[0]?.target_id).toBe("p1");
 	});
@@ -183,7 +198,12 @@ describe("runPool", () => {
 			concurrency: 1,
 			handlers: { sync: async () => {} },
 		});
-		expect(result).toEqual({ succeeded: 1, failed: 0, retried: 0 });
+		expect(result).toEqual({
+			succeeded: 1,
+			failed: 0,
+			retried: 0,
+			cancelled: 0,
+		});
 		const remaining = queue.list("queued");
 		expect(remaining).toHaveLength(1);
 		expect(remaining[0]?.kind).toBe("analyse");
@@ -242,5 +262,161 @@ describe("runPool", () => {
 		expect(second.succeeded).toBe(3);
 		expect(queue.count("done")).toBe(4);
 		expect(queue.count("queued")).toBe(0);
+	});
+});
+
+describe("cancellation", () => {
+	test("hands each handler a signal scoped to its own job", async () => {
+		queue.enqueue("analyse", "e1");
+		queue.enqueue("analyse", "e2");
+		const controllers = new Map<string, AbortController>();
+		const seen: boolean[] = [];
+		await runPool({
+			queue,
+			concurrency: 2,
+			signalFor: (job) => {
+				const controller = new AbortController();
+				controllers.set(job.target_id, controller);
+				return controller.signal;
+			},
+			handlers: {
+				analyse: async (_job, signal) => {
+					seen.push(signal.aborted);
+				},
+			},
+		});
+		expect(seen).toEqual([false, false]);
+		expect(controllers.get("e1")).not.toBe(controllers.get("e2"));
+	});
+
+	test("aborting a running job marks it cancelled rather than failed", async () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		const controller = new AbortController();
+		const result = await runPool({
+			queue,
+			concurrency: 1,
+			signalFor: () => controller.signal,
+			handlers: {
+				sync: async (_job, signal) => {
+					controller.abort();
+					signal.throwIfAborted();
+				},
+			},
+		});
+		expect(result).toEqual({
+			succeeded: 0,
+			failed: 0,
+			retried: 0,
+			cancelled: 1,
+		});
+		expect(queue.get(job.id)?.state).toBe("cancelled");
+		expect(queue.count("failed")).toBe(0);
+	});
+
+	test("never retries an aborted job, however many attempts remain", async () => {
+		queue.enqueue("sync", "r1");
+		const controller = new AbortController();
+		let calls = 0;
+		const result = await runPool({
+			queue,
+			concurrency: 1,
+			maxAttempts: 5,
+			backoffMs: () => 0,
+			signalFor: () => controller.signal,
+			handlers: {
+				sync: async (_job, signal) => {
+					calls++;
+					controller.abort();
+					signal.throwIfAborted();
+				},
+			},
+		});
+		expect(calls).toBe(1);
+		expect(result.retried).toBe(0);
+		expect(result.cancelled).toBe(1);
+	});
+
+	test("emits a cancelled event carrying the job", async () => {
+		queue.enqueue("sync", "r1");
+		const controller = new AbortController();
+		const events: PoolEvent[] = [];
+		await runPool({
+			queue,
+			concurrency: 1,
+			signalFor: () => controller.signal,
+			onEvent: (event) => events.push(event),
+			handlers: {
+				sync: async (_job, signal) => {
+					controller.abort();
+					signal.throwIfAborted();
+				},
+			},
+		});
+		expect(events.map((event) => event.type)).toEqual(["started", "cancelled"]);
+		expect(events[1]?.job.target_id).toBe("r1");
+	});
+
+	test("cancelling one job leaves the others to finish", async () => {
+		queue.enqueue("sync", "doomed");
+		queue.enqueue("sync", "fine");
+		const controllers = new Map<string, AbortController>();
+		const finished: string[] = [];
+		const result = await runPool({
+			queue,
+			concurrency: 2,
+			signalFor: (job) => {
+				const controller = new AbortController();
+				controllers.set(job.target_id, controller);
+				return controller.signal;
+			},
+			handlers: {
+				sync: async (job, signal) => {
+					if (job.target_id === "doomed") {
+						controllers.get("doomed")?.abort();
+						signal.throwIfAborted();
+					}
+					finished.push(job.target_id);
+				},
+			},
+		});
+		expect(finished).toEqual(["fine"]);
+		expect(result.succeeded).toBe(1);
+		expect(result.cancelled).toBe(1);
+	});
+
+	test("a throw while the signal is clear is still an ordinary failure", async () => {
+		queue.enqueue("sync", "r1");
+		const controller = new AbortController();
+		const result = await runPool({
+			queue,
+			concurrency: 1,
+			signalFor: () => controller.signal,
+			handlers: {
+				sync: async () => {
+					throw new Error("GitHub returned 500");
+				},
+			},
+		});
+		expect(result.failed).toBe(1);
+		expect(result.cancelled).toBe(0);
+		expect(queue.list("failed")[0]?.error).toContain("GitHub returned 500");
+	});
+
+	test("frees the target, so the same repository can be enqueued again at once", async () => {
+		queue.enqueue("sync", "r1");
+		const controller = new AbortController();
+		await runPool({
+			queue,
+			concurrency: 1,
+			signalFor: () => controller.signal,
+			handlers: {
+				sync: async (_job, signal) => {
+					controller.abort();
+					signal.throwIfAborted();
+				},
+			},
+		});
+		expect(queue.enqueue("sync", "r1")).not.toBeNull();
 	});
 });

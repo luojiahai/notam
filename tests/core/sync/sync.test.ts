@@ -20,6 +20,9 @@ import { upsertHost } from "../../../src/store/hosts.ts";
 import { applyMigrations } from "../../../src/store/migrations.ts";
 import { getRepo, upsertRepo } from "../../../src/store/repos.ts";
 
+/** A signal that never aborts: these tests exercise the handler, not cancellation. */
+const NEVER = new AbortController().signal;
+
 const NOW = new Date("2026-08-23T09:00:00.000Z");
 
 /** A PR fixture builder: number, when it was updated, and what it touched. */
@@ -347,7 +350,7 @@ describe("syncRepo", () => {
 describe("createSyncHandler", () => {
 	test("rejects when the job's target_id names an unknown repo, so the pool retries", async () => {
 		const handler = createSyncHandler(deps(fakeClient([])));
-		await expect(handler(makeJob("no-such-repo"))).rejects.toThrow(
+		await expect(handler(makeJob("no-such-repo"), NEVER)).rejects.toThrow(
 			/unknown repo/,
 		);
 	});
@@ -359,7 +362,7 @@ describe("createSyncHandler", () => {
 		const handler = createSyncHandler(deps(client), (summary) => {
 			summaries.push(summary);
 		});
-		await handler(makeJob(repo.id));
+		await handler(makeJob(repo.id), NEVER);
 		expect(summaries).toHaveLength(1);
 		expect(summaries[0]?.repo).toBe("acme/mono");
 		expect(summaries[0]?.created).toBe(1);
@@ -524,5 +527,163 @@ describe("syncRepo — missing PRs (I5)", () => {
 		expect(summary.scanned).toBe(1);
 		expect(summary.created).toBe(1);
 		expect(getEntryByNumber(db, repo.id, good.ref.number)).not.toBeNull();
+	});
+});
+
+describe("cancellation", () => {
+	test("stops fetching the moment the signal aborts", async () => {
+		const repo = makeRepo();
+		const prs = [
+			pr(5, "2026-08-20T00:00:05Z", ["a.ts"]),
+			pr(4, "2026-08-20T00:00:04Z", ["b.ts"]),
+			pr(3, "2026-08-20T00:00:03Z", ["c.ts"]),
+			pr(2, "2026-08-20T00:00:02Z", ["d.ts"]),
+		];
+		const client = fakeClient(prs);
+		const controller = new AbortController();
+		// Abort once the second PR has been hydrated, mid-page.
+		const gated: GitHubClient = {
+			...client,
+			async fetchPRDetail(ref, number, options) {
+				const detail = await client.fetchPRDetail(ref, number, options);
+				if (client.detailCalls.length === 2) controller.abort();
+				return detail;
+			},
+		};
+
+		await expect(
+			syncRepo(deps(gated, { signal: controller.signal }), repo),
+		).rejects.toThrow();
+		expect(client.detailCalls).toEqual([5, 4]);
+	});
+
+	test("keeps the entries it already stored", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([
+			pr(5, "2026-08-20T00:00:05Z", ["a.ts"]),
+			pr(4, "2026-08-20T00:00:04Z", ["b.ts"]),
+			pr(3, "2026-08-20T00:00:03Z", ["c.ts"]),
+		]);
+		const controller = new AbortController();
+		const gated: GitHubClient = {
+			...client,
+			async fetchPRDetail(ref, number, options) {
+				const detail = await client.fetchPRDetail(ref, number, options);
+				if (client.detailCalls.length === 2) controller.abort();
+				return detail;
+			},
+		};
+
+		await expect(
+			syncRepo(deps(gated, { signal: controller.signal }), repo),
+		).rejects.toThrow();
+		expect(
+			listEntries(db, repo.id)
+				.map((entry) => entry.number)
+				.sort(),
+		).toEqual([4, 5]);
+	});
+
+	test("leaves the watermark unmoved, so the next run re-covers the ground", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([
+			pr(5, "2026-08-20T00:00:05Z", ["a.ts"]),
+			pr(4, "2026-08-20T00:00:04Z", ["b.ts"]),
+		]);
+		const controller = new AbortController();
+		const gated: GitHubClient = {
+			...client,
+			async fetchPRDetail(ref, number, options) {
+				const detail = await client.fetchPRDetail(ref, number, options);
+				controller.abort();
+				return detail;
+			},
+		};
+
+		await expect(
+			syncRepo(deps(gated, { signal: controller.signal }), repo),
+		).rejects.toThrow();
+		expect(getRepo(db, repo.id)?.sync_watermark).toBeNull();
+	});
+
+	test("re-running after a cancel picks up where it stopped and finishes", async () => {
+		const repo = makeRepo();
+		const prs = [
+			pr(5, "2026-08-20T00:00:05Z", ["a.ts"]),
+			pr(4, "2026-08-20T00:00:04Z", ["b.ts"]),
+			pr(3, "2026-08-20T00:00:03Z", ["c.ts"]),
+		];
+		const first = fakeClient(prs);
+		const controller = new AbortController();
+		const gated: GitHubClient = {
+			...first,
+			async fetchPRDetail(ref, number, options) {
+				const detail = await first.fetchPRDetail(ref, number, options);
+				controller.abort();
+				return detail;
+			},
+		};
+		await expect(
+			syncRepo(deps(gated, { signal: controller.signal }), repo),
+		).rejects.toThrow();
+
+		const summary = await syncRepo(deps(fakeClient(prs)), repo);
+		expect(summary.scanned).toBe(3);
+		expect(listEntries(db, repo.id)).toHaveLength(3);
+		expect(getRepo(db, repo.id)?.sync_watermark).toBe(
+			"2026-08-20T00:00:05.000Z",
+		);
+	});
+
+	test("refuses to start at all when the signal is already aborted", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([pr(5, "2026-08-20T00:00:05Z", ["a.ts"])]);
+		const controller = new AbortController();
+		controller.abort();
+		await expect(
+			syncRepo(deps(client, { signal: controller.signal }), repo),
+		).rejects.toThrow();
+		expect(client.detailCalls).toEqual([]);
+	});
+
+	test("hands the signal to the client, so an in-flight request is abortable", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([pr(5, "2026-08-20T00:00:05Z", ["a.ts"])]);
+		const controller = new AbortController();
+		const seen: (AbortSignal | undefined)[] = [];
+		const spying: GitHubClient = {
+			listMergedPRs: (ref, options) => {
+				seen.push(options.signal);
+				return client.listMergedPRs(ref, options);
+			},
+			fetchPRDetail: (ref, number, options) => {
+				seen.push(options?.signal);
+				return client.fetchPRDetail(ref, number, options);
+			},
+		};
+		await syncRepo(deps(spying, { signal: controller.signal }), repo);
+		expect(seen).toEqual([controller.signal, controller.signal]);
+	});
+
+	test("createSyncHandler threads the pool's signal into the sync", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([pr(5, "2026-08-20T00:00:05Z", ["a.ts"])]);
+		const controller = new AbortController();
+		controller.abort();
+		const handler = createSyncHandler(deps(client));
+		await expect(
+			handler(makeJob(repo.id), controller.signal),
+		).rejects.toThrow();
+		expect(client.detailCalls).toEqual([]);
+	});
+});
+
+describe("createSyncHandler without a summary callback", () => {
+	test("still runs the sync", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([pr(7, "2026-08-20T00:00:00Z", ["a.ts"])]);
+		const handler = createSyncHandler(deps(client));
+		await handler(makeJob(repo.id), NEVER);
+		expect(listEntries(db, repo.id)).toHaveLength(1);
 	});
 });

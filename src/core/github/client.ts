@@ -48,6 +48,32 @@ type FilesConnection = {
 
 type GraphQLEnvelope<T> = { data?: T; errors?: { message: string }[] };
 
+/**
+ * Races the injected sleep against the caller's signal. Without this a
+ * cancelled sync would still sit out a rate-limit pause, and GitHub's reset
+ * window can be minutes long — which is exactly when a user reaches for Stop.
+ */
+function abortableSleep(
+	sleep: (ms: number) => Promise<void>,
+	ms: number,
+	signal: AbortSignal | undefined,
+): Promise<void> {
+	if (!signal) return sleep(ms);
+	signal.throwIfAborted();
+	return new Promise<void>((resolve, reject) => {
+		const onAbort = () => reject(signal.reason);
+		signal.addEventListener("abort", onAbort, { once: true });
+		const settle = (run: () => void) => {
+			signal.removeEventListener("abort", onAbort);
+			run();
+		};
+		sleep(ms).then(
+			() => settle(resolve),
+			(error: unknown) => settle(() => reject(error)),
+		);
+	});
+}
+
 const MIN_PAUSE_MS = 1_000;
 /**
  * Safety valve for file-list pagination: bounds how many PULL_REQUEST_FILES
@@ -77,7 +103,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 
 	async listMergedPRs(
 		repo: RepoRef,
-		options: { cursor?: string; pageSize?: number },
+		options: { cursor?: string; pageSize?: number; signal?: AbortSignal },
 	): Promise<PRPage> {
 		type Data = {
 			repository: {
@@ -87,12 +113,17 @@ export class GraphQLGitHubClient implements GitHubClient {
 				};
 			} | null;
 		};
-		const data = await this.request<Data>(repo, LIST_MERGED_PRS, {
-			owner: repo.owner,
-			name: repo.name,
-			pageSize: options.pageSize ?? 50,
-			cursor: options.cursor ?? null,
-		});
+		const data = await this.request<Data>(
+			repo,
+			LIST_MERGED_PRS,
+			{
+				owner: repo.owner,
+				name: repo.name,
+				pageSize: options.pageSize ?? 50,
+				cursor: options.cursor ?? null,
+			},
+			options.signal,
+		);
 		const connection = data.repository?.pullRequests;
 		if (!connection)
 			throw new GitHubError(
@@ -107,7 +138,11 @@ export class GraphQLGitHubClient implements GitHubClient {
 		};
 	}
 
-	async fetchPRDetail(repo: RepoRef, number: number): Promise<PRDetail> {
+	async fetchPRDetail(
+		repo: RepoRef,
+		number: number,
+		options: { signal?: AbortSignal } = {},
+	): Promise<PRDetail> {
 		type Data = {
 			repository: {
 				pullRequest:
@@ -115,11 +150,12 @@ export class GraphQLGitHubClient implements GitHubClient {
 					| null;
 			} | null;
 		};
-		const data = await this.request<Data>(repo, PULL_REQUEST_DETAIL, {
-			owner: repo.owner,
-			name: repo.name,
-			number,
-		});
+		const data = await this.request<Data>(
+			repo,
+			PULL_REQUEST_DETAIL,
+			{ owner: repo.owner, name: repo.name, number },
+			options.signal,
+		);
 		const node = data.repository?.pullRequest;
 		if (!node)
 			throw new GitHubError(
@@ -147,12 +183,17 @@ export class GraphQLGitHubClient implements GitHubClient {
 					pullRequest: { files: FilesConnection | null } | null;
 				} | null;
 			};
-			const page = await this.request<FilesData>(repo, PULL_REQUEST_FILES, {
-				owner: repo.owner,
-				name: repo.name,
-				number,
-				filesCursor: pageInfo.endCursor,
-			});
+			const page = await this.request<FilesData>(
+				repo,
+				PULL_REQUEST_FILES,
+				{
+					owner: repo.owner,
+					name: repo.name,
+					number,
+					filesCursor: pageInfo.endCursor,
+				},
+				options.signal,
+			);
 			const connection = page.repository?.pullRequest?.files ?? null;
 			paths = paths.concat(pathsOf(connection));
 			pageInfo = connection?.pageInfo ?? {
@@ -181,6 +222,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 		repo: RepoRef,
 		query: string,
 		variables: Record<string, unknown>,
+		signal?: AbortSignal,
 	): Promise<T> {
 		const label = `${repo.owner}/${repo.name}`;
 		let retries = 0;
@@ -197,8 +239,13 @@ export class GraphQLGitHubClient implements GitHubClient {
 						"user-agent": `notam/${VERSION}`,
 					},
 					body: JSON.stringify({ query, variables }),
+					signal,
 				});
 			} catch (err) {
+				// An aborted request is the caller's own decision, not a
+				// transient fault: retrying it would spend the whole budget
+				// re-issuing a request nobody is waiting for.
+				if (signal?.aborted) throw err;
 				// A thrown fetch (DNS failure, connection reset, ...) shares the
 				// same retry budget and backoff as a 5xx — it is the single most
 				// common transient failure in a long backfill, and there is only
@@ -210,7 +257,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 					);
 				}
 				retries++;
-				await this.sleep(500 * 2 ** (retries - 1));
+				await abortableSleep(this.sleep, 500 * 2 ** (retries - 1), signal);
 				continue;
 			}
 
@@ -222,7 +269,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 						waitMs,
 						reason: `${label}: API rate limit reached`,
 					});
-					await this.sleep(waitMs);
+					await abortableSleep(this.sleep, waitMs, signal);
 					continue;
 				}
 				throw new GitHubError(
@@ -239,7 +286,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 					);
 				}
 				retries++;
-				await this.sleep(500 * 2 ** (retries - 1));
+				await abortableSleep(this.sleep, 500 * 2 ** (retries - 1), signal);
 				continue;
 			}
 
@@ -274,7 +321,7 @@ export class GraphQLGitHubClient implements GitHubClient {
 						waitMs,
 						reason: `${label}: ${rateLimit.remaining} API points left, waiting for the quota to reset`,
 					});
-					await this.sleep(waitMs);
+					await abortableSleep(this.sleep, waitMs, signal);
 				}
 			}
 			return envelope.data;

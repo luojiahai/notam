@@ -199,3 +199,133 @@ describe("persistence", () => {
 		expect(second.count("queued")).toBe(2);
 	});
 });
+
+describe("cancel", () => {
+	test("cancels a queued job that was never claimed", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		tick(3);
+		expect(queue.cancel(job.id)).toBe(true);
+		const cancelled = queue.get(job.id);
+		expect(cancelled?.state).toBe("cancelled");
+		expect(cancelled?.finished_at).toBe("2026-08-23T09:00:03.000Z");
+	});
+
+	test("cancels a running job", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		expect(queue.cancel(job.id)).toBe(true);
+		expect(queue.get(job.id)?.state).toBe("cancelled");
+	});
+
+	test("frees the target immediately, so the repository is re-syncable", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		queue.cancel(job.id);
+		expect(queue.enqueue("sync", "r1")).not.toBeNull();
+	});
+
+	test("refuses a job that already settled", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		queue.complete(job.id);
+		expect(queue.cancel(job.id)).toBe(false);
+		expect(queue.get(job.id)?.state).toBe("done");
+	});
+
+	test("returns false on a nonexistent id and creates nothing", () => {
+		expect(queue.cancel("j_doesnotexist")).toBe(false);
+		expect(queue.get("j_doesnotexist")).toBeNull();
+	});
+
+	test("resetStale leaves a cancelled job alone", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		queue.cancel(job.id);
+		expect(queue.resetStale()).toBe(0);
+		expect(queue.get(job.id)?.state).toBe("cancelled");
+	});
+});
+
+describe("status", () => {
+	test("reports nothing for a target that has never had a job", () => {
+		expect(queue.status("sync", "r1")).toEqual({ pending: null, last: null });
+	});
+
+	test("reports a queued job as pending", () => {
+		const job = queue.enqueue("sync", "r1");
+		const status = queue.status("sync", "r1");
+		expect(status.pending?.id).toBe(job?.id ?? "");
+		expect(status.pending?.state).toBe("queued");
+		expect(status.last).toBeNull();
+	});
+
+	test("reports a running job as pending", () => {
+		queue.enqueue("sync", "r1");
+		queue.claim();
+		expect(queue.status("sync", "r1").pending?.state).toBe("running");
+	});
+
+	test("moves a settled job from pending to last", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		tick(10);
+		queue.fail(job.id, "GitHub returned 401 Bad credentials");
+		const status = queue.status("sync", "r1");
+		expect(status.pending).toBeNull();
+		expect(status.last?.state).toBe("failed");
+		expect(status.last?.error).toBe("GitHub returned 401 Bad credentials");
+		expect(status.last?.finished_at).toBe("2026-08-23T09:00:10.000Z");
+	});
+
+	test("keeps the most recently settled job, not the first", () => {
+		const first = queue.enqueue("sync", "r1");
+		if (!first) throw new Error("expected a job");
+		queue.claim();
+		queue.fail(first.id, "boom");
+		tick(60);
+		const second = queue.enqueue("sync", "r1");
+		if (!second) throw new Error("expected a job");
+		queue.claim();
+		tick(10);
+		queue.complete(second.id);
+		expect(queue.status("sync", "r1").last?.state).toBe("done");
+	});
+
+	test("reports a pending job and a previously settled one together", () => {
+		const first = queue.enqueue("sync", "r1");
+		if (!first) throw new Error("expected a job");
+		queue.claim();
+		queue.complete(first.id);
+		tick(60);
+		queue.enqueue("sync", "r1");
+		const status = queue.status("sync", "r1");
+		expect(status.pending?.state).toBe("queued");
+		expect(status.last?.state).toBe("done");
+	});
+
+	test("a cancelled job is the last outcome, not a failure", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		queue.cancel(job.id);
+		const status = queue.status("sync", "r1");
+		expect(status.pending).toBeNull();
+		expect(status.last?.state).toBe("cancelled");
+		expect(status.last?.error).toBeNull();
+	});
+
+	test("scopes to one kind and one target", () => {
+		queue.enqueue("sync", "r1");
+		queue.enqueue("analyse", "r1");
+		queue.enqueue("sync", "r2");
+		expect(queue.status("sync", "r1").pending?.kind).toBe("sync");
+		expect(queue.status("analyse", "r1").pending?.kind).toBe("analyse");
+		expect(queue.status("sync", "r9").pending).toBeNull();
+	});
+});

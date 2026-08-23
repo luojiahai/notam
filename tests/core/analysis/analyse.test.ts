@@ -22,6 +22,9 @@ import {
 import { insertRules, listRulesByEntry } from "../../../src/store/rules.ts";
 import { SEED_NOW, seedDatabase } from "../../helpers/seed.ts";
 
+/** A signal that never aborts: these tests exercise the handler, not cancellation. */
+const NEVER = new AbortController().signal;
+
 const RULE = {
 	kind: "do",
 	directive: "Always add a regression test alongside a bug fix.",
@@ -360,7 +363,7 @@ describe("createAnalyseHandler", () => {
 
 	test("resolves on success", async () => {
 		const handler = createAnalyseHandler(deps(replies(ok([RULE]))));
-		await handler(job(entry.id));
+		await handler(job(entry.id), NEVER);
 		expect(getEntry(db, entry.id)?.analysis_state).toBe("analysed");
 	});
 
@@ -368,13 +371,15 @@ describe("createAnalyseHandler", () => {
 		const handler = createAnalyseHandler(
 			deps(replies({ ok: false, kind: "missing", message: "no claude here" })),
 		);
-		await expect(handler(job(entry.id))).rejects.toThrow(/no claude here/);
+		await expect(handler(job(entry.id), NEVER)).rejects.toThrow(
+			/no claude here/,
+		);
 		expect(getEntry(db, entry.id)?.last_error).toContain("no claude here");
 	});
 
 	test("throws for an unknown entry", async () => {
 		const handler = createAnalyseHandler(deps(replies(ok([]))));
-		await expect(handler(job("e_nope"))).rejects.toThrow(/e_nope/);
+		await expect(handler(job("e_nope"), NEVER)).rejects.toThrow(/e_nope/);
 	});
 });
 
