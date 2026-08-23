@@ -87,7 +87,7 @@ describe("complete and fail", () => {
 		if (!job) throw new Error("expected a job");
 		queue.claim();
 		tick(10);
-		queue.complete(job.id);
+		expect(queue.complete(job.id)).toBe(true);
 		const done = queue.get(job.id);
 		expect(done?.state).toBe("done");
 		expect(done?.finished_at).toBe("2026-08-23T09:00:10.000Z");
@@ -98,7 +98,9 @@ describe("complete and fail", () => {
 		const job = queue.enqueue("sync", "r1");
 		if (!job) throw new Error("expected a job");
 		queue.claim();
-		queue.fail(job.id, "GitHub returned 401 Bad credentials");
+		expect(queue.fail(job.id, "GitHub returned 401 Bad credentials")).toBe(
+			true,
+		);
 		const failed = queue.get(job.id);
 		expect(failed?.state).toBe("failed");
 		expect(failed?.error).toBe("GitHub returned 401 Bad credentials");
@@ -109,11 +111,42 @@ describe("complete and fail", () => {
 		const job = queue.enqueue("sync", "r1");
 		if (!job) throw new Error("expected a job");
 		queue.claim();
-		queue.requeue(job.id);
+		expect(queue.requeue(job.id)).toBe(true);
 		const back = queue.get(job.id);
 		expect(back?.state).toBe("queued");
 		expect(back?.attempts).toBe(1);
 		expect(back?.started_at).toBeNull();
+	});
+
+	test("complete on a queued (never-claimed) job returns false and leaves it queued", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		expect(queue.complete(job.id)).toBe(false);
+		expect(queue.get(job.id)?.state).toBe("queued");
+	});
+
+	test("complete on a nonexistent id returns false and creates nothing", () => {
+		expect(queue.complete("j_doesnotexist")).toBe(false);
+		expect(queue.get("j_doesnotexist")).toBeNull();
+	});
+
+	test("fail on a nonexistent id returns false and creates nothing", () => {
+		expect(queue.fail("j_doesnotexist", "boom")).toBe(false);
+		expect(queue.get("j_doesnotexist")).toBeNull();
+	});
+
+	test("complete after resetStale already reset the job to queued is a no-op (lost-update guard)", () => {
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		queue.claim();
+		// Simulate a crash-recovery reset racing a worker that is still trying
+		// to report success for the job it thinks it owns.
+		queue.resetStale();
+		expect(queue.get(job.id)?.state).toBe("queued");
+		expect(queue.complete(job.id)).toBe(false);
+		const after = queue.get(job.id);
+		expect(after?.state).toBe("queued");
+		expect(after?.finished_at).toBeNull();
 	});
 });
 

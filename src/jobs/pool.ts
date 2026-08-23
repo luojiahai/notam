@@ -60,10 +60,15 @@ export async function runPool(options: PoolOptions): Promise<PoolResult> {
 			} catch (error) {
 				const message = describe(error);
 				if (job.attempts < maxAttempts) {
-					queue.requeue(job.id);
 					result.retried++;
 					onEvent?.({ type: "retrying", job, error: message });
+					// The job stays `running` (and thus unclaimable, and still
+					// deduped by the partial unique index) for the whole backoff,
+					// exactly as the `backoffMs` doc comment promises. Requeueing
+					// first would make it claimable immediately, defeating the
+					// backoff for every worker but the one that just failed it.
 					await Bun.sleep(backoffMs(job.attempts));
+					queue.requeue(job.id);
 				} else {
 					queue.fail(job.id, message);
 					result.failed++;

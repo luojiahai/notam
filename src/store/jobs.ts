@@ -53,27 +53,42 @@ export function markRunning(db: Database, id: string, now: string): void {
 	).run(now, id);
 }
 
-export function markDone(db: Database, id: string, now: string): void {
-	db.query(
-		"UPDATE jobs SET state = 'done', finished_at = ?, error = NULL WHERE id = ?",
-	).run(now, id);
+/** Only a `running` job can finish. Returns false if it wasn't (already reset, or unknown id). */
+export function markDone(db: Database, id: string, now: string): boolean {
+	return (
+		db
+			.query(
+				"UPDATE jobs SET state = 'done', finished_at = ?, error = NULL WHERE id = ? AND state = 'running'",
+			)
+			.run(now, id).changes > 0
+	);
 }
 
+/** Only a `running` job can fail. Returns false if it wasn't (already reset, or unknown id). */
 export function markFailed(
 	db: Database,
 	id: string,
 	error: string,
 	now: string,
-): void {
-	db.query(
-		"UPDATE jobs SET state = 'failed', finished_at = ?, error = ? WHERE id = ?",
-	).run(now, error, id);
+): boolean {
+	return (
+		db
+			.query(
+				"UPDATE jobs SET state = 'failed', finished_at = ?, error = ? WHERE id = ? AND state = 'running'",
+			)
+			.run(now, error, id).changes > 0
+	);
 }
 
-export function markQueued(db: Database, id: string): void {
-	db.query(
-		"UPDATE jobs SET state = 'queued', started_at = NULL, finished_at = NULL WHERE id = ?",
-	).run(id);
+/** Only a `running` job can be requeued. Returns false if it wasn't (already reset, or unknown id). */
+export function markQueued(db: Database, id: string): boolean {
+	return (
+		db
+			.query(
+				"UPDATE jobs SET state = 'queued', started_at = NULL, finished_at = NULL WHERE id = ? AND state = 'running'",
+			)
+			.run(id).changes > 0
+	);
 }
 
 export function resetRunning(db: Database): number {

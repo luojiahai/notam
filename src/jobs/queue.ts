@@ -46,16 +46,19 @@ export class JobQueue {
 		})();
 	}
 
-	complete(id: string): void {
-		markDone(this.db, id, this.now().toISOString());
+	/** Marks a `running` job `done`. Returns false if it was not running (already reset, or unknown id). */
+	complete(id: string): boolean {
+		return markDone(this.db, id, this.now().toISOString());
 	}
 
-	fail(id: string, error: string): void {
-		markFailed(this.db, id, error, this.now().toISOString());
+	/** Marks a `running` job `failed`. Returns false if it was not running (already reset, or unknown id). */
+	fail(id: string, error: string): boolean {
+		return markFailed(this.db, id, error, this.now().toISOString());
 	}
 
-	requeue(id: string): void {
-		markQueued(this.db, id);
+	/** Puts a `running` job back to `queued`, preserving its attempt count. Returns false if it was not running (already reset, or unknown id). */
+	requeue(id: string): boolean {
+		return markQueued(this.db, id);
 	}
 
 	/** Call at startup: anything left `running` belongs to a process that died. */

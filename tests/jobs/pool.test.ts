@@ -118,6 +118,38 @@ describe("runPool", () => {
 		expect(queue.count("done")).toBe(1);
 	});
 
+	test("keeps a retrying job unclaimable for the whole backoff window", async () => {
+		const job = queue.enqueue("analyse", "flaky");
+		if (!job) throw new Error("expected a job");
+		let attempts = 0;
+		const run = runPool({
+			queue,
+			concurrency: 1,
+			maxAttempts: 2,
+			backoffMs: () => 40,
+			handlers: {
+				analyse: async () => {
+					attempts++;
+					if (attempts === 1) throw new Error("transient");
+				},
+			},
+		});
+
+		// Give the first attempt time to fail and enter its backoff sleep, but
+		// not long enough for the 40ms backoff to elapse.
+		await Bun.sleep(10);
+		// A second, independent claim attempt -- as another worker in a bigger
+		// pool would make -- must not see the job: it stays `running` for the
+		// whole backoff window, not just until requeue is eventually called.
+		expect(queue.claim()).toBeNull();
+		expect(queue.count("running")).toBe(1);
+		expect(queue.count("queued")).toBe(0);
+
+		await run;
+		expect(attempts).toBe(2);
+		expect(queue.count("done")).toBe(1);
+	});
+
 	test("gives up once maxAttempts is exhausted", async () => {
 		queue.enqueue("analyse", "doomed");
 		const result = await runPool({
