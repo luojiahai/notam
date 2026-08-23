@@ -67,7 +67,7 @@ function goodRunner(): ClaudeRunner & { peak: () => number } {
 			stdout: JSON.stringify({
 				type: "result",
 				is_error: false,
-				result: "```json\n" + JSON.stringify(rules) + "\n```",
+				result: `\`\`\`json\n${JSON.stringify(rules)}\n\`\`\``,
 			}),
 		};
 	};

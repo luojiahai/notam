@@ -14,4 +14,5 @@ test-results/
 playwright-report/
 .agents/
 .claude/
+.vscode/
 skills-lock.json
