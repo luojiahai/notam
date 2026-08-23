@@ -86,7 +86,11 @@ resolve_tag() {
 	fi
 	body=$(curl -fsSL "$API_BASE/repos/$REPO/releases/latest") ||
 		die "Could not reach $API_BASE to resolve the latest release of $REPO."
+	# sed's match is greedy, so it would take the *last* "tag_name" in the body
+	# rather than the first. Splitting on "," and "{" first means each line can
+	# contain at most one field, so `head -n 1` genuinely takes the first match.
 	tag=$(printf '%s' "$body" |
+		tr ',{' '\n\n' |
 		sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
 		head -n 1)
 	[ -n "$tag" ] || die "The latest release of $REPO reported no tag_name."
@@ -137,21 +141,45 @@ mkdir -p "$DIR" || die "Could not create $DIR"
 TARGET="$DIR/notam"
 
 if [ -e "$TARGET" ]; then
-	previous=$("$TARGET" version 2>/dev/null || printf 'unknown version')
+	# Never execute a pre-existing file at the target as a probe when running as
+	# root (e.g. `sudo sh install.sh --dir /usr/local/bin`): that file may be
+	# user-writable, and running it before it has been verified would let it run
+	# with root privileges. Non-root has no such escalation, so the probe still
+	# runs there and the upgrade report stays intact.
+	if [ "$(id -u)" -eq 0 ]; then
+		previous='unknown version'
+	else
+		previous=$("$TARGET" version 2>/dev/null || printf 'unknown version')
+	fi
 	printf 'Upgrading the existing install at %s (%s).\n' "$TARGET" "$previous"
 fi
 
 # Staged inside the destination so the rename is atomic on the same filesystem:
 # a half-written binary is never visible, and replacing one that is currently
-# running is fine.
-STAGE="$DIR/.notam-install.$$"
+# running is fine. mktemp (not a name built from $$) so a pre-created symlink
+# at a predictable path in a shared directory cannot intercept the verified
+# bytes.
+STAGE=$(mktemp "$DIR/.notam-install.XXXXXX") || die "Could not write to $DIR"
 cp "$TMP/$ASSET" "$STAGE" || die "Could not write to $DIR"
 chmod +x "$STAGE"
 mv "$STAGE" "$TARGET" || die "Could not install $TARGET"
 STAGE=""
 
-installed=$("$TARGET" version 2>/dev/null || printf '%s' "$TAG")
-printf 'Installed notam %s to %s\n' "$installed" "$TARGET"
+# This is the last chance to catch a binary that cannot run at all (wrong
+# loader, exec-format error): that must not be reported as a cheerful success.
+# A binary that runs but prints nothing is a separate, lesser problem and is
+# reported as such rather than silently standing in the tag as if it were the
+# version.
+if installed=$("$TARGET" version 2>/dev/null); then
+	if [ -n "$installed" ]; then
+		printf 'Installed notam %s to %s\n' "$installed" "$TARGET"
+	else
+		printf 'Installed notam %s to %s (it ran but printed no version)\n' \
+			"$TAG" "$TARGET"
+	fi
+else
+	die "Installed to $TARGET, but \`notam version\` failed to run. The install may be broken for this platform."
+fi
 
 case ":${PATH:-}:" in
 	*":$DIR:"*) ;;
