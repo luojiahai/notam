@@ -38,6 +38,26 @@ function stubFetch(responses: Response[]) {
 	return { impl: impl as unknown as typeof fetch, calls };
 }
 
+/** A fake fetch that rejects (as a DNS failure or connection reset would) the first `failures` times, then returns `finalResponse`. */
+function stubFetchWithFailures(failures: number, finalResponse: Response) {
+	const calls: Call[] = [];
+	let attempt = 0;
+	const impl = async (
+		url: string | URL | Request,
+		init?: RequestInit,
+	): Promise<Response> => {
+		calls.push({
+			url: String(url),
+			headers: (init?.headers ?? {}) as Record<string, string>,
+			body: JSON.parse(String(init?.body)) as Call["body"],
+		});
+		attempt++;
+		if (attempt <= failures) throw new TypeError("fetch failed");
+		return finalResponse;
+	};
+	return { impl: impl as unknown as typeof fetch, calls };
+}
+
 function json(body: unknown, init: ResponseInit = {}): Response {
 	return new Response(JSON.stringify(body), {
 		status: 200,
@@ -212,6 +232,70 @@ describe("fetchPRDetail", () => {
 		expect(stub.calls).toHaveLength(3);
 	});
 
+	test("reaches exactly 300 files with no further page and does not flag truncation", async () => {
+		const batch = (start: number) =>
+			Array.from({ length: 100 }, (_, i) => `src/f${start + i}.ts`);
+		const stub = stubFetch([
+			json(await detailFixtureWithFiles(batch(0), true, "c1")),
+			json(filesPage(batch(100), true, "c2")),
+			json(filesPage(batch(200), false, null)),
+		]);
+		const { instance } = client(stub.impl);
+		const detail = await instance.fetchPRDetail(REPO, 4821);
+		expect(detail.changedPaths).toHaveLength(300);
+		expect(detail.pathsTruncated).toBe(false);
+		expect(stub.calls).toHaveLength(3);
+	});
+
+	test("slices to 300 and flags truncation when a page pushes the total past the cap", async () => {
+		const batch = (start: number, len: number) =>
+			Array.from({ length: len }, (_, i) => `src/g${start + i}.ts`);
+		const stub = stubFetch([
+			json(await detailFixtureWithFiles(batch(0, 50), true, "c1")),
+			json(filesPage(batch(50, 100), true, "c2")),
+			json(filesPage(batch(150, 100), true, "c3")),
+			json(filesPage(batch(250, 100), false, null)),
+		]);
+		const { instance } = client(stub.impl);
+		const detail = await instance.fetchPRDetail(REPO, 4821);
+		expect(detail.changedPaths).toHaveLength(300);
+		expect(detail.pathsTruncated).toBe(true);
+		expect(stub.calls).toHaveLength(4);
+	});
+
+	test("flags truncation when hasNextPage is true but the server gave no cursor to continue with", async () => {
+		const stub = stubFetch([
+			json(
+				await detailFixtureWithFiles(
+					["services/payments/round.ts"],
+					true,
+					null,
+				),
+			),
+		]);
+		const { instance } = client(stub.impl);
+		const detail = await instance.fetchPRDetail(REPO, 4821);
+		expect(detail.changedPaths).toEqual(["services/payments/round.ts"]);
+		expect(detail.pathsTruncated).toBe(true);
+		expect(stub.calls).toHaveLength(1);
+	});
+
+	test("terminates instead of hanging when the server keeps promising another page", async () => {
+		const stuckPage = () => filesPage([], true, "c1");
+		const stub = stubFetch([
+			json(await detailFixtureWithFiles([], true, "c1")),
+			json(stuckPage()),
+			json(stuckPage()),
+			json(stuckPage()),
+			json(stuckPage()),
+		]);
+		const { instance } = client(stub.impl);
+		const detail = await instance.fetchPRDetail(REPO, 4821);
+		expect(detail.changedPaths).toEqual([]);
+		expect(detail.pathsTruncated).toBe(true);
+		expect(stub.calls).toHaveLength(5);
+	});
+
 	test("throws a clear error when the pull request does not exist", async () => {
 		const stub = stubFetch([
 			json({
@@ -229,21 +313,84 @@ describe("fetchPRDetail", () => {
 });
 
 describe("error handling", () => {
-	test("surfaces GraphQL errors verbatim", async () => {
+	test("surfaces GraphQL errors verbatim with a null status, since it is not an HTTP failure", async () => {
 		const stub = stubFetch([
 			json({ errors: [{ message: "Field 'reviewThreads' doesn't exist" }] }),
 		]);
 		const { instance } = client(stub.impl);
-		await expect(instance.listMergedPRs(REPO, {})).rejects.toThrow(
+		let error: unknown;
+		try {
+			await instance.listMergedPRs(REPO, {});
+		} catch (err) {
+			error = err;
+		}
+		expect(error).toBeInstanceOf(GitHubError);
+		expect((error as GitHubError).message).toContain(
 			"Field 'reviewThreads' doesn't exist",
 		);
+		expect((error as GitHubError).status).toBeNull();
 	});
 
 	test("does not retry a 401, because a bad token will never come good", async () => {
 		const stub = stubFetch([new Response("Bad credentials", { status: 401 })]);
 		const { instance } = client(stub.impl);
-		await expect(instance.listMergedPRs(REPO, {})).rejects.toThrow(GitHubError);
+		let error: unknown;
+		try {
+			await instance.listMergedPRs(REPO, {});
+		} catch (err) {
+			error = err;
+		}
+		expect(error).toBeInstanceOf(GitHubError);
+		expect((error as GitHubError).status).toBe(401);
 		expect(stub.calls).toHaveLength(1);
+	});
+
+	test("wraps a network failure like a transient 5xx and retries it", async () => {
+		const stub = stubFetchWithFailures(
+			1,
+			json(await fixture("pr-list-github.json")),
+		);
+		const { instance, sleeps } = client(stub.impl);
+		const page = await instance.listMergedPRs(REPO, {});
+		expect(page.nodes).toHaveLength(2);
+		expect(sleeps).toHaveLength(1);
+		expect(stub.calls).toHaveLength(2);
+	});
+
+	test("gives up on a persistent network failure with a null-status GitHubError", async () => {
+		const stub = stubFetchWithFailures(
+			99,
+			json(await fixture("pr-list-github.json")),
+		);
+		const { instance } = client(stub.impl, { maxRetries: 1 });
+		let error: unknown;
+		try {
+			await instance.listMergedPRs(REPO, {});
+		} catch (err) {
+			error = err;
+		}
+		expect(error).toBeInstanceOf(GitHubError);
+		expect((error as GitHubError).status).toBeNull();
+		expect(stub.calls).toHaveLength(2);
+	});
+
+	test("shares its retry budget between network failures and 5xx responses, not two separate policies", async () => {
+		const calls: string[] = [];
+		let attempt = 0;
+		const impl = async (): Promise<Response> => {
+			attempt++;
+			calls.push(`attempt-${attempt}`);
+			if (attempt === 1) throw new TypeError("fetch failed");
+			if (attempt === 2) return new Response("bad gateway", { status: 502 });
+			return json(await fixture("pr-list-github.json"));
+		};
+		const { instance, sleeps } = client(impl as unknown as typeof fetch, {
+			maxRetries: 2,
+		});
+		const page = await instance.listMergedPRs(REPO, {});
+		expect(page.nodes).toHaveLength(2);
+		expect(calls).toHaveLength(3);
+		expect(sleeps).toHaveLength(2);
 	});
 
 	test("retries a 502 and succeeds", async () => {
