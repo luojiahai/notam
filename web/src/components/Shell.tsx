@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ThemeToggle } from "./ThemeToggle.tsx";
 
 export type ShellProps = {
 	repoName: string | null;
@@ -22,21 +23,38 @@ export function Shell({
 	return (
 		<div className="shell">
 			<header className="header">
-				<h1>NOTAM</h1>
-				<span className="secondary">
+				<h1 className="brand">NOTAM</h1>
+				<span className="header-context" data-empty={repoName === null}>
 					{repoName ?? "no repository selected"}
 				</span>
 				<span className="spacer" />
-				{warnings.map((warning) => (
-					<span key={warning} className="warning" role="status">
-						{warning}
-					</span>
-				))}
-				<button type="button" onClick={onSync} disabled={syncing || !repoName}>
+				<button
+					type="button"
+					className="btn-primary"
+					onClick={onSync}
+					disabled={syncing || !repoName}
+				>
 					{syncing ? "Syncing…" : "Sync"}
 				</button>
-				<span className="secondary">{version}</span>
+				<ThemeToggle />
+				<span className="version">{version}</span>
 			</header>
+
+			{/*
+				Warnings used to sit in the header's flex row, where one long
+				sentence from the server squeezed the sync button off the end.
+				They are server text of unbounded length, so they get the full
+				width and wrap instead of competing with the controls.
+			*/}
+			<div className="banners">
+				{warnings.map((warning) => (
+					<div key={warning} className="banner" role="status">
+						<span className="banner-label">Warning</span>
+						<span className="banner-text">{warning}</span>
+					</div>
+				))}
+			</div>
+
 			<div className="body">
 				{sidebar}
 				<main className="main">{children}</main>

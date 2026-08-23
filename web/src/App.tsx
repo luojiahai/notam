@@ -179,7 +179,12 @@ export function App() {
 			</div>
 			{repoId === null ? (
 				<div className="table-wrap">
-					<p className="secondary">Select a repository.</p>
+					<div className="state">
+						<p className="state-title">No repository selected</p>
+						<p className="state-hint">
+							Pick one from the sidebar to see its entries and rules.
+						</p>
+					</div>
 				</div>
 			) : tab === "entries" ? (
 				// Keyed on the repository: without it React keeps the tab's state

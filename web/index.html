@@ -3,7 +3,30 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="description" content="Notes On Team Agreements & Methods" />
+		<!--
+			Both schemes are declared so form controls, scrollbars, and the
+			canvas the browser paints before CSS arrives all match the theme.
+		-->
+		<meta name="color-scheme" content="light dark" />
 		<title>NOTAM</title>
+		<!--
+			Applied before first paint, on purpose. Reading the stored theme from
+			React would leave one frame of light chrome on a dark machine, and
+			that flash is the single most visible defect a themed app can ship.
+			Kept in sync afterwards by web/src/lib/theme.ts.
+		-->
+		<script>
+			var stored = null;
+			try {
+				stored = localStorage.getItem("notam.theme");
+			} catch {
+				// Storage can be unavailable; the OS preference still applies.
+			}
+			if (stored === "light" || stored === "dark") {
+				document.documentElement.setAttribute("data-theme", stored);
+			}
+		</script>
 	</head>
 	<body>
 		<div id="root"></div>

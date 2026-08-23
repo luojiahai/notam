@@ -5,8 +5,9 @@ import type {
 	RuleSummary,
 } from "../../../src/shared/api.ts";
 import { useSelection } from "../state/selection.ts";
-import { Badge } from "./Badge.tsx";
+import { Badge, StatusPill } from "./Badge.tsx";
 import { type Chip, FilterChips } from "./FilterChips.tsx";
+import { TableEmpty, TableSkeleton } from "./TableState.tsx";
 
 export type RulesTableProps = {
 	rules: RuleSummary[];
@@ -77,6 +78,8 @@ export function RulesTable(props: RulesTableProps) {
 		count: props.counts[status],
 	}));
 
+	const filtered = props.status !== "" || props.query !== "";
+
 	return (
 		<>
 			<div className="toolbar">
@@ -92,8 +95,10 @@ export function RulesTable(props: RulesTableProps) {
 					value={props.query}
 					onChange={(event) => props.onQueryChange(event.target.value)}
 				/>
+				<span className="spacer" />
 				<button
 					type="button"
+					className="btn-toggle"
 					aria-pressed={props.sort === "directive"}
 					onClick={() =>
 						props.onSortChange(
@@ -106,86 +111,95 @@ export function RulesTable(props: RulesTableProps) {
 			</div>
 
 			<div className="table-wrap">
-				<table>
-					<thead>
-						<tr>
-							<th>
-								<input
-									type="checkbox"
-									aria-label="Select all rules"
-									checked={allSelected}
-									onChange={() =>
-										allSelected
-											? selection.clear()
-											: selection.setAll(props.rules)
-									}
-								/>
-							</th>
-							<th>Kind</th>
-							<th>Directive</th>
-							<th>Scope</th>
-							<th>Confidence</th>
-							<th>Source</th>
-							<th>Status</th>
-						</tr>
-					</thead>
-					<tbody>
-						{props.rules.map((rule) => (
-							<tr key={rule.id}>
-								<td>
+				{props.loading ? (
+					<TableSkeleton />
+				) : props.rules.length === 0 ? (
+					<TableEmpty
+						title={filtered ? "No rules match this filter." : "No rules yet."}
+						hint={
+							filtered
+								? "Clear the filter or widen the search to see the rest."
+								: "Analyse some entries and the Dos and Don'ts they contain land here."
+						}
+					/>
+				) : (
+					<table>
+						<thead>
+							<tr>
+								<th>
 									<input
 										type="checkbox"
-										aria-label={`Select ${rule.directive}`}
-										checked={selection.has(rule.id)}
-										onChange={() => selection.toggle(rule)}
+										aria-label="Select all rules"
+										checked={allSelected}
+										onChange={() =>
+											allSelected
+												? selection.clear()
+												: selection.setAll(props.rules)
+										}
 									/>
-								</td>
-								<td>
-									<Badge kind={rule.kind}>
-										{rule.kind === "do" ? "DO" : "DON'T"}
-									</Badge>
-								</td>
-								<td>
-									<button
-										type="button"
-										style={{
-											background: "none",
-											border: 0,
-											padding: 0,
-											textAlign: "left",
-										}}
-										onClick={() => props.onOpenRule(rule.id)}
-									>
-										{rule.directive}
-									</button>
-									<div className="secondary">{rule.rationale}</div>
-								</td>
-								<td className="secondary">
-									{rule.scope_globs.length === 0
-										? "whole repository"
-										: rule.scope_globs.join(", ")}
-								</td>
-								<td>{rule.confidence.toFixed(2)}</td>
-								<td>
-									<a href={rule.source_url} target="_blank" rel="noreferrer">
-										#{rule.source_number}
-									</a>
-								</td>
-								<td>{rule.status}</td>
+								</th>
+								<th>Kind</th>
+								<th>Directive</th>
+								<th>Scope</th>
+								<th className="num">Confidence</th>
+								<th>Source</th>
+								<th>Status</th>
 							</tr>
-						))}
-					</tbody>
-				</table>
-				{props.loading && <p className="secondary">Loading…</p>}
-				{!props.loading && props.rules.length === 0 && (
-					<p className="secondary">No rules match this filter.</p>
+						</thead>
+						<tbody>
+							{props.rules.map((rule) => (
+								<tr key={rule.id}>
+									<td>
+										<input
+											type="checkbox"
+											aria-label={`Select ${rule.directive}`}
+											checked={selection.has(rule.id)}
+											onChange={() => selection.toggle(rule)}
+										/>
+									</td>
+									<td>
+										<Badge kind={rule.kind}>
+											{rule.kind === "do" ? "DO" : "DON'T"}
+										</Badge>
+									</td>
+									<td className="cell-title">
+										<button
+											type="button"
+											className="btn-plain"
+											onClick={() => props.onOpenRule(rule.id)}
+										>
+											{rule.directive}
+										</button>
+										<div className="secondary">{rule.rationale}</div>
+									</td>
+									<td className="secondary mono">
+										{rule.scope_globs.length === 0
+											? "whole repository"
+											: rule.scope_globs.join(", ")}
+									</td>
+									<td className="num">{rule.confidence.toFixed(2)}</td>
+									<td className="mono">
+										<a href={rule.source_url} target="_blank" rel="noreferrer">
+											#{rule.source_number}
+										</a>
+									</td>
+									<td>
+										<StatusPill status={rule.status} />
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
 				)}
 			</div>
 
 			<div className="bulk">
-				<span>{selection.size} selected</span>
+				<span className="bulk-count" data-active={selection.size > 0}>
+					{selection.size} selected
+				</span>
 				<button
 					type="button"
+					className="btn-primary"
 					disabled={!allDraft}
 					onClick={() => props.onCreatePromotion(selection.ids)}
 				>
@@ -200,15 +214,16 @@ export function RulesTable(props: RulesTableProps) {
 				</button>
 				<button
 					type="button"
+					className="btn-danger"
 					disabled={selection.size === 0 || anyAbandoned}
 					onClick={() => props.onAbandon(selection.ids)}
 				>
 					Abandon
 				</button>
 				{selection.size > 0 && !allDraft && (
-					<span className="secondary">Only draft rules can be promoted.</span>
+					<span className="bulk-hint">Only draft rules can be promoted.</span>
 				)}
-				{props.error && <span className="error">{props.error}</span>}
+				{props.error && <span className="bulk-error">{props.error}</span>}
 			</div>
 		</>
 	);

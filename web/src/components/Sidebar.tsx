@@ -1,5 +1,5 @@
 import type { PromotionSummary, RepoSummary } from "../../../src/shared/api.ts";
-import { Badge } from "./Badge.tsx";
+import { StatusPill } from "./Badge.tsx";
 
 export type SidebarProps = {
 	repos: RepoSummary[];
@@ -30,7 +30,7 @@ export function Sidebar({
 		<nav className="sidebar" aria-label="Repositories and promotions">
 			<h2>Repositories</h2>
 			{repos.length === 0 ? (
-				<p className="secondary" style={{ padding: "0 0.5rem" }}>
+				<p className="sidebar-note">
 					No repositories configured. Add one to{" "}
 					<code>~/.notam/config.yaml</code>.
 				</p>
@@ -39,11 +39,12 @@ export function Sidebar({
 					<button
 						key={repo.id}
 						type="button"
+						className="repo"
 						aria-current={repo.id === selectedRepoId}
 						onClick={() => onSelectRepo(repo.id)}
 					>
-						<div>{repo.name}</div>
-						<div className="secondary">
+						<div className="repo-name">{repo.name}</div>
+						<div className="repo-meta">
 							{repo.entries.total} entries · {repo.rules.draft} drafts
 						</div>
 					</button>
@@ -51,33 +52,46 @@ export function Sidebar({
 			)}
 
 			<h2>Promotions</h2>
-			<div style={{ padding: "0 0.5rem 0.5rem" }}>
+			<div className="sidebar-actions">
 				<button
 					type="button"
+					className="btn-sm"
 					onClick={onRefreshPromotions}
 					disabled={refreshing}
 				>
 					{refreshing ? "Refreshing…" : "Refresh status"}
 				</button>
-				{refreshError && <p className="error">{refreshError}</p>}
+				{refreshError && <p className="notice notice-error">{refreshError}</p>}
 			</div>
 			{promotions.length === 0 ? (
-				<p className="secondary" style={{ padding: "0 0.5rem" }}>
-					No promotions yet.
-				</p>
+				<p className="sidebar-note">No promotions yet.</p>
 			) : (
-				<ul style={{ listStyle: "none", margin: 0, padding: "0 0.5rem" }}>
+				<ul className="promotions">
 					{promotions.map((promotion) => (
-						<li key={promotion.id} style={{ padding: "0.25rem 0" }}>
+						<li key={promotion.id} className="promotion">
 							{promotion.pr_url && promotion.pr_number !== null ? (
-								<a href={promotion.pr_url} target="_blank" rel="noreferrer">
+								<a
+									className="promotion-ref"
+									href={promotion.pr_url}
+									target="_blank"
+									rel="noreferrer"
+								>
 									#{promotion.pr_number}
 								</a>
 							) : (
-								<span className="secondary">{promotion.branch}</span>
-							)}{" "}
-							<Badge>{promotion.state}</Badge>
-							<div className="secondary">{promotion.rule_count} rules</div>
+								// No pull request yet, so the branch is the only handle.
+								<span
+									className="promotion-ref is-branch"
+									title={promotion.branch}
+								>
+									{promotion.branch}
+								</span>
+							)}
+							<StatusPill status={promotion.state} />
+							<span className="promotion-count">
+								{promotion.rule_count} rule
+								{promotion.rule_count === 1 ? "" : "s"}
+							</span>
 						</li>
 					))}
 				</ul>

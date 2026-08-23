@@ -17,6 +17,10 @@ export type PromotionDialogProps = {
  * Spec section 7's pre-flight. The collision sentence is quoted from the spec
  * on purpose: committing `…-2.md` without saying so is the silent footgun this
  * dialog exists to prevent.
+ *
+ * Each file is a bordered block rather than a run of list items, because this
+ * is the last screen before something is written to someone else's repository:
+ * the boundary between one committed file and the next has to be unmistakable.
  */
 export function PromotionDialog(props: PromotionDialogProps) {
 	const collisionFor = new Map(
@@ -40,31 +44,42 @@ export function PromotionDialog(props: PromotionDialogProps) {
 				<code>{props.plan.repo_name}</code>.
 			</p>
 
-			{props.error && <p className="error">{props.error}</p>}
+			{props.error && (
+				<p className="notice notice-error" role="alert">
+					{props.error}
+				</p>
+			)}
 
-			<ul style={{ listStyle: "none", padding: 0 }}>
+			<ul className="plan-list">
 				{props.plan.files.map((file) => {
 					const collision = collisionFor.get(file.rule_id);
+					const included = props.included.includes(file.rule_id);
 					return (
-						<li key={file.rule_id} style={{ marginBottom: "0.75rem" }}>
-							<label>
-								<input
-									type="checkbox"
-									checked={props.included.includes(file.rule_id)}
-									onChange={() => props.onToggle(file.rule_id)}
-								/>{" "}
-								{file.directive}
-							</label>
-							<div className="secondary">
-								<code>{file.path}</code>
+						<li
+							className="plan-file"
+							data-excluded={!included}
+							key={file.rule_id}
+						>
+							<div className="plan-file-head">
+								<label className="plan-file-label">
+									<input
+										type="checkbox"
+										checked={included}
+										onChange={() => props.onToggle(file.rule_id)}
+									/>
+									<span>{file.directive}</span>
+								</label>
+								<div className="plan-file-path">{file.path}</div>
+								{collision && (
+									<p className="notice notice-warn">
+										{basename(collision.existing)} already exists in{" "}
+										{props.plan.repo_name}; promoting adds a second file.
+									</p>
+								)}
 							</div>
-							{collision && (
-								<div className="warning">
-									{basename(collision.existing)} already exists in{" "}
-									{props.plan.repo_name}; promoting adds a second file.
-								</div>
-							)}
-							<pre>{file.content}</pre>
+							<div className="plan-file-body">
+								<pre>{file.content}</pre>
+							</div>
 						</li>
 					);
 				})}

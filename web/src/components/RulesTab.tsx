@@ -3,6 +3,7 @@ import type { RuleStatus } from "../../../src/shared/api.ts";
 import { useRules, useSetRuleStatus } from "../api/hooks.ts";
 import { PromotionFlow } from "./PromotionFlow.tsx";
 import { RulesTable } from "./RulesTable.tsx";
+import { TableError } from "./TableState.tsx";
 
 export function RulesTab({
 	repoId,
@@ -18,7 +19,7 @@ export function RulesTab({
 	const rules = useRules(repoId, status, query, sort);
 	const setRuleStatus = useSetRuleStatus();
 
-	if (rules.error) return <p className="error">{rules.error.message}</p>;
+	if (rules.error) return <TableError message={rules.error.message} />;
 
 	return (
 		<>

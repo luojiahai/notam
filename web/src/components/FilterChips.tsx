@@ -20,7 +20,9 @@ export function FilterChips({
 					// Clicking the active chip clears it, so a filter is never a trap.
 					onClick={() => onChange(chip.value === active ? "" : chip.value)}
 				>
-					{chip.label} {chip.count}
+					{/* The literal space is load-bearing: it keeps the accessible
+					    name "Unanalysed 12" rather than "Unanalysed12". */}
+					{chip.label} <span className="chip-count">{chip.count}</span>
 				</button>
 			))}
 		</div>
