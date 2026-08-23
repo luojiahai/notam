@@ -3,6 +3,7 @@ import type { AppContext } from "./context.ts";
 import { errorResponse, HttpError } from "./errors.ts";
 import { entryRoutes } from "./routes/entries.ts";
 import { metaRoutes } from "./routes/meta.ts";
+import { promotionRoutes } from "./routes/promotions.ts";
 import { repoRoutes } from "./routes/repos.ts";
 import { ruleRoutes } from "./routes/rules.ts";
 import { syncRoutes } from "./routes/sync.ts";
@@ -21,6 +22,7 @@ export function createApp(ctx: AppContext): Hono {
 	api.route("/", entryRoutes(ctx));
 	api.route("/", ruleRoutes(ctx));
 	api.route("/", syncRoutes(ctx));
+	api.route("/", promotionRoutes(ctx));
 
 	const app = new Hono();
 	app.onError((error) => errorResponse(error));
