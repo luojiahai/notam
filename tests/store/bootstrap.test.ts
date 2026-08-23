@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { ConfigSchema } from "../../src/core/config/schema.ts";
 import { applyConfig } from "../../src/store/bootstrap.ts";
 import { openDatabase } from "../../src/store/db.ts";
-import { listHosts } from "../../src/store/hosts.ts";
+import { getHost, listHosts } from "../../src/store/hosts.ts";
 import { applyMigrations } from "../../src/store/migrations.ts";
 import { listRepos, setWatermark } from "../../src/store/repos.ts";
 
@@ -21,6 +21,27 @@ hosts:
     api_base: https://api.github.com
     graphql: https://api.github.com/graphql
     token_env: NOTAM_GITHUB_TOKEN
+  - id: ghe
+    label: Acme GHES
+    api_base: https://ghe.acme.net/api/v3
+    graphql: https://ghe.acme.net/api/graphql
+    token_env: NOTAM_GHE_TOKEN
+repos:
+  - host: github
+    name: acme/monolith
+    path_globs: ["services/payments/**"]
+  - host: ghe
+    name: acme/internal
+    window_days: 90
+`;
+
+const GITHUB_HOST_EDITED = `
+hosts:
+  - id: github
+    label: GitHub (Edited)
+    api_base: https://api.github.edited
+    graphql: https://api.github.com/graphql
+    token_env: NOTAM_GITHUB_TOKEN_V2
   - id: ghe
     label: Acme GHES
     api_base: https://ghe.acme.net/api/v3
@@ -93,6 +114,29 @@ describe("applyConfig", () => {
 		const updated = listRepos(db).find((r) => r.name === "acme/monolith");
 		expect(updated?.path_globs).toEqual(["libs/money/**"]);
 		expect(updated?.sync_watermark).toBe("2026-08-21T10:00:00.000Z");
+	});
+
+	test("updates an existing host's label, api_base, and token_env without creating a duplicate or disturbing its repos", () => {
+		const first = applyConfig(db, config(TWO_HOSTS), NOW);
+		const mono = first.repos.find((r) => r.name === "acme/monolith");
+		if (!mono) throw new Error("missing repo");
+
+		applyConfig(db, config(GITHUB_HOST_EDITED), NOW);
+
+		const hostsAfter = listHosts(db);
+		expect(hostsAfter).toHaveLength(2);
+		const github = getHost(db, "github");
+		expect(github?.id).toBe("github");
+		expect(github?.label).toBe("GitHub (Edited)");
+		expect(github?.api_base).toBe("https://api.github.edited");
+		expect(github?.token_env).toBe("NOTAM_GITHUB_TOKEN_V2");
+
+		const reposAfter = listRepos(db);
+		expect(reposAfter).toHaveLength(2);
+		const monoAfter = reposAfter.find((r) => r.name === "acme/monolith");
+		expect(monoAfter?.id).toBe(mono.id);
+		expect(monoAfter?.host_id).toBe("github");
+		expect(monoAfter?.path_globs).toEqual(["services/payments/**"]);
 	});
 
 	test("leaves rows for repos dropped from config in place", () => {
