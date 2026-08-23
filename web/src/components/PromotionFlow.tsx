@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useCreatePromotion, usePlanPromotion } from "../api/hooks.ts";
+import { Dialog } from "./Dialog.tsx";
 import { PromotionDialog } from "./PromotionDialog.tsx";
 
 /**
@@ -28,23 +29,18 @@ export function PromotionFlow({
 
 	if (!plan.data) {
 		return (
-			<div className="dialog-backdrop">
-				<div
-					className="dialog"
-					role="dialog"
-					aria-modal="true"
-					aria-label="Create rules pull request"
-				>
-					{plan.error ? (
-						<p className="error">{plan.error.message}</p>
-					) : (
-						<p className="secondary">Checking the base branch…</p>
-					)}
-					<button type="button" onClick={onClose}>
-						Close
-					</button>
-				</div>
-			</div>
+			<Dialog
+				title="Create rules pull request"
+				confirmLabel="Close"
+				onCancel={onClose}
+				onConfirm={onClose}
+			>
+				{plan.error ? (
+					<p className="error">{plan.error.message}</p>
+				) : (
+					<p className="secondary">Checking the base branch…</p>
+				)}
+			</Dialog>
 		);
 	}
 
