@@ -5,6 +5,7 @@ import type {
 	RunnerResult,
 } from "../../src/core/analysis/runner.ts";
 import type { Config } from "../../src/core/config/schema.ts";
+import { GitHubError } from "../../src/core/github/client.ts";
 import type {
 	CreatePRRequest,
 	CreatePRResult,
@@ -44,11 +45,29 @@ export const TEST_CONFIG: Config = {
 };
 
 export class FakeGitHubClient implements GitHubClient {
+	/** Whatever this holds is what a sync will find. */
+	prs: PRDetail[] = [];
+
 	listMergedPRs(): Promise<PRPage> {
-		return Promise.resolve({ nodes: [], endCursor: null, hasNextPage: false });
+		return Promise.resolve({
+			nodes: this.prs.map((detail) => ({
+				number: detail.pullRequest.number,
+				updatedAt: detail.pullRequest.updatedAt,
+				mergedAt: detail.pullRequest.mergedAt,
+			})),
+			endCursor: null,
+			hasNextPage: false,
+		});
 	}
-	fetchPRDetail(): Promise<PRDetail> {
-		throw new Error("fetchPRDetail is not used by this test");
+
+	fetchPRDetail(_repo: RepoRef, number: number): Promise<PRDetail> {
+		const found = this.prs.find(
+			(detail) => detail.pullRequest.number === number,
+		);
+		if (!found) {
+			return Promise.reject(new GitHubError(`no PR #${number}`, 404));
+		}
+		return Promise.resolve(found);
 	}
 }
 
@@ -89,6 +108,7 @@ export type TestHarness = {
 	repoId: string;
 	entryId: string;
 	gitData: FakeGitDataClient;
+	github: FakeGitHubClient;
 	runnerCalls: RunnerRequest[];
 	close: () => void;
 };
@@ -108,6 +128,7 @@ export const DEFAULT_ANALYSER_STDOUT = JSON.stringify({
 export function testContext(options: HarnessOptions = {}): TestHarness {
 	const seeded = seedDatabase();
 	const gitData = new FakeGitDataClient();
+	const github = new FakeGitHubClient();
 	const runnerCalls: RunnerRequest[] = [];
 	const ctx = createContext({
 		db: seeded.db,
@@ -117,7 +138,7 @@ export function testContext(options: HarnessOptions = {}): TestHarness {
 		now: () => SEED_NOW,
 		version: "test",
 		claudeAvailable: options.claudeAvailable ?? true,
-		githubFor: () => new FakeGitHubClient(),
+		githubFor: () => github,
 		gitDataFor: () => gitData,
 		claudeRunner: async (request) => {
 			runnerCalls.push(request);
@@ -136,6 +157,7 @@ export function testContext(options: HarnessOptions = {}): TestHarness {
 		repoId: seeded.repo.id,
 		entryId: seeded.entry.id,
 		gitData,
+		github,
 		runnerCalls,
 		close: () => {
 			ctx.shutdown();
