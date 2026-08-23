@@ -137,6 +137,13 @@ export function usePromotions(
  * Mutations invalidate on success as well as relying on the SSE stream. The
  * stream is the live channel, but a browser whose EventSource dropped must
  * still see the result of its own click.
+ *
+ * A mutation that moves a row invalidates the detail family beside the list
+ * family — `["rule"]` next to `["rules"]`, `["entry"]` next to `["entries"]`.
+ * The two are separate key families, so `["rules"]` does not prefix-match
+ * `["rule", id]`: without the second call an open drawer keeps rendering the
+ * status the row has just left, and with `refetchOnWindowFocus` off nothing
+ * ever refetches it.
  */
 export function useSync() {
 	const client = useQueryClient();
@@ -156,6 +163,7 @@ export function useAnalyse() {
 			post(QueueResultSchema, "/api/entries/analyse", { entry_ids: entryIds }),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["entries"] });
+			void client.invalidateQueries({ queryKey: ["entry"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
 	});
@@ -168,6 +176,7 @@ export function useAnalyseUnanalysed() {
 			post(QueueResultSchema, `/api/repos/${repoId}/analyse-unanalysed`, {}),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["entries"] });
+			void client.invalidateQueries({ queryKey: ["entry"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
 	});
@@ -187,6 +196,7 @@ export function useSetRuleStatus() {
 			}),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["rules"] });
+			void client.invalidateQueries({ queryKey: ["rule"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
 	});
@@ -206,6 +216,7 @@ export function useCreatePromotion() {
 			post(PromotionSummarySchema, "/api/promotions", { rule_ids: ruleIds }),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["rules"] });
+			void client.invalidateQueries({ queryKey: ["rule"] });
 			void client.invalidateQueries({ queryKey: ["promotions"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
@@ -224,6 +235,7 @@ export function useRefreshPromotions() {
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["promotions"] });
 			void client.invalidateQueries({ queryKey: ["rules"] });
+			void client.invalidateQueries({ queryKey: ["rule"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
 	});
