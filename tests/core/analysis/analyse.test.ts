@@ -51,7 +51,7 @@ function replies(...results: RunnerResult[]): ClaudeRunner & {
 function ok(rules: unknown[]): RunnerResult {
 	return {
 		ok: true,
-		stdout: envelope("```json\n" + JSON.stringify(rules) + "\n```"),
+		stdout: envelope(`\`\`\`json\n${JSON.stringify(rules)}\n\`\`\``),
 	};
 }
 

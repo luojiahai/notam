@@ -138,7 +138,7 @@ describe("parseAnalyserOutput", () => {
 
 	test("reports a bare object that was not wrapped in an array", () => {
 		const result = parseAnalyserOutput(
-			envelope("```json\n" + JSON.stringify(RULE) + "\n```"),
+			envelope(`\`\`\`json\n${JSON.stringify(RULE)}\n\`\`\``),
 		);
 		expect(result.ok).toBe(false);
 	});
