@@ -4,3 +4,7 @@ node_modules/
 dist/
 *.db
 .DS_Store
+*.db-wal
+*.db-shm
+*.bak
+.notam-test/
