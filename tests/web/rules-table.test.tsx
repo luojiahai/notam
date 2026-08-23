@@ -129,6 +129,13 @@ describe("RulesTable", () => {
 		});
 		expect((button as HTMLButtonElement).disabled).toBe(true);
 		expect(screen.getByText(/only draft rules can be promoted/i)).toBeDefined();
+		expect(
+			(
+				screen.getByRole("button", {
+					name: /mark verified/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true);
 	});
 
 	test("Abandon works on any live selection", async () => {
