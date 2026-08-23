@@ -5,6 +5,7 @@ import type { ServerEvent } from "../../src/shared/api.ts";
 import { useServerEvents } from "./api/events.ts";
 import {
 	queryKeys,
+	useAnalyse,
 	useMeta,
 	usePromotions,
 	useRefreshPromotions,
@@ -12,6 +13,7 @@ import {
 	useSync,
 } from "./api/hooks.ts";
 import { EntriesTab } from "./components/EntriesTab.tsx";
+import { EntryDrawer } from "./components/EntryDrawer.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
@@ -79,8 +81,7 @@ export function App() {
 	const repos = useRepos();
 	const [repoId, setRepoId] = useState<string | null>(null);
 	const [tab, setTab] = useState<"entries" | "rules">("entries");
-	// `drawer` itself is read by Task 14's drawer panel, not yet wired here.
-	const [, setDrawer] = useState<DrawerTarget>(null);
+	const [drawer, setDrawer] = useState<DrawerTarget>(null);
 	const [batch, setBatch] = useState<BatchState>({ queued: 0, running: 0 });
 
 	// Select the first repository as soon as one is known, and never fight the
@@ -94,6 +95,7 @@ export function App() {
 	const promotions = usePromotions(repoId);
 	const sync = useSync();
 	const refresh = useRefreshPromotions();
+	const analyse = useAnalyse();
 
 	useServerEvents(
 		useCallback((event) => applyServerEvent(client, event, setBatch), [client]),
@@ -164,6 +166,14 @@ export function App() {
 				<div className="table-wrap">
 					<p className="secondary">Rules for {repo?.name}</p>
 				</div>
+			)}
+			{drawer?.kind === "entry" && (
+				<EntryDrawer
+					entryId={drawer.id}
+					onClose={() => setDrawer(null)}
+					onReanalyse={(entryId) => analyse.mutate([entryId])}
+					onOpenRule={(ruleId) => setDrawer({ kind: "rule", id: ruleId })}
+				/>
 			)}
 		</Shell>
 	);
