@@ -183,6 +183,7 @@ Environment variables NOTAM itself reads:
 | *whatever `token_env` names* | The token for that host. Required |
 | `NOTAM_HOME` | Use this directory instead of `$HOME` when locating `.notam/` |
 | `NOTAM_WEB_DIST` | Serve the web UI from this directory instead of the copy compiled into the binary |
+| `NOTAM_VERSION` | Read by `src/version.ts` as the version string `notam version` prints when running from source (a compiled binary ignores it — its version is baked in at compile time). Also read by `install.sh`, unrelatedly, as the release tag to install — see [Install](#install) |
 
 ## How it works
 
