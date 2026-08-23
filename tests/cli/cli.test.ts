@@ -2,8 +2,43 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runSync } from "../../src/cli/sync.ts";
+import { defaultDbPath } from "../../src/core/config/load.ts";
+import type { GitHubClient } from "../../src/core/github/types.ts";
+import { JobQueue } from "../../src/jobs/queue.ts";
+import { migrateDatabase } from "../../src/store/migrations.ts";
 
 const ENTRY = join(import.meta.dir, "../../src/cli/index.ts");
+
+/**
+ * A GitHubClient that never issues a request: used to exercise runSync's
+ * success and failure-reporting paths offline, by injecting it via the
+ * SyncOptions.clientFor seam instead of the CLI's default GraphQLGitHubClient.
+ */
+function fakeClient(): GitHubClient {
+	return {
+		listMergedPRs: async () => ({
+			nodes: [],
+			endCursor: null,
+			hasNextPage: false,
+		}),
+		fetchPRDetail: async () => {
+			throw new Error("fetchPRDetail should not be called in this test");
+		},
+	};
+}
+
+/** Runs `fn` with NOTAM_TEST_TOKEN set, restoring whatever was there before. */
+async function withTestToken<T>(fn: () => Promise<T>): Promise<T> {
+	const original = process.env.NOTAM_TEST_TOKEN;
+	process.env.NOTAM_TEST_TOKEN = "t";
+	try {
+		return await fn();
+	} finally {
+		if (original === undefined) delete process.env.NOTAM_TEST_TOKEN;
+		else process.env.NOTAM_TEST_TOKEN = original;
+	}
+}
 
 let home: string;
 beforeEach(async () => {
@@ -119,8 +154,21 @@ describe("notam init", () => {
 	});
 
 	test("warns when the claude CLI is not on PATH", async () => {
+		// PATH is pinned to a directory with nothing in it, so the missing
+		// branch is deterministic here regardless of whether this machine
+		// happens to have the claude CLI installed.
 		const result = await notam(["init"], { PATH: "/nonexistent" });
-		expect(result.output).toContain("claude");
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("not found on PATH");
+	});
+
+	test("notam init --help prints help without writing a config", async () => {
+		const result = await notam(["init", "--help"]);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("Usage");
+		expect(await Bun.file(join(home, ".notam", "config.yaml")).exists()).toBe(
+			false,
+		);
 	});
 });
 
@@ -162,5 +210,80 @@ describe("notam sync", () => {
 		});
 		expect(result.exitCode).not.toBe(0);
 		expect(result.output).toContain("acme/nonexistent");
+	});
+
+	test("notam sync --help prints help without attempting to sync", async () => {
+		const result = await notam(["sync", "--help"]);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("Usage");
+		expect(await Bun.file(join(home, ".notam", "notam.db")).exists()).toBe(
+			false,
+		);
+	});
+
+	test("reports a job with no registered handler as failed, without touching the network", async () => {
+		await writeConfig();
+		const dbPath = defaultDbPath(home);
+
+		// Seed a job of a kind runSync never registers a handler for — as if a
+		// later plan's "analyse" job were left behind. Opened and closed before
+		// runSync's own migrateDatabase call, so there is only ever one writer.
+		const seeded = await migrateDatabase(dbPath);
+		new JobQueue(seeded.db).enqueue("analyse", "some-entry-id");
+		seeded.db.close();
+
+		const lines: string[] = [];
+		const failed = await withTestToken(() =>
+			runSync({
+				home,
+				concurrency: 1,
+				log: (line) => lines.push(line),
+				clientFor: fakeClient,
+			}),
+		);
+
+		// Exactly the pre-seeded "analyse" job fails; the real "sync" job (run
+		// against the fake, offline client) succeeds. main() maps failed > 0 to
+		// exit code 1, so this is the offline equivalent of that exit code.
+		expect(failed).toBe(1);
+		expect(failed > 0 ? 1 : 0).toBe(1);
+		expect(
+			lines.some(
+				(line) => line.includes("FAILED") && line.includes("no handler"),
+			),
+		).toBe(true);
+	});
+
+	test("does not reprint a job failed by an earlier run", async () => {
+		await writeConfig();
+		const dbPath = defaultDbPath(home);
+
+		// Seed a job that failed on some earlier, unrelated run: enqueue, claim,
+		// then fail it directly, so it sits in the jobs table as history.
+		const seeded = await migrateDatabase(dbPath);
+		const seedQueue = new JobQueue(seeded.db);
+		const stale = seedQueue.enqueue("analyse", "old-entry-id");
+		if (!stale)
+			throw new Error("setup failed: could not enqueue the stale job");
+		const claimed = seedQueue.claim();
+		if (!claimed)
+			throw new Error("setup failed: could not claim the stale job");
+		seedQueue.fail(claimed.id, "yesterday's error");
+		seeded.db.close();
+
+		const lines: string[] = [];
+		const failed = await withTestToken(() =>
+			runSync({
+				home,
+				concurrency: 1,
+				log: (line) => lines.push(line),
+				clientFor: fakeClient,
+			}),
+		);
+
+		// A clean run must not resurrect history from the jobs table: no FAILED
+		// line, and a zero failure count (what main() maps to exit code 0).
+		expect(failed).toBe(0);
+		expect(lines.some((line) => line.includes("FAILED"))).toBe(false);
 	});
 });

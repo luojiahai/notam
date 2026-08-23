@@ -47,14 +47,17 @@ export async function main(
 	const home = resolveHome(env);
 	const [command, ...rest] = argv;
 
-	if (
-		command === undefined ||
-		command === "--help" ||
-		command === "-h" ||
-		command === "help"
-	) {
+	if (command === undefined) {
 		log(USAGE);
-		return command === undefined ? 1 : 0;
+		return 1;
+	}
+
+	// Checked before dispatch, and against the whole argv rather than just the
+	// command: `notam init --help` must never write a config, and `notam sync
+	// --help` must never attempt a sync.
+	if (argv.includes("--help") || argv.includes("-h") || command === "help") {
+		log(USAGE);
+		return 0;
 	}
 
 	try {
