@@ -136,6 +136,11 @@ Nothing was installed."
 mkdir -p "$DIR" || die "Could not create $DIR"
 TARGET="$DIR/notam"
 
+if [ -e "$TARGET" ]; then
+	previous=$("$TARGET" version 2>/dev/null || printf 'unknown version')
+	printf 'Upgrading the existing install at %s (%s).\n' "$TARGET" "$previous"
+fi
+
 # Staged inside the destination so the rename is atomic on the same filesystem:
 # a half-written binary is never visible, and replacing one that is currently
 # running is fine.
@@ -147,5 +152,20 @@ STAGE=""
 
 installed=$("$TARGET" version 2>/dev/null || printf '%s' "$TAG")
 printf 'Installed notam %s to %s\n' "$installed" "$TARGET"
+
+case ":${PATH:-}:" in
+	*":$DIR:"*) ;;
+	*)
+		printf '\n%s is not on your PATH. Add it with:\n  export PATH="%s:$PATH"\n' \
+			"$DIR" "$DIR"
+		;;
+esac
+
+# A notam installed elsewhere and earlier on PATH silently keeps winning after
+# this install, which is a confusing way to discover you upgraded nothing.
+resolved=$(command -v notam 2>/dev/null || true)
+if [ -n "$resolved" ] && [ "$resolved" != "$TARGET" ]; then
+	printf '\nNote: another notam earlier on your PATH will win: %s\n' "$resolved"
+fi
 
 printf '\nNext: run `notam init`\n'

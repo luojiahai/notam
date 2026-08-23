@@ -6,11 +6,12 @@ import {
 	expect,
 	test,
 } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { hostPlatform } from "../../scripts/entry-module.ts";
 import {
+	defaultChecksums,
 	type ReleaseStub,
 	STUB_BINARY,
 	STUB_REPO,
@@ -151,5 +152,83 @@ describe("install.sh", () => {
 		const dir = join(await tempDir(), "nested", "bin");
 		expect((await install(["--dir", dir])).code).toBe(0);
 		expect(await Bun.file(join(dir, "notam")).exists()).toBe(true);
+	});
+
+	test("reports the version it is replacing", async () => {
+		const dir = await tempDir();
+		const target = join(dir, "notam");
+		await Bun.write(target, "#!/bin/sh\necho 0.9.0\n");
+		await chmod(target, 0o755);
+
+		const result = await install(["--dir", dir]);
+		expect(result.code).toBe(0);
+		expect(result.stdout).toContain(
+			`Upgrading the existing install at ${target}`,
+		);
+		expect(result.stdout).toContain("0.9.0");
+		expect(await Bun.file(target).text()).toBe(STUB_BINARY);
+	});
+
+	test("says `unknown version` when the existing install will not run", async () => {
+		const dir = await tempDir();
+		const target = join(dir, "notam");
+		await Bun.write(target, "not an executable at all");
+
+		const result = await install(["--dir", dir]);
+		expect(result.code).toBe(0);
+		expect(result.stdout).toContain("unknown version");
+		expect(await Bun.file(target).text()).toBe(STUB_BINARY);
+	});
+
+	test("prints a PATH hint when the directory is not on PATH", async () => {
+		const dir = await tempDir();
+		const result = await install(["--dir", dir]);
+
+		expect(result.stdout).toContain(`${dir} is not on your PATH`);
+		expect(result.stdout).toContain(`export PATH="${dir}:$PATH"`);
+	});
+
+	test("prints no PATH hint when the directory is already on PATH", async () => {
+		const dir = await tempDir();
+		const result = await install(["--dir", dir], {
+			PATH: `${dir}:${process.env.PATH ?? ""}`,
+		});
+
+		expect(result.code).toBe(0);
+		expect(result.stdout).not.toContain("is not on your PATH");
+	});
+
+	test("warns when another notam earlier on PATH would win", async () => {
+		const dir = await tempDir();
+		const shadow = await tempDir();
+		await Bun.write(join(shadow, "notam"), "#!/bin/sh\necho 0.0.1\n");
+		await chmod(join(shadow, "notam"), 0o755);
+
+		const result = await install(["--dir", dir], {
+			PATH: `${shadow}:${dir}:${process.env.PATH ?? ""}`,
+		});
+
+		expect(result.code).toBe(0);
+		expect(result.stdout).toContain(`will win: ${join(shadow, "notam")}`);
+	});
+
+	test("--help prints usage and touches nothing", async () => {
+		const result = await install(["--help"]);
+
+		expect(result.code).toBe(0);
+		expect(result.stdout).toContain("Usage: install.sh");
+		expect(stub.requests).toEqual([]);
+	});
+
+	test("rejects an unknown argument", async () => {
+		const result = await install(["--fast"]);
+
+		expect(result.code).not.toBe(0);
+		expect(result.stderr).toContain('Unknown argument "--fast"');
+		expect(stub.requests).toEqual([]);
+	});
+
+	test("the default checksums cover this platform", () => {
+		expect(defaultChecksums()).toContain(`  ${asset}\n`);
 	});
 });
