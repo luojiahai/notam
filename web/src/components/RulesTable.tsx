@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import type {
 	RuleCounts,
 	RuleStatus,
@@ -21,6 +22,8 @@ export type RulesTableProps = {
 	onVerify: (ruleIds: string[]) => void;
 	onCreatePromotion: (ruleIds: string[]) => void;
 	loading: boolean;
+	/** The last mutation failure, verbatim from the server. */
+	error?: string | null;
 };
 
 const STATUS_LABELS: Record<RuleStatus, string> = {
@@ -36,11 +39,26 @@ const STATUS_LABELS: Record<RuleStatus, string> = {
  * selection-dependent bulk-action rules below are testable without a server.
  */
 export function RulesTable(props: RulesTableProps) {
-	const selection = useSelection();
+	const selection = useSelection<RuleSummary>();
 	const visibleIds = props.rules.map((rule) => rule.id);
 	const allSelected =
 		visibleIds.length > 0 && visibleIds.every((id) => selection.has(id));
-	const selected = props.rules.filter((rule) => selection.has(rule.id));
+
+	// A selection must never outlive the row set it was made in. The chip, the
+	// search box, and the sort all change which rows exist, and `clear` is
+	// stable, so this fires exactly on a context change — the repository switch
+	// is covered by App keying the tab on `repoId`.
+	const { clear } = selection;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the context props are the trigger, not values the effect reads; `clear` is a stable useCallback.
+	useEffect(() => {
+		clear();
+	}, [props.status, props.query, props.sort]);
+
+	// The whole selection, not the visible slice: a rule the current filter
+	// hides is still going to be sent, so it still has to be able to veto a
+	// bulk action. Visible rows are taken fresh in case a refetch moved them.
+	const visible = new Map(props.rules.map((rule) => [rule.id, rule]));
+	const selected = selection.rows.map((rule) => visible.get(rule.id) ?? rule);
 
 	// The button states encode spec section 8's state machine. The server
 	// re-checks every one of them — this only keeps the user from being told
@@ -99,7 +117,7 @@ export function RulesTable(props: RulesTableProps) {
 									onChange={() =>
 										allSelected
 											? selection.clear()
-											: selection.setAll(visibleIds)
+											: selection.setAll(props.rules)
 									}
 								/>
 							</th>
@@ -119,7 +137,7 @@ export function RulesTable(props: RulesTableProps) {
 										type="checkbox"
 										aria-label={`Select ${rule.directive}`}
 										checked={selection.has(rule.id)}
-										onChange={() => selection.toggle(rule.id)}
+										onChange={() => selection.toggle(rule)}
 									/>
 								</td>
 								<td>
@@ -169,27 +187,28 @@ export function RulesTable(props: RulesTableProps) {
 				<button
 					type="button"
 					disabled={!allDraft}
-					onClick={() => props.onCreatePromotion([...selection.ids])}
+					onClick={() => props.onCreatePromotion(selection.ids)}
 				>
 					Create rules PR ({selection.size})
 				</button>
 				<button
 					type="button"
 					disabled={!allProposed}
-					onClick={() => props.onVerify([...selection.ids])}
+					onClick={() => props.onVerify(selection.ids)}
 				>
 					Mark verified
 				</button>
 				<button
 					type="button"
 					disabled={selection.size === 0 || anyAbandoned}
-					onClick={() => props.onAbandon([...selection.ids])}
+					onClick={() => props.onAbandon(selection.ids)}
 				>
 					Abandon
 				</button>
 				{selection.size > 0 && !allDraft && (
 					<span className="secondary">Only draft rules can be promoted.</span>
 				)}
+				{props.error && <span className="error">{props.error}</span>}
 			</div>
 		</>
 	);

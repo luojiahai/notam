@@ -8,6 +8,8 @@ export type SidebarProps = {
 	onSelectRepo: (repoId: string) => void;
 	onRefreshPromotions: () => void;
 	refreshing: boolean;
+	/** The last refresh failure, verbatim from the server. */
+	refreshError?: string | null;
 };
 
 /**
@@ -22,6 +24,7 @@ export function Sidebar({
 	onSelectRepo,
 	onRefreshPromotions,
 	refreshing,
+	refreshError = null,
 }: SidebarProps) {
 	return (
 		<nav className="sidebar" aria-label="Repositories and promotions">
@@ -56,6 +59,7 @@ export function Sidebar({
 				>
 					{refreshing ? "Refreshing…" : "Refresh status"}
 				</button>
+				{refreshError && <p className="error">{refreshError}</p>}
 			</div>
 			{promotions.length === 0 ? (
 				<p className="secondary" style={{ padding: "0 0.5rem" }}>

@@ -26,6 +26,7 @@ import {
 	type RuleDetail,
 	RuleDetailSchema,
 	type RuleStatus,
+	type RuleSummary,
 	RuleSummarySchema,
 	type RulesResponse,
 	RulesResponseSchema,
@@ -185,7 +186,7 @@ export function useAnalyseUnanalysed() {
 export function useSetRuleStatus() {
 	const client = useQueryClient();
 	return useMutation<
-		unknown,
+		RuleSummary[],
 		Error,
 		{ ruleIds: string[]; status: "verified" | "abandoned" }
 	>({

@@ -38,7 +38,7 @@ function entry(overrides: Partial<EntrySummary> = {}): EntrySummary {
 
 type Props = Parameters<typeof EntriesTable>[0];
 
-function draw(overrides: Partial<Props> = {}) {
+function build(overrides: Partial<Props> = {}) {
 	const calls = {
 		analysed: [] as string[][],
 		all: 0,
@@ -62,8 +62,24 @@ function draw(overrides: Partial<Props> = {}) {
 		loading: false,
 		...overrides,
 	};
+	return { calls, props };
+}
+
+function draw(overrides: Partial<Props> = {}) {
+	const { calls, props } = build(overrides);
 	render(<EntriesTable {...props} />);
 	return calls;
+}
+
+/** `draw`, plus the ability to hand the table a new set of props. */
+function drawAgain(overrides: Partial<Props> = {}) {
+	const { calls, props } = build(overrides);
+	const { rerender } = render(<EntriesTable {...props} />);
+	return {
+		calls,
+		update: (next: Partial<Props>) =>
+			rerender(<EntriesTable {...props} {...next} />),
+	};
 }
 
 describe("EntriesTable", () => {
@@ -234,6 +250,73 @@ describe("EntriesTable", () => {
 			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
 		);
 		expect(calls.analysed).toEqual([["e_1"]]);
+	});
+
+	/**
+	 * The rule this table exists to keep: a bulk action acts on what the user
+	 * can see, and nothing else. Both halves are checked — the selection is
+	 * dropped when the row set changes, and while it is held it is judged as a
+	 * whole rather than by the slice that happens to be on screen.
+	 */
+	test("a selection hidden by a filter change is not acted on", async () => {
+		const analysed = entry({
+			analysis_state: "analysed",
+			rule_count: 3,
+			draft_rule_count: 3,
+		});
+		const unanalysed = entry({ id: "e_2", number: 4822 });
+		const { calls, update } = drawAgain({ entries: [analysed, unanalysed] });
+
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		expect(screen.getByText("2 selected")).toBeDefined();
+
+		// The user switches the chip to "Unanalysed": the analysed row, with its
+		// three drafts, is no longer on screen.
+		update({ state: "unanalysed", entries: [unanalysed] });
+
+		expect(screen.getByText("0 selected")).toBeDefined();
+		const button = screen.getByRole("button", { name: /analyse selected/i });
+		expect((button as HTMLButtonElement).disabled).toBe(true);
+		await userEvent.click(button);
+		expect(calls.analysed).toEqual([]);
+		expect(screen.queryByRole("dialog")).toBeNull();
+	});
+
+	test("a selected row that leaves the list still counts its drafts", async () => {
+		// A refetch — an SSE invalidation, not a filter change — can drop a
+		// selected row from the visible slice. The selection survives that, so
+		// the discard confirmation has to keep counting it.
+		const analysed = entry({
+			analysis_state: "analysed",
+			rule_count: 3,
+			draft_rule_count: 3,
+		});
+		const other = entry({ id: "e_2", number: 4822 });
+		const { calls, update } = drawAgain({ entries: [analysed, other] });
+
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select #4821/i }),
+		);
+		update({ entries: [other] });
+
+		expect(screen.getByText("1 selected")).toBeDefined();
+		await userEvent.click(
+			screen.getByRole("button", { name: /analyse selected \(1\)/i }),
+		);
+		// Nothing has been sent: the drafts are confirmed first, and counted.
+		expect(calls.analysed).toEqual([]);
+		expect(
+			within(screen.getByRole("dialog")).getByText(
+				"This will discard 3 draft rules and re-run analysis.",
+			),
+		).toBeDefined();
+	});
+
+	test("a mutation failure is shown verbatim in the bulk bar", () => {
+		draw({ error: "No entry with id e_9" });
+		expect(screen.getByText("No entry with id e_9")).toBeDefined();
 	});
 
 	test("a truncated file list says so on the row", () => {

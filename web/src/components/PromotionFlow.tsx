@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { PromotionPlanView } from "../../../src/shared/api.ts";
 import { useCreatePromotion, usePlanPromotion } from "../api/hooks.ts";
 import { Dialog } from "./Dialog.tsx";
 import { PromotionDialog } from "./PromotionDialog.tsx";
@@ -19,6 +20,7 @@ export function PromotionFlow({
 	onClose: () => void;
 }) {
 	const [included, setIncluded] = useState<string[]>(ruleIds);
+	const [shown, setShown] = useState<PromotionPlanView | null>(null);
 	const plan = usePlanPromotion();
 	const create = useCreatePromotion();
 
@@ -27,7 +29,15 @@ export function PromotionFlow({
 		if (included.length > 0) plan.mutate(included);
 	}, [included]);
 
-	if (!plan.data) {
+	// React Query's `pending` reducer clears `data`, so without this the whole
+	// list would unmount and flash "Checking the base branch…" on every
+	// checkbox toggle. Holding the previous plan is also what makes the
+	// dialog's `planning` flag meaningful rather than unreachable.
+	useEffect(() => {
+		if (plan.data) setShown(plan.data);
+	}, [plan.data]);
+
+	if (!shown) {
 		return (
 			<Dialog
 				title="Create rules pull request"
@@ -46,11 +56,13 @@ export function PromotionFlow({
 
 	return (
 		<PromotionDialog
-			plan={plan.data}
+			plan={shown}
 			included={included}
 			planning={plan.isPending}
 			submitting={create.isPending}
-			error={create.error?.message ?? null}
+			// A re-plan that fails leaves the previous plan on screen, so its
+			// error has to surface here rather than only in the branch above.
+			error={create.error?.message ?? plan.error?.message ?? null}
 			onToggle={(ruleId) =>
 				setIncluded((current) =>
 					current.includes(ruleId)

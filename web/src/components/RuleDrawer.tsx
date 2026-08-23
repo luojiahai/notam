@@ -3,6 +3,16 @@ import { useRule } from "../api/hooks.ts";
 import { Badge } from "./Badge.tsx";
 import { Drawer } from "./Drawer.tsx";
 
+/**
+ * The fragment of a comment URL worth showing — `#discussion_r123` — falling
+ * back to the whole URL. These come from the model and are unconstrained, so a
+ * URL with no `#` must not be sliced to its last character.
+ */
+function commentLabel(url: string): string {
+	const hash = url.indexOf("#");
+	return hash === -1 ? url : url.slice(hash);
+}
+
 /** Read-only. Editing a rule's text is out of scope for v1; re-analysis is the recovery path. */
 export function RuleDrawerView({ rule }: { rule: RuleDetail }) {
 	return (
@@ -37,7 +47,7 @@ export function RuleDrawerView({ rule }: { rule: RuleDetail }) {
 					{rule.source_comment_urls.map((url) => (
 						<li key={url}>
 							<a href={url} target="_blank" rel="noreferrer">
-								{url.slice(url.indexOf("#"))}
+								{commentLabel(url)}
 							</a>
 						</li>
 					))}

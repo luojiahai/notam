@@ -45,6 +45,8 @@ export function EntriesTab({
 			onAnalyseAllUnanalysed={() => analyseAll.mutate(repoId)}
 			batch={batch}
 			loading={entries.isPending}
+			// Verbatim server text: a queue refusal is only visible here.
+			error={analyse.error?.message ?? analyseAll.error?.message ?? null}
 		/>
 	);
 }

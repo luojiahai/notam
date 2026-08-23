@@ -36,7 +36,7 @@ function rule(overrides: Partial<RuleSummary> = {}): RuleSummary {
 
 type Props = Parameters<typeof RulesTable>[0];
 
-function draw(overrides: Partial<Props> = {}) {
+function build(overrides: Partial<Props> = {}) {
 	const calls = {
 		abandon: [] as string[][],
 		verify: [] as string[][],
@@ -62,8 +62,24 @@ function draw(overrides: Partial<Props> = {}) {
 		loading: false,
 		...overrides,
 	};
+	return { calls, props };
+}
+
+function draw(overrides: Partial<Props> = {}) {
+	const { calls, props } = build(overrides);
 	render(<RulesTable {...props} />);
 	return calls;
+}
+
+/** `draw`, plus the ability to hand the table a new set of props. */
+function drawAgain(overrides: Partial<Props> = {}) {
+	const { calls, props } = build(overrides);
+	const { rerender } = render(<RulesTable {...props} />);
+	return {
+		calls,
+		update: (next: Partial<Props>) =>
+			rerender(<RulesTable {...props} {...next} />),
+	};
 }
 
 describe("RulesTable", () => {
@@ -172,6 +188,64 @@ describe("RulesTable", () => {
 				}) as HTMLButtonElement
 			).disabled,
 		).toBe(true);
+	});
+
+	/**
+	 * Abandon is terminal (`LEGAL_TRANSITIONS.abandoned = []`) and the product
+	 * has no undo, so it is the one action that must never reach a row the user
+	 * cannot see. Both halves are checked: the selection is dropped when the
+	 * row set changes, and while it is held it is judged as a whole rather than
+	 * by the slice that happens to be on screen.
+	 */
+	test("a selection hidden by a filter change is not acted on", async () => {
+		const draft = rule();
+		const proposed = rule({
+			id: "ru_2",
+			directive: "Prefer explicit timeouts.",
+			status: "proposed",
+			promotion_id: "pm_1",
+		});
+		const { calls, update } = drawAgain({ rules: [draft, proposed] });
+
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		expect(screen.getByText("2 selected")).toBeDefined();
+
+		// The user switches the chip to "Draft": the proposed rule is gone from
+		// the screen, and so must be gone from anything Abandon would send.
+		update({ status: "draft", rules: [draft] });
+
+		expect(screen.getByText("0 selected")).toBeDefined();
+		const abandon = screen.getByRole("button", { name: /^abandon$/i });
+		expect((abandon as HTMLButtonElement).disabled).toBe(true);
+		await userEvent.click(abandon);
+		expect(calls.abandon).toEqual([]);
+	});
+
+	test("a selected abandoned rule that leaves the list still blocks Abandon", async () => {
+		// A refetch — an SSE invalidation, not a filter change — can drop a
+		// selected row from the visible slice. Deriving the guard from the
+		// visible rows alone would leave Abandon enabled and fire it on an id
+		// nothing on screen accounts for.
+		const abandoned = rule({ id: "ru_9", status: "abandoned" });
+		const { calls, update } = drawAgain({ rules: [abandoned] });
+
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		update({ rules: [] });
+
+		expect(screen.getByText("1 selected")).toBeDefined();
+		const abandon = screen.getByRole("button", { name: /^abandon$/i });
+		expect((abandon as HTMLButtonElement).disabled).toBe(true);
+		await userEvent.click(abandon);
+		expect(calls.abandon).toEqual([]);
+	});
+
+	test("a rejected transition is shown verbatim in the bulk bar", () => {
+		draw({ error: "draft cannot become verified" });
+		expect(screen.getByText("draft cannot become verified")).toBeDefined();
 	});
 
 	test("clicking the directive opens the drawer", async () => {

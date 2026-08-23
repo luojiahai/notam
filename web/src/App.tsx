@@ -62,15 +62,25 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
  * Applies one server event to the cache: batch progress updates local state
  * directly, everything else invalidates the query keys `invalidationsFor`
  * names for it.
+ *
+ * A failed sync is the one event whose payload is not just a cache hint. Spec
+ * section 14 requires failures to be surfaced rather than swallowed, and a
+ * sync job's error text reaches the browser only here — no route exposes it —
+ * so it is held in App state and rendered in the header. It is passed on
+ * verbatim; the next sync of any repository clears it.
  */
 export function applyServerEvent(
 	client: QueryClient,
 	event: ServerEvent,
 	setBatch: (batch: BatchState) => void,
+	setSyncError: (error: string | null) => void,
 ): void {
 	if (event.type === "batch") {
 		setBatch({ queued: event.queued, running: event.running });
 		return;
+	}
+	if (event.type === "sync") {
+		setSyncError(event.phase === "failed" ? event.error : null);
 	}
 	for (const queryKey of invalidationsFor(event)) {
 		void client.invalidateQueries({ queryKey });
@@ -85,6 +95,7 @@ export function App() {
 	const [tab, setTab] = useState<"entries" | "rules">("entries");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
 	const [batch, setBatch] = useState<BatchState>({ queued: 0, running: 0 });
+	const [syncError, setSyncError] = useState<string | null>(null);
 
 	// Select the first repository as soon as one is known, and never fight the
 	// user's own choice afterwards.
@@ -100,7 +111,10 @@ export function App() {
 	const analyse = useAnalyse();
 
 	useServerEvents(
-		useCallback((event) => applyServerEvent(client, event, setBatch), [client]),
+		useCallback(
+			(event) => applyServerEvent(client, event, setBatch, setSyncError),
+			[client],
+		),
 	);
 
 	// Spec section 7: the status refresh runs on app open as well as on the
@@ -113,11 +127,19 @@ export function App() {
 
 	const repo = repos.data?.find((candidate) => candidate.id === repoId) ?? null;
 
+	// Server text, unrewritten: the boot warnings, then whatever the last sync
+	// failure said, then a sync request that never even started.
+	const warnings = [
+		...(meta.data?.warnings ?? []),
+		...(syncError === null ? [] : [syncError]),
+		...(sync.error ? [sync.error.message] : []),
+	];
+
 	return (
 		<Shell
 			repoName={repo?.name ?? null}
 			version={meta.data?.version ?? ""}
-			warnings={meta.data?.warnings ?? []}
+			warnings={warnings}
 			onSync={() => {
 				if (repoId) sync.mutate(repoId);
 			}}
@@ -133,6 +155,7 @@ export function App() {
 					}}
 					onRefreshPromotions={() => refresh.mutate(repoId ?? undefined)}
 					refreshing={refresh.isPending}
+					refreshError={refresh.error?.message ?? null}
 				/>
 			}
 		>
@@ -159,13 +182,18 @@ export function App() {
 					<p className="secondary">Select a repository.</p>
 				</div>
 			) : tab === "entries" ? (
+				// Keyed on the repository: without it React keeps the tab's state
+				// across a switch, and a selection made in one repository would
+				// still be sitting there — and still actionable — in the next.
 				<EntriesTab
+					key={repoId}
 					repoId={repoId}
 					batch={batch}
 					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
 				/>
 			) : (
 				<RulesTab
+					key={repoId}
 					repoId={repoId}
 					onOpenRule={(id) => setDrawer({ kind: "rule", id })}
 				/>

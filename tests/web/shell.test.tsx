@@ -4,14 +4,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import type {
+	EntriesResponse,
 	EntryDetail,
+	EntrySummary,
+	Meta,
 	PromotionSummary,
 	RepoSummary,
 	RuleDetail,
 	RuleStatus,
 	ServerEvent,
 } from "../../src/shared/api.ts";
-import { applyServerEvent, invalidationsFor } from "../../web/src/App.tsx";
+import { App, applyServerEvent, invalidationsFor } from "../../web/src/App.tsx";
 import { useEntry, useRule } from "../../web/src/api/hooks.ts";
 import { Sidebar } from "../../web/src/components/Sidebar.tsx";
 
@@ -112,6 +115,25 @@ describe("Sidebar", () => {
 		);
 		expect(screen.getByText("open")).toBeDefined();
 		expect(screen.getByText(/2 rules/)).toBeDefined();
+	});
+
+	test("a failed refresh shows the server's text beside the button", () => {
+		wrap(
+			<Sidebar
+				repos={[repo]}
+				promotions={[]}
+				selectedRepoId="r_1"
+				onSelectRepo={() => {}}
+				onRefreshPromotions={() => {}}
+				refreshing={false}
+				refreshError="GET /repos/acme/mono/pulls/900 -> 401: Bad credentials"
+			/>,
+		);
+		expect(
+			screen.getByText(
+				"GET /repos/acme/mono/pulls/900 -> 401: Bad credentials",
+			),
+		).toBeDefined();
 	});
 
 	test("the refresh button reports a click", async () => {
@@ -271,6 +293,36 @@ describe("applyServerEvent", () => {
 		globalThis.fetch = originalFetch;
 	});
 
+	test("a failed sync hands its error text on, and the next sync clears it", () => {
+		// The only place a sync failure exists in the browser: no route exposes
+		// `jobs.error`, so an event dropped here is a failure the user never
+		// hears about (spec section 14).
+		const client = new QueryClient();
+		const seen: (string | null)[] = [];
+		const failed: ServerEvent = {
+			type: "sync",
+			repo_id: "r_1",
+			phase: "failed",
+			created: 0,
+			updated: 0,
+			skipped: 0,
+			error: "GET /graphql -> 401: Bad credentials",
+		};
+		applyServerEvent(
+			client,
+			failed,
+			() => {},
+			(error) => seen.push(error),
+		);
+		applyServerEvent(
+			client,
+			{ ...failed, phase: "started", error: null },
+			() => {},
+			(error) => seen.push(error),
+		);
+		expect(seen).toEqual(["GET /graphql -> 401: Bad credentials", null]);
+	});
+
 	test("a rules event refetches both an open rule drawer and an open entry drawer's embedded rule status", async () => {
 		let status: RuleStatus = "draft";
 		globalThis.fetch = ((input: unknown) => {
@@ -317,7 +369,12 @@ describe("applyServerEvent", () => {
 		});
 
 		status = "verified";
-		applyServerEvent(client, { type: "rules", repo_id: "r_1" }, () => {});
+		applyServerEvent(
+			client,
+			{ type: "rules", repo_id: "r_1" },
+			() => {},
+			() => {},
+		);
 
 		await waitFor(() => {
 			expect(screen.getByTestId("rule-status").textContent).toBe("verified");
@@ -325,5 +382,108 @@ describe("applyServerEvent", () => {
 				"verified",
 			);
 		});
+	});
+});
+
+const meta: Meta = {
+	version: "test",
+	config_path: "/home/u/.notam/config.yaml",
+	db_path: "/home/u/.notam/notam.db",
+	claude_available: true,
+	warnings: [],
+	analysis: { concurrency: 2, timeout_seconds: 30, model: null },
+};
+
+function entriesFor(repoId: string, number: number): EntriesResponse {
+	const summary: EntrySummary = {
+		id: `e_${repoId}`,
+		repo_id: repoId,
+		number,
+		title: `A pull request in ${repoId}`,
+		author: "dana",
+		url: `https://example.invalid/pull/${number}`,
+		merged_at: "2026-08-20T10:00:00.000Z",
+		updated_at: "2026-08-21T10:00:00.000Z",
+		matched_prefix: null,
+		changed_file_count: 1,
+		comment_count: 0,
+		paths_truncated: false,
+		analysis_state: "unanalysed",
+		analysed_at: null,
+		last_error: null,
+		rule_count: 0,
+		draft_rule_count: 0,
+	};
+	return {
+		entries: [summary],
+		counts: {
+			total: 1,
+			unanalysed: 1,
+			queued: 0,
+			running: 0,
+			analysed: 0,
+			failed: 0,
+		},
+	};
+}
+
+/**
+ * The repository switch half of the selection rule. `App` renders the tab in
+ * the same position for every repository, so without a key React would keep
+ * the previous repository's selection mounted — and `POST /entries/analyse`
+ * does not scope by repository, so it would happily analyse those entries.
+ */
+describe("App", () => {
+	const originalFetch = globalThis.fetch;
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	test("switching repository drops the selection made in the previous one", async () => {
+		const second: RepoSummary = { ...repo, id: "r_2", name: "acme/api" };
+		globalThis.fetch = ((input: unknown) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") {
+				return Promise.resolve(Response.json([repo, second]));
+			}
+			if (path.startsWith("/api/repos/r_1/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
+			}
+			if (path.startsWith("/api/repos/r_2/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_2", 22)));
+			}
+			if (path.endsWith("/promotions")) {
+				return Promise.resolve(Response.json([]));
+			}
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(
+					Response.json({
+						checked: 0,
+						merged: 0,
+						closed: 0,
+						unchanged: 0,
+						returned_to_draft: 0,
+						errors: [],
+					}),
+				);
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		await screen.findByRole("checkbox", { name: /select #11/i });
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all entries/i }),
+		);
+		expect(screen.getByText("1 selected")).toBeDefined();
+
+		await userEvent.click(screen.getByRole("button", { name: /acme\/api/ }));
+
+		await screen.findByRole("checkbox", { name: /select #22/i });
+		expect(screen.getByText("0 selected")).toBeDefined();
 	});
 });

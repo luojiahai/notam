@@ -48,6 +48,9 @@ export function RulesTab({
 				}
 				onCreatePromotion={(ruleIds) => setPromoting(ruleIds)}
 				loading={rules.isPending}
+				// Verbatim server text — a 409 from an illegal transition is
+				// exactly the message the user needs, and nothing else renders it.
+				error={setRuleStatus.error?.message ?? null}
 			/>
 			{promoting && (
 				<PromotionFlow ruleIds={promoting} onClose={() => setPromoting(null)} />

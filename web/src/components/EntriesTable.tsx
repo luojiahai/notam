@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type {
 	AnalysisState,
 	EntryCounts,
@@ -21,6 +21,8 @@ export type EntriesTableProps = {
 	onAnalyseAllUnanalysed: () => void;
 	batch: BatchState;
 	loading: boolean;
+	/** The last mutation failure, verbatim from the server. */
+	error?: string | null;
 };
 
 const STATE_LABELS: Record<AnalysisState, string> = {
@@ -42,12 +44,22 @@ function day(timestamp: string | null): string {
  * of this screen that can lose a user's work — is testable without a server.
  */
 export function EntriesTable(props: EntriesTableProps) {
-	const selection = useSelection();
+	const selection = useSelection<EntrySummary>();
 	const [pending, setPending] = useState<string[] | null>(null);
 
 	const visibleIds = props.entries.map((entry) => entry.id);
 	const allSelected =
 		visibleIds.length > 0 && visibleIds.every((id) => selection.has(id));
+
+	// A selection must never outlive the row set it was made in. The chip and
+	// the search box change which rows exist, and `clear` is stable, so this
+	// fires exactly on a context change — the repository switch is covered by
+	// App keying the tab on `repoId`.
+	const { clear } = selection;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the context props are the trigger, not values the effect reads; `clear` is a stable useCallback.
+	useEffect(() => {
+		clear();
+	}, [props.state, props.query]);
 
 	const chips: Chip[] = (
 		["unanalysed", "analysed", "failed"] as AnalysisState[]
@@ -57,21 +69,32 @@ export function EntriesTable(props: EntriesTableProps) {
 		count: props.counts[state],
 	}));
 
-	/** Spec section 6: a re-run that would discard drafts must say how many. */
+	const visible = new Map(props.entries.map((entry) => [entry.id, entry]));
+
+	/**
+	 * Spec section 6: a re-run that would discard drafts must say how many.
+	 *
+	 * The count comes from the visible row where there is one and from the
+	 * remembered selected row otherwise, so an id the current filter hides
+	 * still contributes its drafts. Counting only the visible slice would
+	 * report zero and skip the confirmation entirely.
+	 */
+	function draftCountFor(ids: string[]): number {
+		return ids.reduce((sum, id) => {
+			const entry = visible.get(id) ?? selection.get(id);
+			return sum + (entry?.draft_rule_count ?? 0);
+		}, 0);
+	}
+
 	function requestAnalyse(ids: string[]): void {
-		const drafts = props.entries
-			.filter((entry) => ids.includes(entry.id))
-			.reduce((sum, entry) => sum + entry.draft_rule_count, 0);
-		if (drafts > 0) {
+		if (draftCountFor(ids) > 0) {
 			setPending(ids);
 			return;
 		}
 		props.onAnalyse(ids);
 	}
 
-	const pendingDrafts = props.entries
-		.filter((entry) => pending?.includes(entry.id))
-		.reduce((sum, entry) => sum + entry.draft_rule_count, 0);
+	const pendingDrafts = pending === null ? 0 : draftCountFor(pending);
 
 	return (
 		<>
@@ -110,7 +133,7 @@ export function EntriesTable(props: EntriesTableProps) {
 									onChange={() =>
 										allSelected
 											? selection.clear()
-											: selection.setAll(visibleIds)
+											: selection.setAll(props.entries)
 									}
 								/>
 							</th>
@@ -132,7 +155,7 @@ export function EntriesTable(props: EntriesTableProps) {
 										type="checkbox"
 										aria-label={`Select #${entry.number}`}
 										checked={selection.has(entry.id)}
-										onChange={() => selection.toggle(entry.id)}
+										onChange={() => selection.toggle(entry)}
 									/>
 								</td>
 								<td>
@@ -210,10 +233,11 @@ export function EntriesTable(props: EntriesTableProps) {
 				<button
 					type="button"
 					disabled={selection.size === 0}
-					onClick={() => requestAnalyse([...selection.ids])}
+					onClick={() => requestAnalyse(selection.ids)}
 				>
 					Analyse selected ({selection.size})
 				</button>
+				{props.error && <span className="error">{props.error}</span>}
 				<span className="spacer" style={{ flex: 1 }} />
 				<span className="secondary">
 					{props.batch.running} running, {props.batch.queued} queued
