@@ -8,15 +8,19 @@ import { promotionRoutes } from "./routes/promotions.ts";
 import { repoRoutes } from "./routes/repos.ts";
 import { ruleRoutes } from "./routes/rules.ts";
 import { syncRoutes } from "./routes/sync.ts";
+import { type AssetSource, createStaticHandler } from "./static.ts";
 
 /**
- * The whole HTTP surface. Routers are mounted under `/api`; later tasks add
- * more of them and the static SPA handler underneath.
+ * The whole HTTP surface. Routers are mounted under `/api`; the static SPA
+ * handler answers everything else.
  *
  * There is no business logic in this tree. A route resolves the context, calls
  * a function plans 1 and 2 exported, serialises, and returns.
  */
-export function createApp(ctx: AppContext): Hono {
+export function createApp(
+	ctx: AppContext,
+	assets: AssetSource = new Map(),
+): Hono {
 	const api = new Hono();
 	api.route("/", metaRoutes(ctx));
 	api.route("/", repoRoutes(ctx));
@@ -29,16 +33,19 @@ export function createApp(ctx: AppContext): Hono {
 	const app = new Hono();
 	app.onError((error) => errorResponse(error));
 	app.route("/api", api);
-	// A mounted sub-app's own notFound is not consulted, so the JSON 404 has to
-	// live on the parent. Task 9 replaces this handler with one that tries the
-	// SPA assets first and falls back to exactly this response.
-	app.notFound((c) =>
-		errorResponse(
-			new HttpError(
-				404,
-				`No route for ${c.req.method} ${new URL(c.req.url).pathname}`,
-			),
-		),
-	);
+	const serveStatic = createStaticHandler(assets);
+	// Registered as notFound rather than as a `GET *` route so it can never
+	// shadow an API path: anything under /api that matched nothing already
+	// produced its own response.
+	app.notFound((c) => {
+		const { pathname } = new URL(c.req.url);
+		if (c.req.method === "GET" && !pathname.startsWith("/api/")) {
+			const response = serveStatic(pathname);
+			if (response) return response;
+		}
+		return errorResponse(
+			new HttpError(404, `No route for ${c.req.method} ${pathname}`),
+		);
+	});
 	return app;
 }
