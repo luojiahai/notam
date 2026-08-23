@@ -4,8 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runInit } from "../../src/cli/init.ts";
 import { startServer } from "../../src/cli/run.ts";
-import { ConfigError, defaultConfigPath } from "../../src/core/config/load.ts";
+import {
+	ConfigError,
+	defaultConfigPath,
+	defaultDbPath,
+} from "../../src/core/config/load.ts";
+import { JobQueue } from "../../src/jobs/queue.ts";
 import { MetaSchema, RepoSummarySchema } from "../../src/shared/api.ts";
+import { migrateDatabase } from "../../src/store/migrations.ts";
 
 const homes: string[] = [];
 
@@ -85,8 +91,11 @@ describe("startServer", () => {
 			log: () => {},
 			openBrowser: (url) => opened.push(url),
 		});
-		expect(opened).toEqual([server.url]);
-		await server.stop();
+		try {
+			expect(opened).toEqual([server.url]);
+		} finally {
+			await server.stop();
+		}
 	});
 
 	test("serves the placeholder page when the SPA has not been built", async () => {
@@ -109,15 +118,20 @@ describe("startServer", () => {
 
 	test("refuses to start when a token environment variable is missing", async () => {
 		const home = await tempHome();
+		// A fixed port, not an ephemeral one: the point of the test is that the
+		// refusal happens *before* anything is bound or written, and port 0 could
+		// not tell that apart from a refusal issued after a successful bind.
 		const promise = startServer({
 			home,
-			port: 0,
+			port: 4399,
 			open: false,
 			env: { ...process.env, NOTAM_RUN_TEST_TOKEN: undefined },
 			log: () => {},
 			openBrowser: () => {},
 		});
 		await expect(promise).rejects.toThrow("NOTAM_RUN_TEST_TOKEN");
+		await expect(fetch("http://127.0.0.1:4399/api/meta")).rejects.toThrow();
+		expect(await Bun.file(defaultDbPath(home)).exists()).toBe(false);
 	});
 
 	test("refuses to start on an invalid config, naming the offending path", async () => {
@@ -151,6 +165,42 @@ describe("startServer", () => {
 			);
 			expect(meta.claude_available).toBe(false);
 			expect(meta.warnings.join(" ")).toContain("claude");
+		} finally {
+			await server.stop();
+		}
+	});
+
+	test("resumes a job left running by a previous process", async () => {
+		const home = await tempHome();
+
+		// Seed the state a Ctrl-C mid-analysis leaves behind: a claimed job stuck
+		// in `running` with no process behind it. The entry id names nothing, so
+		// the handler fails on its own unknown-entry guard — a terminal state
+		// reached with no `claude` subprocess and no network.
+		const seeded = await migrateDatabase(defaultDbPath(home));
+		const seedQueue = new JobQueue(seeded.db);
+		const enqueued = seedQueue.enqueue("analyse", "no-such-entry-id");
+		if (!enqueued) throw new Error("setup failed: could not enqueue the job");
+		const claimed = seedQueue.claim();
+		if (!claimed) throw new Error("setup failed: could not claim the job");
+		expect(claimed.state).toBe("running");
+		seeded.db.close();
+
+		const lines: string[] = [];
+		const server = await startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: (line) => lines.push(line),
+			openBrowser: () => {},
+		});
+		try {
+			// No route is called: booting alone must have kicked the runner.
+			await server.ctx.analyseRunner.idle();
+			expect(server.ctx.queue.get(claimed.id)?.state).toBe("failed");
+			expect(server.ctx.queue.count("queued")).toBe(0);
+			expect(lines.join("\n")).toContain("Reclaimed 1 job(s)");
 		} finally {
 			await server.stop();
 		}

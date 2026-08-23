@@ -65,67 +65,83 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 	for (const host of config.hosts) resolveToken(host, env);
 
 	const { db, applied, backup } = await migrateDatabase(dbPath);
-	if (backup) {
-		options.log(
-			`Backed up the database to ${backup} before applying ${applied} migration(s).`,
-		);
-	}
-
-	const now = () => new Date();
-	applyConfig(db, config, now());
-
-	const ctx = createContext({ db, config, configPath, dbPath, now, env });
-	for (const warning of ctx.warnings) options.log(`Warning: ${warning}`);
-
-	// Plan 1's guarantee: anything left `running` belongs to a process that died.
-	const reclaimed = ctx.queue.resetStale();
-	if (reclaimed > 0) {
-		options.log(
-			`Reclaimed ${reclaimed} job(s) left running by a previous process.`,
-		);
-	}
-
-	const assets = await loadAssetsFromDirectory(defaultWebDistPath(env));
-	const app = createApp(ctx, assets);
-
-	let listener: ReturnType<typeof listen>;
+	// Everything from here on can throw with the database already open — a
+	// UNIQUE violation from applyConfig, an unreadable web/dist, an explicit
+	// --port that is taken — so the whole block unwinds as one, the way
+	// runSync's own try/finally does.
+	let ctx: AppContext | undefined;
 	try {
-		listener = listen({
+		if (backup) {
+			options.log(
+				`Backed up the database to ${backup} before applying ${applied} migration(s).`,
+			);
+		}
+
+		const now = () => new Date();
+		applyConfig(db, config, now());
+
+		ctx = createContext({ db, config, configPath, dbPath, now, env });
+		for (const warning of ctx.warnings) options.log(`Warning: ${warning}`);
+
+		// Plan 1's guarantee: anything left `running` belongs to a process that
+		// died. Reclaiming alone only returns them to `queued`; the kick below is
+		// what actually resumes them, so a Ctrl-C mid-analysis does not leave work
+		// stranded until the user happens to press an unrelated button.
+		const reclaimed = ctx.queue.resetStale();
+		if (reclaimed > 0) {
+			options.log(
+				`Reclaimed ${reclaimed} job(s) left running by a previous process.`,
+			);
+			ctx.syncRunner.kick();
+			ctx.analyseRunner.kick();
+		}
+
+		const assets = await loadAssetsFromDirectory(defaultWebDistPath(env));
+		const app = createApp(ctx, assets);
+
+		const listener = listen({
 			fetch: app.fetch,
 			port: options.port ?? config.server.port,
 			autoIncrement: options.port === undefined,
 		});
+
+		// Spec section 7: the status refresh runs on app open. It is fire-and-forget
+		// because a GitHub outage must not stop the server from coming up, and it
+		// costs nothing when there are no open promotions.
+		void refreshPromotions(ctx.promotionDeps).catch((error: unknown) => {
+			options.log(
+				`Could not refresh promotion status: ${
+					error instanceof Error ? error.message : String(error)
+				}`,
+			);
+		});
+
+		if (options.open) (options.openBrowser ?? launchBrowser)(listener.url);
+
+		const started = ctx;
+		return {
+			url: listener.url,
+			port: listener.port,
+			ctx: started,
+			stop: async () => {
+				started.shutdown();
+				// The abort only signals; a handler mid-statement still holds the
+				// database. Closing under it would throw inside the drain, where
+				// nothing surfaces it, and leave the job `running` for the next
+				// boot to reclaim.
+				await Promise.all([
+					started.syncRunner.idle(),
+					started.analyseRunner.idle(),
+				]);
+				await listener.stop();
+				db.close();
+			},
+		};
 	} catch (error) {
-		// An explicit --port that is taken fails loudly; unwind what booting
-		// already opened so the caller is not left holding a database handle.
-		ctx.shutdown();
+		ctx?.shutdown();
 		db.close();
 		throw error;
 	}
-
-	// Spec section 7: the status refresh runs on app open. It is fire-and-forget
-	// because a GitHub outage must not stop the server from coming up, and it
-	// costs nothing when there are no open promotions.
-	void refreshPromotions(ctx.promotionDeps).catch((error: unknown) => {
-		options.log(
-			`Could not refresh promotion status: ${
-				error instanceof Error ? error.message : String(error)
-			}`,
-		);
-	});
-
-	if (options.open) (options.openBrowser ?? launchBrowser)(listener.url);
-
-	return {
-		url: listener.url,
-		port: listener.port,
-		ctx,
-		stop: async () => {
-			ctx.shutdown();
-			await listener.stop();
-			db.close();
-		},
-	};
 }
 
 /** Blocks until SIGINT or SIGTERM, then shuts down cleanly. */
