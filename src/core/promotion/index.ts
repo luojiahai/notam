@@ -35,7 +35,7 @@ export type PlannedFile = {
 	sourceNumber: number;
 };
 
-/** What the confirmation dialog renders, per spec section 7's pre-flight. */
+/** What the confirmation dialog renders for the pre-flight. */
 export type Collision = {
 	ruleId: string;
 	reason: "base-branch" | "batch";
@@ -67,7 +67,7 @@ function yyyymmdd(date: Date): string {
 /**
  * The pre-flight. Reads `.claude/rules/` on the base branch, assigns final file
  * names, and reports every collision rather than silently committing a second
- * file — spec section 7 calls the silent version a footgun, and it is.
+ * file: the silent version is a footgun.
  *
  * Reads only. Nothing here changes a rule.
  */
@@ -161,7 +161,7 @@ export async function planPromotion(
 /**
  * The irreversible half. The GitHub call happens first and nothing is written
  * until it returns: a failed push therefore leaves every rule `draft` with
- * nothing half-committed, exactly as spec section 7 requires.
+ * nothing half-committed.
  */
 export async function promoteRules(
 	deps: PromotionDeps,

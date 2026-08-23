@@ -1,5 +1,5 @@
 /**
- * Spec section 5 step 3: a PR is kept when any changed path matches any glob.
+ * A PR is kept when any changed path matches any glob.
  * Empty globs mean the whole repository, so everything is kept.
  */
 export function matchesGlobs(paths: string[], globs: string[]): boolean {

@@ -7,7 +7,7 @@ import {
 } from "../../scripts/entry-module.ts";
 
 describe("the platform table", () => {
-	test("is exactly the four the spec ships", () => {
+	test("is exactly the four shipped targets", () => {
 		expect([...PLATFORMS]).toEqual([
 			"darwin-arm64",
 			"darwin-x64",

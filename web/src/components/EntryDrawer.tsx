@@ -43,9 +43,9 @@ export function EntryDrawerView({
 	const [confirming, setConfirming] = useState(false);
 
 	/**
-	 * Spec section 6 requires the draft count on the row action, in this drawer,
-	 * and on the bulk action alike, so the guard lives with each entry point
-	 * rather than at the one the user happened to reach first.
+	 * The draft count belongs on the row action, in this drawer, and on the bulk
+	 * action alike, so the guard lives with each entry point rather than at the
+	 * one the user happened to reach first.
 	 */
 	const requestReanalyse = () => {
 		if (entry.draft_rule_count > 0) {

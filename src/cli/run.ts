@@ -124,10 +124,10 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 		ctx = createContext({ db, config, configPath, dbPath, now, env });
 		for (const warning of ctx.warnings) options.log(`Warning: ${warning}`);
 
-		// Plan 1's guarantee: anything left `running` belongs to a process that
-		// died. Reclaiming alone only returns them to `queued`; the kick below is
-		// what actually resumes them, so a Ctrl-C mid-analysis does not leave work
-		// stranded until the user happens to press an unrelated button.
+		// Anything left `running` belongs to a process that died. Reclaiming
+		// alone only returns them to `queued`; the kick below is what actually
+		// resumes them, so a Ctrl-C mid-analysis does not leave work stranded
+		// until the user happens to press an unrelated button.
 		const reclaimed = ctx.queue.resetStale();
 		if (reclaimed > 0) {
 			options.log(
@@ -146,8 +146,8 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 			autoIncrement: options.port === undefined,
 		});
 
-		// Spec section 7: the status refresh runs on app open. It is fire-and-forget
-		// because a GitHub outage must not stop the server from coming up, and it
+		// The status refresh runs on app open. It is fire-and-forget because a
+		// GitHub outage must not stop the server from coming up, and it
 		// costs nothing when there are no open promotions.
 		void refreshPromotions(ctx.promotionDeps).catch((error: unknown) => {
 			options.log(

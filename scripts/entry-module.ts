@@ -6,7 +6,7 @@
  * out — is testable without compiling a 60 MB executable.
  */
 
-/** Spec section 12. The Bun target is `bun-` plus one of these, verbatim. */
+/** The Bun target is `bun-` plus one of these, verbatim. */
 export const PLATFORMS = [
 	"darwin-arm64",
 	"darwin-x64",

@@ -21,7 +21,7 @@ function isAddressInUse(error: unknown): boolean {
 }
 
 /**
- * Spec section 3: `127.0.0.1` only, auto-incrementing if the port is taken.
+ * `127.0.0.1` only, auto-incrementing if the port is taken.
  *
  * The hostname is not configurable. There is no authentication layer, so a
  * routable bind would expose a user's GitHub token surface to their network,

@@ -126,7 +126,7 @@ describe("refreshPromotions", () => {
 		const after = getPromotion(db, promotion.id);
 		expect(after?.state).toBe("merged");
 		expect(after?.last_checked_at).toBe(CHECKED.toISOString());
-		// Verification is always a manual decision (spec section 8).
+		// Verification is always a manual decision.
 		expect(getRule(db, rules[0]?.id as string)?.status).toBe("proposed");
 		expect(getRule(db, rules[0]?.id as string)?.promotion_id).toBe(
 			promotion.id,

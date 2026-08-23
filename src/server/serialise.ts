@@ -161,7 +161,7 @@ export function toRuleSummary(rule: RuleRow, entry: EntryRow): RuleSummary {
  * The drawer's preview uses the rule's *base* slug with no collision suffix:
  * suffixes are assigned per promotion batch, so the honest thing to show
  * outside a promotion is the unsuffixed name, and the collision dialog is
- * where a suffix is disclosed (spec section 7).
+ * where a suffix is disclosed.
  */
 export function toRuleDetail(rule: RuleRow, entry: EntryRow): RuleDetail {
 	return {

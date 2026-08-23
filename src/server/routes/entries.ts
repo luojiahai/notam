@@ -57,8 +57,8 @@ export function entryRoutes(ctx: AppContext): Hono {
 
 	/**
 	 * The row action, the drawer action, and the multi-select bulk action are
-	 * all this one call — spec section 6 says all three enqueue one job per
-	 * entry, and giving them one endpoint is what keeps that true.
+	 * all this one call: all three enqueue one job per entry, and giving them
+	 * one endpoint is what keeps that true.
 	 */
 	app.post("/entries/analyse", async (c) => {
 		const body = await readBody(c, AnalyseRequestSchema);

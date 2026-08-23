@@ -14,7 +14,7 @@ export type SidebarProps = {
 };
 
 /**
- * Spec section 9's sidebar: repositories with entry counts, and below them the
+ * Repositories with entry counts, and below them the
  * promotions with their state badges. Draft count rides along on the repository
  * line because it is the number that tells the user there is work waiting.
  */

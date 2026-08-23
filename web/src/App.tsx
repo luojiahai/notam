@@ -118,7 +118,7 @@ export function App() {
 		),
 	);
 
-	// Spec section 7: the status refresh runs on app open as well as on the
+	// The status refresh runs on app open as well as on the
 	// button. The server does its own pass at boot; this covers a tab opened
 	// hours later against a long-running process.
 	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally once per mount, not on every `refresh` identity change.

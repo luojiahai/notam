@@ -75,7 +75,7 @@ export function promotionRoutes(ctx: AppContext): Hono {
 		);
 	});
 
-	/** Spec section 7: runs on app open and on the manual button. */
+	/** Runs on app open and on the manual button. */
 	app.post("/promotions/refresh", async (c) => {
 		const body = await readBody(c, RefreshRequestSchema);
 		const summary = await refreshPromotions(ctx.promotionDeps, {

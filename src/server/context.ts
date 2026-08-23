@@ -35,7 +35,7 @@ export type ContextOptions = {
 	/** Injected by tests. Production builds a RestGitHubClient per host. */
 	gitDataFor?: (host: HostRow) => GitDataClient;
 	claudeRunner?: ClaudeRunner;
-	/** Checked once at boot rather than per call; see spec section 14. */
+	/** Checked once at boot rather than per call. */
 	claudeAvailable?: boolean;
 	version?: string;
 };
@@ -66,9 +66,10 @@ export type AppContext = {
  * whole server can be exercised with `app.request()` and no network and no
  * subprocess. That is the only reason the route tests are cheap.
  *
- * This is also where plan 2's named handoff is discharged: `analysis.concurrency`,
- * `analysis.timeout_seconds`, and `analysis.model` are read from the config and
- * pushed into the analyse runner and the analysis deps. Nothing else reads them.
+ * This is also the one place config's analysis knobs are handed off:
+ * `analysis.concurrency`, `analysis.timeout_seconds`, and `analysis.model` are
+ * read here and pushed into the analyse runner and the analysis deps. Nothing
+ * else reads them.
  */
 export function createContext(options: ContextOptions): AppContext {
 	const { db, config } = options;

@@ -12,9 +12,9 @@ export class ApiError extends Error {
 }
 
 /**
- * Every response is parsed with the same schema the server serialised it from
- * (spec section 3). A field the server stopped sending becomes a loud error
- * here instead of `undefined` rendered into a table cell three components away.
+ * Every response is parsed with the same schema the server serialised it from.
+ * A field the server stopped sending becomes a loud error here instead of
+ * `undefined` rendered into a table cell three components away.
  *
  * Paths are relative: the SPA is served from the same origin as the API, and in
  * development Vite proxies `/api` to the running server.
@@ -45,7 +45,7 @@ export async function request<T>(
 		const parsed = ApiErrorSchema.safeParse(body);
 		throw new ApiError(
 			response.status,
-			// GitHub's own text reaches the user unchanged (spec section 7).
+			// GitHub's own text reaches the user unchanged.
 			parsed.success
 				? parsed.data.error.message
 				: `${response.status} ${response.statusText}`,

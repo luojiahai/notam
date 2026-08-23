@@ -104,9 +104,9 @@ CREATE TABLE rules (
 CREATE INDEX rules_repo_status ON rules(repo_id, status);
 CREATE INDEX rules_entry ON rules(entry_id);
 CREATE INDEX rules_promotion ON rules(promotion_id);
--- Spec section 2 accepts a long flat rule list and substitutes sorting by
--- directive for clustering. This index is what makes that sort cheap; the
--- collation matches listRules' ORDER BY, or the index would not be used.
+-- The rule list is long and flat, sorted by directive rather than clustered.
+-- This index is what makes that sort cheap; the collation matches listRules'
+-- ORDER BY, or the index would not be used.
 CREATE INDEX rules_repo_directive ON rules(repo_id, directive COLLATE NOCASE);
 `,
 	},

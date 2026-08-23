@@ -18,7 +18,7 @@ import {
 
 /** Config's `analysis.timeout_seconds` default, in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 120_000;
-/** One attempt plus the two retries spec section 6 allows for a timeout or a non-zero exit. */
+/** One attempt plus the two retries allowed for a timeout or a non-zero exit. */
 export const DEFAULT_TRANSPORT_ATTEMPTS = 3;
 
 export type AnalysisEvent =
@@ -67,7 +67,7 @@ function describe(error: unknown): string {
 }
 
 /**
- * Spec section 6. Two independent retry budgets:
+ * Two independent retry budgets:
  *
  * - transport (timeout, non-zero exit) retries twice with backoff *within* one
  *   attempt, because the model never saw the request;
@@ -108,7 +108,7 @@ export async function analyseEntry(
 	};
 
 	// Everything from here on runs after the entry has been marked `running`.
-	// Plan 3 injects both `onProgress` and `runner`, so an unexpected throw from
+	// Both `onProgress` and `runner` are injected, so an unexpected throw from
 	// either of them — or from the transaction below — is a supported case, not
 	// a hypothetical: without this guard it would escape analyseEntry entirely
 	// and strand the entry `running` forever, with `last_error` still null.

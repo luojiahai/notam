@@ -1,7 +1,7 @@
 import type { EntryRow, RuleRow } from "../shared/types.ts";
 
 /**
- * Spec section 9's substring filters, done in memory rather than in SQL.
+ * The substring filters, done in memory rather than in SQL.
  *
  * This is a single-user local tool over a few hundred rows per repository, so
  * the query cost is irrelevant, and keeping it out of SQL keeps `store/` free
@@ -12,7 +12,7 @@ function normalise(query: string): string | null {
 	return trimmed === "" ? null : trimmed;
 }
 
-/** Title, author, changed path, and PR number — spec section 9's entries tab. */
+/** Title, author, changed path, and PR number — the entries tab's filter. */
 export function matchesEntryQuery(entry: EntryRow, query: string): boolean {
 	const needle = normalise(query);
 	if (needle === null) return true;

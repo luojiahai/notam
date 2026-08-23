@@ -152,7 +152,7 @@ export function countRulesByStatus(
 	return counts;
 }
 
-/** Re-analysis discards drafts and nothing else — see spec section 6. */
+/** Re-analysis discards drafts and nothing else. */
 export function deleteDraftRulesForEntry(
 	db: Database,
 	entryId: string,

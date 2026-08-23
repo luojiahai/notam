@@ -330,11 +330,11 @@ describe("EntriesTable", () => {
 	});
 
 	/**
-	 * The actions column used to have three shapes for one verb: a bare button
-	 * on a failed row, a ⋯ menu on an analysed one, and nothing at all on an
-	 * unanalysed row. Every row now offers the same Analyse action, named for
-	 * its entry so five of them do not share one accessible name. Queued and
-	 * running rows carry it too, disabled — covered separately below.
+	 * One verb, one shape: every row offers the same Analyse action whatever
+	 * its state, rather than a bare button on a failed row, a ⋯ menu on an
+	 * analysed one, and nothing at all on an unanalysed one. It is named for its
+	 * entry so five of them do not share one accessible name. Queued and running
+	 * rows carry it too, disabled — covered separately below.
 	 */
 	test("every actionable row offers Analyse, whatever its state", async () => {
 		const calls = draw({
@@ -415,7 +415,7 @@ describe("EntriesTable", () => {
 	});
 
 	/**
-	 * Without this the new busy rule is unenforceable on the bulk button. The
+	 * Without this the busy rule is unenforceable on the bulk button. The
 	 * rows it just queued leave the visible slice (they no longer match an
 	 * "unanalysed" chip), so `allBusy` falls back to the remembered rows, whose
 	 * `analysis_state` is frozen at selection time and still reads unanalysed —

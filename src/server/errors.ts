@@ -18,9 +18,9 @@ export class HttpError extends Error {
 /**
  * The one place an error becomes a status code.
  *
- * A GitHubError is 502 and not 500: the failure is upstream, and spec section 7
- * requires GitHub's own text to reach the user verbatim, which `messageFor`
- * below guarantees by never rewriting an Error's message.
+ * A GitHubError is 502 and not 500: the failure is upstream, and GitHub's own
+ * text has to reach the user verbatim, which `messageFor` below guarantees by
+ * never rewriting an Error's message.
  *
  * A ConfigError is 503 and not 500, because it can genuinely reach a request:
  * `applyConfig` is additive, so a host removed from config.yaml — or one whose

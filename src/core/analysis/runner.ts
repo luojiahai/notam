@@ -22,7 +22,7 @@ export type RunnerOptions = {
 
 /**
  * `--tools ""` disables every built-in tool. Analysis reads text and returns
- * text; it must not be able to touch the filesystem (spec section 6).
+ * text; it must not be able to touch the filesystem.
  */
 export const BASE_ARGS: readonly string[] = Object.freeze([
 	"--output-format",
@@ -84,7 +84,7 @@ export function createClaudeRunner(options: RunnerOptions = {}): ClaudeRunner {
 
 		// A hand-rolled timer rather than Bun.spawn's `timeout`, because the
 		// caller has to be able to tell a timeout apart from any other kill: the
-		// retry policy differs (spec section 6).
+		// retry policy differs.
 		//
 		// `proc.kill("SIGKILL")` only signals the direct child. If `claude` is a
 		// shell wrapper, the shell may fork rather than exec its own work, and a
@@ -97,9 +97,9 @@ export function createClaudeRunner(options: RunnerOptions = {}): ClaudeRunner {
 		// abandoned rather than awaited.
 		//
 		// Known limitation: Bun.spawn has no `detached`/process-group option, so
-		// there is no way here to kill that grandchild. This fix stops NOTAM
-		// from *hanging* on it; the orphaned process itself still lingers until
-		// it exits on its own.
+		// there is no way here to kill that grandchild. The race above stops
+		// NOTAM from *hanging* on it; the orphaned process itself still lingers
+		// until it exits on its own.
 		let timer: ReturnType<typeof setTimeout> | undefined;
 		try {
 			const stdoutReader = proc.stdout.getReader();

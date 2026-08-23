@@ -14,9 +14,9 @@ export type PromotionDialogProps = {
 };
 
 /**
- * Spec section 7's pre-flight. The collision sentence is quoted from the spec
- * on purpose: committing `…-2.md` without saying so is the silent footgun this
- * dialog exists to prevent.
+ * The promotion pre-flight. The collision sentence is spelled out on purpose:
+ * committing `…-2.md` without saying so is the silent footgun this dialog
+ * exists to prevent.
  *
  * Each file is a bordered block rather than a run of list items, because this
  * is the last screen before something is written to someone else's repository:

@@ -6,9 +6,9 @@ export type StaticAsset = { contentType: string; bytes: ArrayBuffer };
 /**
  * Web-root path (`/index.html`, `/assets/app-abc123.js`) to bytes.
  *
- * This Map *is* the seam spec section 3's "embedded SPA" needs. Plan 4 adds a
- * second producer of it that reads the same entries out of a
- * `bun build --compile` binary; nothing downstream of this type changes.
+ * This Map *is* the seam the embedded SPA needs: one producer reads a
+ * directory on disk, another reads the same entries out of a
+ * `bun build --compile` binary, and nothing downstream of this type changes.
  */
 export type AssetSource = Map<string, StaticAsset>;
 

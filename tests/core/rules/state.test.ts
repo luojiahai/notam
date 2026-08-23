@@ -63,7 +63,7 @@ function draft(overrides: Partial<NewRule> = {}) {
 }
 
 describe("the transition table", () => {
-	test("matches the spec's lifecycle diagram exactly", () => {
+	test("allows exactly the legal edges and no others", () => {
 		expect(LEGAL_TRANSITIONS).toEqual({
 			draft: ["proposed", "abandoned"],
 			proposed: ["draft", "verified", "abandoned"],
@@ -166,7 +166,7 @@ describe("transitionRules", () => {
 			transitionRules(db, [a.id, b.id], "proposed", LATER, { promotionId }),
 		).toThrow(RuleTransitionError);
 		// a must not have moved: a half-promoted selection is exactly the
-		// half-committed state spec section 7 forbids.
+		// half-committed state promotion forbids.
 		expect(getRule(db, a.id)?.status).toBe("draft");
 	});
 

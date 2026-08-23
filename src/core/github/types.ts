@@ -1,6 +1,6 @@
 import type { PromotionState } from "../../shared/types.ts";
 
-/** Spec section 5: a PR's file list is capped, and exceeding it is recorded, never hidden. */
+/** A PR's file list is capped, and exceeding it is recorded, never hidden. */
 export const MAX_CHANGED_PATHS = 300;
 
 export type RepoRef = { owner: string; name: string };

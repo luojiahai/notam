@@ -39,7 +39,7 @@ describe("rulePath", () => {
 });
 
 describe("renderRuleFile", () => {
-	test("matches the spec's file format exactly", () => {
+	test("renders the rule file format exactly", () => {
 		expect(
 			renderRuleFile(rule(), "https://ghe.acme.net/mono/pull/4821"),
 		).toBe(`---

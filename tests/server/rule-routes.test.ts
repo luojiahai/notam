@@ -141,7 +141,7 @@ describe("rule routes", () => {
 		const rules = seedRules(harness);
 		const ids = rules.map((rule) => rule.id);
 		const body = JSON.stringify({ rule_ids: ids, status: "verified" });
-		// draft -> verified is not a legal edge (spec section 8).
+		// draft -> verified is not a legal edge.
 		const response = await harness.app.request("/api/rules/status", {
 			method: "POST",
 			headers: { "content-type": "application/json" },

@@ -101,7 +101,7 @@ describe("action routes", () => {
 		expect(harness.runnerCalls[0]?.instruction).not.toContain(
 			"Fix rounding in payments",
 		);
-		// Spec section 11's analysis.timeout_seconds, finally wired.
+		// Config's analysis.timeout_seconds reaches the runner.
 		expect(harness.runnerCalls[0]?.timeoutMs).toBe(30_000);
 		harness.close();
 	});
