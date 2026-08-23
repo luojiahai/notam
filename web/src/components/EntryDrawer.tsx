@@ -1,6 +1,8 @@
+import { Sparkles } from "lucide-react";
 import { useState } from "react";
 import type { EntryDetail } from "../../../src/shared/api.ts";
 import { useEntry } from "../api/hooks.ts";
+import { isBusy } from "../lib/analysis.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -41,7 +43,7 @@ export function EntryDrawerView({
 	const [confirming, setConfirming] = useState(false);
 
 	/**
-	 * Spec section 6 requires the draft count on the row menu, in this drawer,
+	 * Spec section 6 requires the draft count on the row action, in this drawer,
 	 * and on the bulk action alike, so the guard lives with each entry point
 	 * rather than at the one the user happened to reach first.
 	 */
@@ -68,15 +70,20 @@ export function EntryDrawerView({
 			)}
 
 			<div className="drawer-actions">
-				<button type="button" onClick={requestReanalyse}>
-					{entry.analysis_state === "failed" ? "Retry" : "Re-analyse"}
+				<button
+					type="button"
+					disabled={isBusy(entry)}
+					onClick={requestReanalyse}
+				>
+					<Sparkles className="icon" aria-hidden="true" />
+					Analyse
 				</button>
 			</div>
 
 			{confirming && (
 				<Dialog
-					title="Re-analyse"
-					confirmLabel="Re-analyse"
+					title="Analyse"
+					confirmLabel="Analyse"
 					onCancel={() => setConfirming(false)}
 					onConfirm={() => {
 						setConfirming(false);

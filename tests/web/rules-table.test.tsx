@@ -42,7 +42,6 @@ function build(overrides: Partial<Props> = {}) {
 		verify: [] as string[][],
 		promote: [] as string[][],
 		status: [] as string[],
-		sort: [] as string[],
 		q: [] as string[],
 		opened: [] as string[],
 	};
@@ -53,8 +52,6 @@ function build(overrides: Partial<Props> = {}) {
 		onStatusChange: (next) => calls.status.push(next),
 		query: "",
 		onQueryChange: (next) => calls.q.push(next),
-		sort: "created",
-		onSortChange: (next) => calls.sort.push(next),
 		onOpenRule: (id) => calls.opened.push(id),
 		onAbandon: (ids) => calls.abandon.push(ids),
 		onVerify: (ids) => calls.verify.push(ids),
@@ -103,14 +100,6 @@ describe("RulesTable", () => {
 		expect(screen.getByRole("button", { name: "Proposed 1" })).toBeDefined();
 		await userEvent.click(screen.getByRole("button", { name: "Draft 2" }));
 		expect(calls.status).toEqual(["draft"]);
-	});
-
-	test("sorting by directive is a toggle", async () => {
-		const calls = draw();
-		await userEvent.click(
-			screen.getByRole("button", { name: /sort by directive/i }),
-		);
-		expect(calls.sort).toEqual(["directive"]);
 	});
 
 	test("the filter box reports what was typed", async () => {

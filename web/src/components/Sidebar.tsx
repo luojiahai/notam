@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import type { PromotionSummary, RepoSummary } from "../../../src/shared/api.ts";
 import { StatusPill } from "./Badge.tsx";
 
@@ -51,18 +52,32 @@ export function Sidebar({
 				))
 			)}
 
-			<h2>Promotions</h2>
-			<div className="sidebar-actions">
+			{/*
+				The refresh control rides on the heading rather than sitting in a
+				row of its own: it is a small, occasional action on the list below
+				it, and a full-width labelled button gave it more weight than the
+				promotions it refreshes. Icon-only, so `aria-label` carries the name
+				`title` shows on hover.
+			*/}
+			<div className="sidebar-heading">
+				<h2>Promotions</h2>
+				<span className="spacer" />
 				<button
 					type="button"
-					className="btn-sm"
+					className="btn-icon"
+					aria-label="Refresh status"
+					title="Refresh status"
+					aria-busy={refreshing}
 					onClick={onRefreshPromotions}
 					disabled={refreshing}
+					data-busy={refreshing}
 				>
-					{refreshing ? "Refreshing…" : "Refresh status"}
+					<RefreshCw className="icon" aria-hidden="true" />
 				</button>
-				{refreshError && <p className="notice notice-error">{refreshError}</p>}
 			</div>
+			{refreshError && (
+				<p className="notice notice-error sidebar-note">{refreshError}</p>
+			)}
 			{promotions.length === 0 ? (
 				<p className="sidebar-note">No promotions yet.</p>
 			) : (

@@ -235,7 +235,7 @@ the database first.
 ### Not in this version
 
 Deliberate omissions, so you do not go looking for them: issues as entries; rule
-deduplication or clustering (the rules list sorts and filters by directive text
+deduplication or clustering (the rules list filters by directive text
 instead); editing a rule's text before promotion (re-analyse instead); anything
 that is not GitHub; and any form of multi-user access. The server binds
 `127.0.0.1` only and has no authentication layer, because it is not built to
@@ -346,7 +346,7 @@ packaging breakage is caught before a tag depends on it.
 | Startup refuses with a path and a reason | `config.yaml` failed validation. The message names the exact key |
 | "The claude CLI was not found on PATH" | A warning, not a refusal. Sync and promotion work; analysis will fail until you install it |
 | A sync seems to pause | GitHub rate limiting. The job backs off and resumes on its own; it does not fail |
-| An entry is `failed` | Open it — the stored error is rendered inline, with a Retry control. Malformed model output gets one repair attempt, a timeout or crash gets two retries, before it lands here |
+| An entry is `failed` | Open it — the stored error is rendered inline, with an Analyse control. Malformed model output gets one repair attempt, a timeout or crash gets two retries, before it lands here |
 | "Create rules PR" failed | Every rule stayed `draft` and nothing was committed. GitHub's own message is shown verbatim — usually no write access, or a protected branch |
 | `notam run` came up on a different port | 4317 was taken, so it auto-incremented. Pass `--port` to insist on one |
 | A rule's file already exists on the base branch | The confirmation dialog says so before you promote. Proceeding commits a suffixed second file; NOTAM never overwrites |

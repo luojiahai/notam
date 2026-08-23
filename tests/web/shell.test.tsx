@@ -136,6 +136,30 @@ describe("Sidebar", () => {
 		).toBeDefined();
 	});
 
+	/**
+	 * The control is an icon on the Promotions heading now, not a labelled
+	 * button under it. An icon with no accessible name is a button nobody using
+	 * a screen reader can find, so the name is asserted alongside the shape.
+	 */
+	test("refresh is an icon that keeps its name and goes down while it runs", () => {
+		wrap(
+			<Sidebar
+				repos={[repo]}
+				promotions={[promotion]}
+				selectedRepoId="r_1"
+				onSelectRepo={() => {}}
+				onRefreshPromotions={() => {}}
+				refreshing={true}
+			/>,
+		);
+		const button = screen.getByRole("button", { name: /refresh status/i });
+		expect(button.textContent).toBe("");
+		expect(button.hasAttribute("disabled")).toBe(true);
+		// The name stays put while it runs — only the state changes. The spin is
+		// decoration, so aria-busy is the only signal a screen reader gets.
+		expect(button.getAttribute("aria-busy")).toBe("true");
+	});
+
 	test("the refresh button reports a click", async () => {
 		let clicks = 0;
 		wrap(
@@ -394,6 +418,15 @@ const meta: Meta = {
 	analysis: { concurrency: 2, timeout_seconds: 30, model: null },
 };
 
+const refreshResult = {
+	checked: 0,
+	merged: 0,
+	closed: 0,
+	unchanged: 0,
+	returned_to_draft: 0,
+	errors: [],
+};
+
 function entriesFor(repoId: string, number: number): EntriesResponse {
 	const summary: EntrySummary = {
 		id: `e_${repoId}`,
@@ -439,6 +472,61 @@ describe("App", () => {
 		globalThis.fetch = originalFetch;
 	});
 
+	/**
+	 * Sync moved out of the global header, where it read as an app-wide action
+	 * and rendered — disabled — even with nothing selected. It belongs to a
+	 * repository now, so with no repository there is no control at all.
+	 */
+	test("offers no sync control until a repository is selected", async () => {
+		globalThis.fetch = ((input: unknown) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") return Promise.resolve(Response.json([]));
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(Response.json(refreshResult));
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		await screen.findByText(/no repository selected/i);
+		expect(screen.queryByRole("button", { name: /sync/i })).toBeNull();
+	});
+
+	test("Sync posts for the repository the bar names", async () => {
+		const posted: string[] = [];
+		globalThis.fetch = ((input: unknown, init?: RequestInit) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") return Promise.resolve(Response.json([repo]));
+			if (path.startsWith("/api/repos/r_1/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
+			}
+			if (path.endsWith("/promotions")) {
+				return Promise.resolve(Response.json([]));
+			}
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(Response.json(refreshResult));
+			}
+			if (init?.method === "POST" && path.endsWith("/sync")) {
+				posted.push(path);
+				return Promise.resolve(Response.json({ job_id: "j_1" }));
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		await screen.findByRole("button", { name: /^sync$/i });
+		await userEvent.click(screen.getByRole("button", { name: /^sync$/i }));
+		await waitFor(() => expect(posted).toEqual(["/api/repos/r_1/sync"]));
+	});
+
 	test("switching repository drops the selection made in the previous one", async () => {
 		const second: RepoSummary = { ...repo, id: "r_2", name: "acme/api" };
 		globalThis.fetch = ((input: unknown) => {
@@ -457,16 +545,7 @@ describe("App", () => {
 				return Promise.resolve(Response.json([]));
 			}
 			if (path === "/api/promotions/refresh") {
-				return Promise.resolve(
-					Response.json({
-						checked: 0,
-						merged: 0,
-						closed: 0,
-						unchanged: 0,
-						returned_to_draft: 0,
-						errors: [],
-					}),
-				);
+				return Promise.resolve(Response.json(refreshResult));
 			}
 			return Promise.resolve(
 				new Response(`unexpected ${path}`, { status: 404 }),

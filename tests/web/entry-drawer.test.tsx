@@ -154,22 +154,20 @@ describe("EntryDrawerView", () => {
 				onOpenRule={() => {}}
 			/>,
 		);
-		await userEvent.click(
-			screen.getByRole("button", { name: /^re-analyse$/i }),
-		);
+		await userEvent.click(screen.getByRole("button", { name: /^analyse$/i }));
 		expect(clicks).toBe(0);
 		expect(
 			screen.getByText("This will discard 1 draft rule and re-run analysis."),
 		).toBeDefined();
 		await userEvent.click(
 			within(screen.getByRole("dialog")).getByRole("button", {
-				name: /^re-analyse$/i,
+				name: /^analyse$/i,
 			}),
 		);
 		expect(clicks).toBe(1);
 	});
 
-	test("with no drafts to lose, re-analyse fires straight away", async () => {
+	test("with no drafts to lose, analysis fires straight away", async () => {
 		let clicks = 0;
 		render(
 			<EntryDrawerView
@@ -180,13 +178,30 @@ describe("EntryDrawerView", () => {
 				onOpenRule={() => {}}
 			/>,
 		);
-		await userEvent.click(
-			screen.getByRole("button", { name: /^re-analyse$/i }),
-		);
+		await userEvent.click(screen.getByRole("button", { name: /^analyse$/i }));
 		expect(clicks).toBe(1);
 	});
 
-	test("a failed entry shows its error and offers Retry", async () => {
+	test("a running entry cannot be queued again from the drawer", () => {
+		render(
+			<EntryDrawerView
+				entry={detail({
+					analysis_state: "running",
+					rules: [],
+					rule_count: 0,
+					draft_rule_count: 0,
+				})}
+				onReanalyse={() => {}}
+				onOpenRule={() => {}}
+			/>,
+		);
+		const button = screen.getByRole("button", {
+			name: /^analyse$/i,
+		}) as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+	});
+
+	test("a failed entry shows its error and offers Analyse", async () => {
 		let clicks = 0;
 		render(
 			<EntryDrawerView
@@ -204,7 +219,7 @@ describe("EntryDrawerView", () => {
 			/>,
 		);
 		expect(screen.getByText(/did not finish within 120000ms/)).toBeDefined();
-		await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		await userEvent.click(screen.getByRole("button", { name: /^analyse$/i }));
 		expect(clicks).toBe(1);
 	});
 });

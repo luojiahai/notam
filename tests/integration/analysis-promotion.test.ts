@@ -286,7 +286,7 @@ describe("failure and recovery", () => {
 		expect(failedEntry?.last_error).toContain("credit balance too low");
 		expect(queue.list("failed")[0]?.error).toContain("credit balance too low");
 
-		// "Retry" is the same action as "Re-analyse": queue it again.
+		// a failed entry re-runs through the same path as any other: queue it again.
 		queueEntries(db, queue, [entry.id]);
 		const second = await runPool({
 			queue,

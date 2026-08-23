@@ -124,19 +124,6 @@ describe("action routes", () => {
 		harness.close();
 	});
 
-	test("POST analyse-unanalysed queues every unanalysed entry in the repo", async () => {
-		const harness = testContext();
-		const response = await post(
-			harness.app,
-			`/api/repos/${harness.repoId}/analyse-unanalysed`,
-		);
-		expect(QueueResultSchema.parse(await response.json()).queued).toEqual([
-			harness.entryId,
-		]);
-		await harness.ctx.analyseRunner.idle();
-		harness.close();
-	});
-
 	test("POST analyse rejects an unknown entry with 404 and queues nothing", async () => {
 		const harness = testContext();
 		const response = await post(harness.app, "/api/entries/analyse", {

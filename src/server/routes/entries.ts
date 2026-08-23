@@ -56,9 +56,9 @@ export function entryRoutes(ctx: AppContext): Hono {
 	});
 
 	/**
-	 * The single, multi-select, and row-menu re-analyse actions are all this one
-	 * call — spec section 6 says all three enqueue one job per entry, and giving
-	 * them one endpoint is what keeps that true.
+	 * The row action, the drawer action, and the multi-select bulk action are
+	 * all this one call — spec section 6 says all three enqueue one job per
+	 * entry, and giving them one endpoint is what keeps that true.
 	 */
 	app.post("/entries/analyse", async (c) => {
 		const body = await readBody(c, AnalyseRequestSchema);
@@ -66,16 +66,6 @@ export function entryRoutes(ctx: AppContext): Hono {
 		// one id cannot leave half a batch running.
 		for (const id of body.entry_ids) requireEntry(ctx.db, id);
 		const result = queueEntries(ctx.db, ctx.queue, body.entry_ids);
-		ctx.analyseRunner.kick();
-		return c.json(result);
-	});
-
-	app.post("/repos/:repoId/analyse-unanalysed", (c) => {
-		const repo = requireRepo(ctx.db, c.req.param("repoId"));
-		const ids = listEntriesByState(ctx.db, repo.id, "unanalysed").map(
-			(entry) => entry.id,
-		);
-		const result = queueEntries(ctx.db, ctx.queue, ids);
 		ctx.analyseRunner.kick();
 		return c.json(result);
 	});
