@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import type { AppContext } from "./context.ts";
 import { errorResponse, HttpError } from "./errors.ts";
 import { entryRoutes } from "./routes/entries.ts";
+import { eventRoutes } from "./routes/events.ts";
 import { metaRoutes } from "./routes/meta.ts";
 import { promotionRoutes } from "./routes/promotions.ts";
 import { repoRoutes } from "./routes/repos.ts";
@@ -23,6 +24,7 @@ export function createApp(ctx: AppContext): Hono {
 	api.route("/", ruleRoutes(ctx));
 	api.route("/", syncRoutes(ctx));
 	api.route("/", promotionRoutes(ctx));
+	api.route("/", eventRoutes(ctx));
 
 	const app = new Hono();
 	app.onError((error) => errorResponse(error));
