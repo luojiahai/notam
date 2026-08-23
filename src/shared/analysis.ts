@@ -26,4 +26,4 @@ export const AnalysedRuleSchema = z.object({
 
 export const AnalysedRulesSchema = z.array(AnalysedRuleSchema);
 
-export type AnalysedRule = z.output<typeof AnalysedRulesSchema>;
+export type AnalysedRule = z.output<typeof AnalysedRuleSchema>;
