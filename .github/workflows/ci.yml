@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -12,7 +15,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +31,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # install.sh is POSIX sh, not bash: tests/install/install.test.ts spawns
+      # `sh`, and ubuntu-latest's /bin/sh is dash, so this is what actually
+      # proves install.sh runs under dash and not just under bash-as-sh.
       - name: Unit, integration, and installer tests
         run: bun run test
 
@@ -45,13 +51,16 @@ jobs:
         run: bun run test:binary
 
       # Spec section 13: build all four targets on every pull request, so
-      # packaging breakage is caught before a tag depends on it.
+      # packaging breakage is caught before a tag depends on it. Runs through
+      # the documented `build:binaries` alias so that alias is exercised too.
       - name: Build all four release targets
-        run: bun run scripts/build-binary.ts --all --version 0.0.0-ci
+        run: bun run build:binaries --version 0.0.0-ci
 
+      # Runs through the documented `checksums` alias so that alias is
+      # exercised too.
       - name: Checksum them
         run: |
-          bun run scripts/checksums.ts --dir dist
+          bun run checksums
           ls -la dist
 
       - name: Upload the Playwright report on failure

@@ -99,6 +99,15 @@ jobs:
       - name: Generate SHA256SUMS
         run: bun run scripts/checksums.ts --dir dist
 
+      - name: Check dist/ holds exactly the five release assets
+        run: |
+          count=$(find dist -type f | wc -l)
+          if [ "$count" -ne 5 ]; then
+            echo "Expected 5 files in dist/, found $count:" >&2
+            ls -la dist >&2
+            exit 1
+          fi
+
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
