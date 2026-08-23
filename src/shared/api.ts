@@ -76,6 +76,31 @@ export const RuleCountsSchema = z.object({
 	abandoned: count,
 });
 
+/** What sync is doing for a repository right now. `idle` means no job is pending. */
+export const SyncStateSchema = z.enum(["idle", "queued", "running"]);
+
+/** How a sync ended. `cancelled` is the user's own stop press, not a failure. */
+export const SyncOutcomeSchema = z.enum(["done", "failed", "cancelled"]);
+
+export const RepoSyncSchema = z.object({
+	state: SyncStateSchema,
+	/** When the job was claimed. Null unless `state` is `running`. */
+	started_at: z.string().nullable(),
+	/**
+	 * How the last sync of this repository ended, or null if it has never run
+	 * one to a conclusion. Survives a reload, which is the point: the browser
+	 * learns this from the job table rather than from an event it may have
+	 * missed.
+	 */
+	last: z
+		.object({
+			outcome: SyncOutcomeSchema,
+			at: z.string(),
+			error: z.string().nullable(),
+		})
+		.nullable(),
+});
+
 export const RepoSummarySchema = z.object({
 	id: z.string(),
 	name: z.string(),
@@ -88,6 +113,7 @@ export const RepoSummarySchema = z.object({
 	entries: EntryCountsSchema,
 	rules: RuleCountsSchema,
 	open_promotions: count,
+	sync: RepoSyncSchema,
 });
 
 export const EntrySummarySchema = z.object({
@@ -245,6 +271,11 @@ export const SyncStartedSchema = z.object({
 	already_running: z.boolean(),
 });
 
+export const SyncCancelledSchema = z.object({
+	/** False when nothing was pending. A no-op, never an error. */
+	cancelled: z.boolean(),
+});
+
 /**
  * List endpoints return their rows *and* the unfiltered counts, because the
  * filter chips must keep showing "Failed 3" while the Unanalysed filter is on.
@@ -306,10 +337,20 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
 		queued: count,
 		running: count,
 	}),
+	/**
+	 * `progress` carries the running totals of a sync still walking pages. It
+	 * is throttled per repository, so it is a live tally rather than one event
+	 * per pull request. `scanned` is the number that keeps moving while sync
+	 * walks pull requests it already has, which is most of a repeat run.
+	 *
+	 * There is no total to divide by — GitHub's listing is cursor-paginated
+	 * with no count — so this is a rising tally, never a percentage.
+	 */
 	z.object({
 		type: z.literal("sync"),
 		repo_id: z.string(),
-		phase: z.enum(["started", "finished", "failed"]),
+		phase: z.enum(["started", "progress", "finished", "failed", "cancelled"]),
+		scanned: count,
 		created: count,
 		updated: count,
 		skipped: count,
@@ -339,6 +380,10 @@ export type RefreshSummaryView = z.infer<typeof RefreshSummarySchema>;
 export type Meta = z.infer<typeof MetaSchema>;
 export type QueueResult = z.infer<typeof QueueResultSchema>;
 export type SyncStarted = z.infer<typeof SyncStartedSchema>;
+export type SyncCancelled = z.infer<typeof SyncCancelledSchema>;
+export type RepoSync = z.infer<typeof RepoSyncSchema>;
+export type SyncState = z.infer<typeof SyncStateSchema>;
+export type SyncOutcome = z.infer<typeof SyncOutcomeSchema>;
 export type EntriesResponse = z.infer<typeof EntriesResponseSchema>;
 export type RulesResponse = z.infer<typeof RulesResponseSchema>;
 export type ServerEvent = z.infer<typeof ServerEventSchema>;

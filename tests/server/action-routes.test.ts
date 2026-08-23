@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	QueueResultSchema,
 	type ServerEvent,
+	SyncCancelledSchema,
 	SyncStartedSchema,
 } from "../../src/shared/api.ts";
 import { getEntry } from "../../src/store/entries.ts";
@@ -151,6 +152,117 @@ describe("action routes", () => {
 			body: "{not json",
 		});
 		expect(response.status).toBe(400);
+		harness.close();
+	});
+});
+
+describe("sync cancellation", () => {
+	/** Seeds one merged PR the fake will hydrate, matching the config's globs. */
+	function seedPR(harness: ReturnType<typeof testContext>) {
+		harness.github.prs = [
+			{
+				pullRequest: {
+					number: 5150,
+					title: "Retry the payments webhook",
+					body: "body",
+					url: "https://github.com/acme/mono/pull/5150",
+					updatedAt: "2026-08-20T00:00:00Z",
+					mergedAt: "2026-08-20T00:00:00Z",
+					author: { login: "dana" },
+					labels: { nodes: [] },
+					reviews: { nodes: [] },
+					reviewThreads: { nodes: [] },
+					comments: { nodes: [] },
+				},
+				changedPaths: ["services/payments/webhook.ts"],
+				pathsTruncated: false,
+			},
+		];
+	}
+
+	test("stops a sync that is already running and says so on the wire", async () => {
+		const harness = testContext();
+		seedPR(harness);
+		let release!: () => void;
+		harness.github.hold = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const events: ServerEvent[] = [];
+		harness.ctx.bus.subscribe((event) => events.push(event));
+
+		await post(harness.app, `/api/repos/${harness.repoId}/sync`);
+		await harness.github.entered;
+
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/sync/cancel`,
+		);
+		expect(SyncCancelledSchema.parse(await response.json())).toEqual({
+			cancelled: true,
+		});
+
+		release();
+		await harness.ctx.syncRunner.idle();
+		const phases = events
+			.filter((event) => event.type === "sync")
+			.map((event) => (event.type === "sync" ? event.phase : ""));
+		expect(phases).toEqual(["started", "cancelled"]);
+		expect(harness.ctx.queue.status("sync", harness.repoId).last?.state).toBe(
+			"cancelled",
+		);
+		harness.close();
+	});
+
+	test("stops a sync still queued, without ever claiming it", async () => {
+		const harness = testContext();
+		const job = harness.ctx.queue.enqueue("sync", harness.repoId);
+		if (!job) throw new Error("expected a job");
+
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/sync/cancel`,
+		);
+		expect(SyncCancelledSchema.parse(await response.json()).cancelled).toBe(
+			true,
+		);
+		expect(harness.ctx.queue.get(job.id)?.state).toBe("cancelled");
+		harness.close();
+	});
+
+	test("cancelling nothing is a no-op, not an error", async () => {
+		const harness = testContext();
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/sync/cancel`,
+		);
+		expect(response.status).toBe(200);
+		expect(SyncCancelledSchema.parse(await response.json()).cancelled).toBe(
+			false,
+		);
+		harness.close();
+	});
+
+	test("404s for a repository that does not exist", async () => {
+		const harness = testContext();
+		const response = await post(harness.app, "/api/repos/r_nope/sync/cancel");
+		expect(response.status).toBe(404);
+		harness.close();
+	});
+
+	test("leaves the repository immediately re-syncable", async () => {
+		const harness = testContext();
+		const job = harness.ctx.queue.enqueue("sync", harness.repoId);
+		if (!job) throw new Error("expected a job");
+		await post(harness.app, `/api/repos/${harness.repoId}/sync/cancel`);
+
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/sync`,
+		);
+		const started = SyncStartedSchema.parse(await response.json());
+		expect(started.already_running).toBe(false);
+		expect(started.job_id).not.toBeNull();
+		await harness.ctx.syncRunner.idle();
 		harness.close();
 	});
 });

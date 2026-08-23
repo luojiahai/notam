@@ -11,18 +11,22 @@ import type {
 	PromotionSummary,
 	RefreshSummaryView,
 	RepoSummary,
+	RepoSync,
 	RuleCounts,
 	RuleDetail,
 	RuleSummary,
+	SyncOutcome,
 } from "../shared/api.ts";
 import type {
 	EntryRow,
 	HostRow,
+	JobState,
 	PromotionRow,
 	RepoRow,
 	RuleRow,
 } from "../shared/types.ts";
 import { countEntriesByState, listEntriesByIds } from "../store/entries.ts";
+import type { JobStatus } from "../store/jobs.ts";
 import { listPromotions } from "../store/promotions.ts";
 import { countRulesByStatus } from "../store/rules.ts";
 
@@ -67,10 +71,39 @@ export function ruleCounts(db: Database, repoId: string): RuleCounts {
 	};
 }
 
+/**
+ * Shapes the job table's answer to "what is sync doing, and how did the last
+ * one end" for the browser. Both halves come from the same query, so a reload
+ * mid-sync sees the truth rather than whatever SSE event it happened to catch.
+ */
+export function toRepoSync(status: JobStatus): RepoSync {
+	const { pending, last } = status;
+	return {
+		state:
+			pending?.state === "running" ? "running" : pending ? "queued" : "idle",
+		started_at: pending?.state === "running" ? pending.started_at : null,
+		last:
+			last && isOutcome(last.state)
+				? {
+						outcome: last.state,
+						// Every settled job is stamped; `created_at` is the honest
+						// fallback rather than widening the field to nullable.
+						at: last.finished_at ?? last.created_at,
+						error: last.error,
+					}
+				: null,
+	};
+}
+
+function isOutcome(state: JobState): state is SyncOutcome {
+	return state === "done" || state === "failed" || state === "cancelled";
+}
+
 export function toRepoSummary(
 	db: Database,
 	repo: RepoRow,
 	host: HostRow,
+	sync: JobStatus,
 ): RepoSummary {
 	const open = listPromotions(db, repo.id).filter(
 		(promotion) => promotion.state === "open",
@@ -87,6 +120,7 @@ export function toRepoSummary(
 		entries: entryCounts(db, repo.id),
 		rules: ruleCounts(db, repo.id),
 		open_promotions: open,
+		sync: toRepoSync(sync),
 	};
 }
 

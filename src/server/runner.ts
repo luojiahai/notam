@@ -99,6 +99,16 @@ export class JobRunner {
 	}
 
 	/**
+	 * Cancels whatever this target has pending, if anything. The pending index
+	 * makes that job single-valued, so a caller holding only a repository id
+	 * never has to guess which job it means.
+	 */
+	cancelPending(kind: JobKind, targetId: string): boolean {
+		const { pending } = this.options.queue.status(kind, targetId);
+		return pending ? this.cancel(pending.id) : false;
+	}
+
+	/**
 	 * Composed with the runner-wide controller, so `stop()` reaches a handler
 	 * that is already mid-request instead of leaving the process waiting on a
 	 * network call it no longer wants.

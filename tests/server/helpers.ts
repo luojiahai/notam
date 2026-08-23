@@ -47,6 +47,21 @@ export const TEST_CONFIG: Config = {
 export class FakeGitHubClient implements GitHubClient {
 	/** Whatever this holds is what a sync will find. */
 	prs: PRDetail[] = [];
+	/**
+	 * Set to hold every hydration open, so a test can observe a sync that is
+	 * genuinely mid-flight rather than one that finished before it looked.
+	 * Resolve it to let the sync run on.
+	 */
+	hold: Promise<void> | null = null;
+	/** Resolves once the first hydration has been entered. */
+	readonly entered: Promise<void>;
+	private announce!: () => void;
+
+	constructor() {
+		this.entered = new Promise<void>((resolve) => {
+			this.announce = resolve;
+		});
+	}
 
 	listMergedPRs(): Promise<PRPage> {
 		return Promise.resolve({
@@ -60,14 +75,29 @@ export class FakeGitHubClient implements GitHubClient {
 		});
 	}
 
-	fetchPRDetail(_repo: RepoRef, number: number): Promise<PRDetail> {
+	async fetchPRDetail(
+		_repo: RepoRef,
+		number: number,
+		options: { signal?: AbortSignal } = {},
+	): Promise<PRDetail> {
+		this.announce();
+		if (this.hold) {
+			await Promise.race([
+				this.hold,
+				new Promise<never>((_resolve, reject) => {
+					options.signal?.addEventListener("abort", () =>
+						reject(options.signal?.reason),
+					);
+				}),
+			]);
+		}
 		const found = this.prs.find(
 			(detail) => detail.pullRequest.number === number,
 		);
 		if (!found) {
-			return Promise.reject(new GitHubError(`no PR #${number}`, 404));
+			throw new GitHubError(`no PR #${number}`, 404);
 		}
-		return Promise.resolve(found);
+		return found;
 	}
 }
 

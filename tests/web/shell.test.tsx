@@ -27,6 +27,7 @@ const repo: RepoSummary = {
 	path_globs: ["services/payments/**"],
 	window_days: 180,
 	sync_watermark: null,
+	sync: { state: "idle", started_at: null, last: null },
 	entries: {
 		total: 12,
 		unanalysed: 7,
@@ -274,6 +275,7 @@ describe("invalidationsFor", () => {
 			type: "sync",
 			repo_id: "r_1",
 			phase: "finished",
+			scanned: 3,
 			created: 0,
 			updated: 3,
 			skipped: 0,
@@ -327,6 +329,7 @@ describe("applyServerEvent", () => {
 			type: "sync",
 			repo_id: "r_1",
 			phase: "failed",
+			scanned: 0,
 			created: 0,
 			updated: 0,
 			skipped: 0,

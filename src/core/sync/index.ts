@@ -56,7 +56,11 @@ export type SyncDeps = {
 	 * re-covers the ground this one abandoned.
 	 */
 	signal?: AbortSignal;
-	onProgress?: (event: SyncEvent) => void;
+	/**
+	 * The repository is passed alongside because a caller fanning several syncs
+	 * out at once has no other way to tell whose progress this is.
+	 */
+	onProgress?: (event: SyncEvent, repo: RepoRow) => void;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -119,7 +123,7 @@ export async function syncRepo(
 			pageSize: deps.pageSize,
 			signal: deps.signal,
 		});
-		deps.onProgress?.({ type: "page", scanned: page.nodes.length });
+		deps.onProgress?.({ type: "page", scanned: page.nodes.length }, repo);
 
 		for (const node of page.nodes) {
 			// Checked per PR rather than per page: a page is up to fifty
@@ -135,11 +139,14 @@ export async function syncRepo(
 				// the rest of the page.
 				if (error instanceof RangeError) {
 					summary.missing++;
-					deps.onProgress?.({
-						type: "missing",
-						number: node.number,
-						reason: "malformed-timestamp",
-					});
+					deps.onProgress?.(
+						{
+							type: "missing",
+							number: node.number,
+							reason: "malformed-timestamp",
+						},
+						repo,
+					);
 					continue;
 				}
 				throw error;
@@ -168,11 +175,10 @@ export async function syncRepo(
 					(error.status === 404 || error.status === 410)
 				) {
 					summary.missing++;
-					deps.onProgress?.({
-						type: "missing",
-						number: node.number,
-						reason: "not-found",
-					});
+					deps.onProgress?.(
+						{ type: "missing", number: node.number, reason: "not-found" },
+						repo,
+					);
 					continue;
 				}
 				throw error;
@@ -181,11 +187,10 @@ export async function syncRepo(
 
 			if (!matchesGlobs(entry.changed_paths, repo.path_globs)) {
 				summary.skipped++;
-				deps.onProgress?.({
-					type: "skipped",
-					number: entry.number,
-					reason: "globs",
-				});
+				deps.onProgress?.(
+					{ type: "skipped", number: entry.number, reason: "globs" },
+					repo,
+				);
 				continue;
 			}
 
@@ -193,11 +198,10 @@ export async function syncRepo(
 			if (result.created) summary.created++;
 			else summary.updated++;
 			if (entry.paths_truncated) summary.truncated++;
-			deps.onProgress?.({
-				type: "stored",
-				number: entry.number,
-				created: result.created,
-			});
+			deps.onProgress?.(
+				{ type: "stored", number: entry.number, created: result.created },
+				repo,
+			);
 		}
 
 		if (reachedFloor) break;
