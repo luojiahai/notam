@@ -3,6 +3,7 @@ import type { AnalysisState } from "../../../src/shared/api.ts";
 import type { BatchState } from "../App.tsx";
 import { useAnalyse, useAnalyseUnanalysed, useEntries } from "../api/hooks.ts";
 import { EntriesTable } from "./EntriesTable.tsx";
+import { TableError } from "./TableState.tsx";
 
 export function EntriesTab({
 	repoId,
@@ -20,7 +21,7 @@ export function EntriesTab({
 	const analyseAll = useAnalyseUnanalysed();
 
 	if (entries.error) {
-		return <p className="error">{entries.error.message}</p>;
+		return <TableError message={entries.error.message} />;
 	}
 
 	return (

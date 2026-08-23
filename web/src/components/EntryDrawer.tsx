@@ -1,9 +1,33 @@
 import { useState } from "react";
 import type { EntryDetail } from "../../../src/shared/api.ts";
 import { useEntry } from "../api/hooks.ts";
-import { Badge } from "./Badge.tsx";
+import { Badge, StatusPill } from "./Badge.tsx";
 import { Dialog } from "./Dialog.tsx";
 import { Drawer } from "./Drawer.tsx";
+
+/**
+ * GitHub's review states arrive as SCREAMING_SNAKE enums. They are rendered as
+ * prose with a semantic tint, because "CHANGES_REQUESTED" is the one word on
+ * this screen that changes how you read everything under it.
+ */
+const REVIEW_STATES: Record<string, { label: string; tone: string }> = {
+	APPROVED: { label: "approved", tone: "status-verified" },
+	CHANGES_REQUESTED: { label: "changes requested", tone: "status-failed" },
+	COMMENTED: { label: "commented", tone: "" },
+	DISMISSED: { label: "dismissed", tone: "status-abandoned" },
+	PENDING: { label: "pending", tone: "" },
+};
+
+function ReviewState({ state }: { state: string }) {
+	// Unknown states are shown verbatim rather than swallowed: GitHub can add
+	// one, and a blank pill would hide it.
+	const known = REVIEW_STATES[state];
+	return (
+		<span className={`status ${known?.tone ?? ""}`}>
+			{known?.label ?? state.toLowerCase().replace(/_/g, " ")}
+		</span>
+	);
+}
 
 export function EntryDrawerView({
 	entry,
@@ -31,26 +55,23 @@ export function EntryDrawerView({
 
 	return (
 		<>
-			<p className="secondary">
-				<a href={entry.url} target="_blank" rel="noreferrer">
+			<p className="meta-line">
+				<a className="mono" href={entry.url} target="_blank" rel="noreferrer">
 					#{entry.number}
-				</a>{" "}
-				by {entry.author}
-				{entry.labels.length > 0 && ` · ${entry.labels.join(", ")}`}
+				</a>
+				<span>by {entry.author}</span>
+				{entry.labels.length > 0 && <span>{entry.labels.join(", ")}</span>}
 			</p>
 
-			{entry.analysis_state === "failed" ? (
-				<p className="error">
-					{entry.last_error}{" "}
-					<button type="button" onClick={requestReanalyse}>
-						Retry
-					</button>
-				</p>
-			) : (
-				<button type="button" onClick={requestReanalyse}>
-					Re-analyse
-				</button>
+			{entry.analysis_state === "failed" && (
+				<p className="notice notice-error">{entry.last_error}</p>
 			)}
+
+			<div className="drawer-actions">
+				<button type="button" onClick={requestReanalyse}>
+					{entry.analysis_state === "failed" ? "Retry" : "Re-analyse"}
+				</button>
+			</div>
 
 			{confirming && (
 				<Dialog
@@ -67,41 +88,34 @@ export function EntryDrawerView({
 						{entry.draft_rule_count === 1 ? "" : "s"} and re-run analysis.
 					</p>
 					<p className="secondary">
-						Proposed, verified, and abandoned rules are untouched, and the
-						stored pull request payload is reused — re-sync first if the
-						conversation has changed.
+						Proposed, verified, and abandoned rules are untouched. The stored
+						pull request payload is reused, so re-sync first if the conversation
+						has changed.
 					</p>
 				</Dialog>
 			)}
 
 			<h3>Description</h3>
-			<p style={{ whiteSpace: "pre-wrap" }}>
-				{entry.body || "(no description)"}
-			</p>
+			<p className="prose">{entry.body || "No description."}</p>
 
 			<h3>Rules from this entry</h3>
 			{entry.rules.length === 0 ? (
 				<p className="secondary">No rules yet.</p>
 			) : (
-				<ul style={{ listStyle: "none", padding: 0 }}>
+				<ul className="rule-list">
 					{entry.rules.map((rule) => (
-						<li key={rule.id} style={{ padding: "0.25rem 0" }}>
+						<li key={rule.id}>
 							<Badge kind={rule.kind}>
 								{rule.kind === "do" ? "DO" : "DON'T"}
-							</Badge>{" "}
+							</Badge>
 							<button
 								type="button"
-								style={{
-									background: "none",
-									border: 0,
-									padding: 0,
-									textAlign: "left",
-								}}
+								className="btn-plain"
 								onClick={() => onOpenRule(rule.id)}
 							>
 								{rule.directive}
-							</button>{" "}
-							<span className="secondary">{rule.status}</span>
+							</button>
+							<StatusPill status={rule.status} />
 						</li>
 					))}
 				</ul>
@@ -112,11 +126,12 @@ export function EntryDrawerView({
 				<p className="secondary">None.</p>
 			) : (
 				entry.reviews.map((review) => (
-					<div key={review.url} style={{ marginBottom: "0.5rem" }}>
-						<div className="secondary">
-							{review.author} · {review.state}
+					<div className="quote" key={review.url}>
+						<div className="quote-head">
+							<span className="quote-author">{review.author}</span>
+							<ReviewState state={review.state} />
 						</div>
-						<div style={{ whiteSpace: "pre-wrap" }}>{review.body}</div>
+						<div className="quote-body">{review.body}</div>
 					</div>
 				))
 			)}
@@ -127,24 +142,29 @@ export function EntryDrawerView({
 			) : (
 				entry.review_threads.map((thread, index) => (
 					<div
+						className="quote"
 						key={thread.comments[0]?.url ?? `thread-${index}`}
-						style={{ marginBottom: "0.75rem" }}
 					>
-						<div className="secondary">
+						<div className="quote-head">
 							{/* The file and line anchor is what makes a thread's advice scopeable. */}
-							<span>
+							<span className="quote-anchor">
 								{thread.path
 									? `${thread.path}${thread.line === null ? "" : `:${thread.line}`}`
 									: "(not anchored to a file)"}
 							</span>
-							{thread.resolved && " · resolved"}
+							{thread.resolved && <span className="status">resolved</span>}
 						</div>
 						{thread.comments.map((comment) => (
-							<div key={comment.url}>
-								<span className="secondary">{comment.author}: </span>
-								<a href={comment.url} target="_blank" rel="noreferrer">
-									{comment.body}
+							<div className="quote-comment" key={comment.url}>
+								<a
+									className="quote-author"
+									href={comment.url}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{comment.author}
 								</a>
+								<span className="quote-body">{comment.body}</span>
 							</div>
 						))}
 					</div>
@@ -156,27 +176,36 @@ export function EntryDrawerView({
 				<p className="secondary">None.</p>
 			) : (
 				entry.comments.map((comment) => (
-					<div key={comment.url}>
-						<span className="secondary">{comment.author}: </span>
-						{comment.body}
+					<div className="quote" key={comment.url}>
+						<div className="quote-head">
+							<a
+								className="quote-author"
+								href={comment.url}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{comment.author}
+							</a>
+						</div>
+						<div className="quote-body">{comment.body}</div>
 					</div>
 				))
 			)}
 
 			<h3>Changed files ({entry.changed_file_count})</h3>
 			{entry.paths_truncated && (
-				<p className="warning">
+				<p className="notice notice-warn">
 					This pull request changed more than 300 files, so the list below is
 					truncated and any scope inferred from it is incomplete.
 				</p>
 			)}
 			{entry.conversation_truncated && (
-				<p className="warning">
+				<p className="notice notice-warn">
 					The stored conversation is truncated: this pull request has more
 					reviews, threads, or comments than one sync page holds.
 				</p>
 			)}
-			<ul className="secondary">
+			<ul className="path-list">
 				{entry.changed_paths.map((path) => (
 					<li key={path}>
 						<code>{path}</code>
@@ -201,7 +230,11 @@ export function EntryDrawer({
 	const entry = useEntry(entryId);
 	return (
 		<Drawer title={entry.data?.title ?? "Entry"} onClose={onClose}>
-			{entry.error && <p className="error">{entry.error.message}</p>}
+			{entry.error && (
+				<p className="notice notice-error" role="alert">
+					{entry.error.message}
+				</p>
+			)}
 			{entry.isPending && <p className="secondary">Loading…</p>}
 			{entry.data && (
 				<EntryDrawerView

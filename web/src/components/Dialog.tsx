@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useDismissOnEscape } from "../lib/dismiss.ts";
 
 export function Dialog({
 	title,
@@ -15,6 +16,7 @@ export function Dialog({
 	confirmDisabled?: boolean;
 	children: ReactNode;
 }) {
+	useDismissOnEscape(onCancel);
 	return (
 		<div className="dialog-backdrop">
 			<div
@@ -23,20 +25,25 @@ export function Dialog({
 				aria-modal="true"
 				aria-label={title}
 			>
-				<h2 style={{ marginTop: 0 }}>{title}</h2>
-				{children}
-				<div
-					style={{
-						display: "flex",
-						gap: "0.5rem",
-						justifyContent: "flex-end",
-						marginTop: "1rem",
-					}}
-				>
+				<div className="dialog-head">
+					<h2>{title}</h2>
+				</div>
+				<div className="dialog-body">{children}</div>
+				{/*
+					The footer is pinned rather than trailing the content: a promotion
+					plan can run to several screens of file previews, and a confirm
+					button you have to scroll to find is a confirm button people miss.
+				*/}
+				<div className="dialog-foot">
 					<button type="button" onClick={onCancel}>
 						Cancel
 					</button>
-					<button type="button" onClick={onConfirm} disabled={confirmDisabled}>
+					<button
+						type="button"
+						className="btn-primary"
+						onClick={onConfirm}
+						disabled={confirmDisabled}
+					>
 						{confirmLabel}
 					</button>
 				</div>
