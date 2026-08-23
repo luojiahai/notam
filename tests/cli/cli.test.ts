@@ -303,3 +303,98 @@ describe("notam sync", () => {
 		expect(lines.some((line) => line.includes("FAILED"))).toBe(false);
 	});
 });
+
+describe("runSync cancellation", () => {
+	const TWO_REPOS = `hosts:
+  - id: github
+    api_base: https://api.github.com
+    graphql: https://api.github.com/graphql
+    token_env: NOTAM_TEST_TOKEN
+repos:
+  - host: github
+    name: acme/first
+  - host: github
+    name: acme/second
+`;
+
+	/**
+	 * A client whose listing blocks until aborted, so the first repository is
+	 * genuinely mid-request when the interrupt arrives.
+	 */
+	function blockingClient(onEnter: () => void): GitHubClient {
+		return {
+			listMergedPRs: (_repo, options) => {
+				const { signal } = options;
+				return new Promise((_resolve, reject) => {
+					// The listener goes on before the interrupt is announced: an
+					// abort fired first would be missed entirely and this would
+					// hang rather than fail.
+					signal?.addEventListener("abort", () => reject(signal.reason));
+					onEnter();
+				});
+			},
+			fetchPRDetail: async () => {
+				throw new Error("fetchPRDetail should not be called in this test");
+			},
+		};
+	}
+
+	test("stops the repository in flight and leaves the rest queued", async () => {
+		await writeConfig(TWO_REPOS);
+		const controller = new AbortController();
+		const lines: string[] = [];
+		const failed = await withTestToken(() =>
+			runSync({
+				home,
+				concurrency: 1,
+				log: (line) => lines.push(line),
+				clientFor: () => blockingClient(() => controller.abort()),
+				signal: controller.signal,
+			}),
+		);
+
+		// One cancelled, one never claimed: not a success, so not exit code 0.
+		expect(failed).toBe(1);
+		expect(lines.some((line) => line.includes("Stopped: 1 cancelled"))).toBe(
+			true,
+		);
+		expect(
+			lines.some((line) => line.includes("1 still queued for the next run")),
+		).toBe(true);
+	});
+
+	test("the queued repository survives for a later run to pick up", async () => {
+		await writeConfig(TWO_REPOS);
+		const controller = new AbortController();
+		await withTestToken(() =>
+			runSync({
+				home,
+				concurrency: 1,
+				log: () => {},
+				clientFor: () => blockingClient(() => controller.abort()),
+				signal: controller.signal,
+			}),
+		);
+
+		const reopened = await migrateDatabase(defaultDbPath(home));
+		const queue = new JobQueue(reopened.db);
+		expect(queue.count("queued")).toBe(1);
+		expect(queue.count("cancelled")).toBe(1);
+		reopened.db.close();
+	});
+
+	test("an uninterrupted run reports nothing about stopping", async () => {
+		await writeConfig();
+		const lines: string[] = [];
+		const failed = await withTestToken(() =>
+			runSync({
+				home,
+				concurrency: 1,
+				log: (line) => lines.push(line),
+				clientFor: fakeClient,
+			}),
+		);
+		expect(failed).toBe(0);
+		expect(lines.some((line) => line.includes("Stopped"))).toBe(false);
+	});
+});

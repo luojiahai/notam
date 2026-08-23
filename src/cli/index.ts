@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import type { EventEmitter } from "node:events";
 import { homedir } from "node:os";
 import { ConfigError } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
@@ -42,6 +43,35 @@ function flagValue(argv: string[], flag: string): string | undefined {
 	if (value === undefined || value.startsWith("--"))
 		throw new ConfigError(`${flag} needs a value`);
 	return value;
+}
+
+/**
+ * Runs `work` with a signal wired to Ctrl-C, so an interrupted sync stops the
+ * request it is waiting on rather than being killed mid-flight. The second
+ * press is fatal: an abort that itself hangs must not be a worse experience
+ * than the ungraceful exit it replaced.
+ */
+async function withInterrupt<T>(
+	log: (line: string) => void,
+	work: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+	const controller = new AbortController();
+	let stopping = false;
+	const onInterrupt = () => {
+		if (stopping) process.exit(130);
+		stopping = true;
+		log("");
+		log("Stopping. Press Ctrl-C again to exit immediately.");
+		controller.abort();
+	};
+	process.on("SIGINT", onInterrupt);
+	try {
+		return await work(controller.signal);
+	} finally {
+		// `process.off` is typed only for Bun's own events. The same object seen
+		// as an EventEmitter carries the general signature.
+		(process as EventEmitter).removeListener("SIGINT", onInterrupt);
+	}
 }
 
 export async function main(
@@ -101,12 +131,15 @@ export async function main(
 				if (!Number.isInteger(concurrency) || concurrency < 1) {
 					throw new ConfigError("--concurrency must be a positive integer");
 				}
-				const failed = await runSync({
-					home,
-					repoFilter: flagValue(rest, "--repo"),
-					concurrency,
-					log,
-				});
+				const failed = await withInterrupt(log, (signal) =>
+					runSync({
+						home,
+						repoFilter: flagValue(rest, "--repo"),
+						concurrency,
+						log,
+						signal,
+					}),
+				);
 				return failed > 0 ? 1 : 0;
 			}
 
