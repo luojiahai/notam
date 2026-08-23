@@ -15,6 +15,7 @@
 		"start": "bun run src/cli/index.ts"
 	},
 	"dependencies": {
+		"hono": "^4",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
