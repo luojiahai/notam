@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatZodError } from "../../shared/zod.ts";
 
 const HostSchema = z.object({
 	id: z.string().min(1),
@@ -70,18 +71,5 @@ export type RepoConfig = Config["repos"][number];
 
 /** Renders zod issues as `hosts[0].api_base: Invalid URL`, one per line. */
 export function formatConfigError(error: z.ZodError): string {
-	return error.issues
-		.map((issue) => {
-			const path = issue.path.reduce<string>(
-				(acc, segment) =>
-					typeof segment === "number"
-						? `${acc}[${segment}]`
-						: acc
-							? `${acc}.${String(segment)}`
-							: String(segment),
-				"",
-			);
-			return `  ${path || "(root)"}: ${issue.message}`;
-		})
-		.join("\n");
+	return formatZodError(error);
 }

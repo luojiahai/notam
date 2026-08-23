@@ -121,3 +121,51 @@ export type JobRow = {
 	started_at: string | null;
 	finished_at: string | null;
 };
+
+export type RuleKind = "do" | "dont";
+export type RuleStatus = "draft" | "proposed" | "verified" | "abandoned";
+export type PromotionState = "open" | "merged" | "closed";
+
+export type RuleRow = {
+	id: string;
+	repo_id: string;
+	entry_id: string;
+	kind: RuleKind;
+	directive: string;
+	rationale: string;
+	scope_globs: string[];
+	confidence: number;
+	source_comment_urls: string[];
+	status: RuleStatus;
+	promotion_id: string | null;
+	/**
+	 * The base kebab slug, derived from the directive when the rule is created.
+	 * Collision suffixes are applied at promotion time and never written back, so
+	 * this stays stable across re-promotion (spec section 4).
+	 */
+	file_slug: string;
+	created_at: string;
+	status_changed_at: string;
+};
+
+/** What store/rules.ts inserts: an analysed rule plus its derived slug. */
+export type NewRule = {
+	kind: RuleKind;
+	directive: string;
+	rationale: string;
+	scope_globs: string[];
+	confidence: number;
+	source_comment_urls: string[];
+	file_slug: string;
+};
+
+export type PromotionRow = {
+	id: string;
+	repo_id: string;
+	branch: string;
+	pr_number: number | null;
+	pr_url: string | null;
+	state: PromotionState;
+	created_at: string;
+	last_checked_at: string | null;
+};

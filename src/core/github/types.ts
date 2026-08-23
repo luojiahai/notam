@@ -1,3 +1,5 @@
+import type { PromotionState } from "../../shared/types.ts";
+
 /** Spec section 5: a PR's file list is capped, and exceeding it is recorded, never hidden. */
 export const MAX_CHANGED_PATHS = 300;
 
@@ -75,4 +77,39 @@ export interface GitHubClient {
 		options: { cursor?: string; pageSize?: number },
 	): Promise<PRPage>;
 	fetchPRDetail(repo: RepoRef, number: number): Promise<PRDetail>;
+}
+
+/** One file in a promotion commit, at a repo-relative path. */
+export type RuleFile = { path: string; content: string };
+
+export type CreatePRRequest = {
+	baseBranch: string;
+	/** The new branch to create. Must not already exist. */
+	branch: string;
+	message: string;
+	title: string;
+	body: string;
+	files: RuleFile[];
+};
+
+export type CreatePRResult = {
+	number: number;
+	url: string;
+	branch: string;
+	commitSha: string;
+};
+
+/**
+ * The write half of GitHub, and the only other module allowed to call fetch.
+ * Split from GitHubClient because sync needs none of it and promotion needs
+ * none of sync — a test fake for one should not have to stub the other.
+ */
+export interface GitDataClient {
+	/** Base names of the `.md` files in `.claude/rules/` on `branch`. Empty when the directory does not exist. */
+	listRuleFiles(repo: RepoRef, branch: string): Promise<string[]>;
+	createPRWithFiles(
+		repo: RepoRef,
+		request: CreatePRRequest,
+	): Promise<CreatePRResult>;
+	getPRState(repo: RepoRef, number: number): Promise<PromotionState>;
 }

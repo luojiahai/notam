@@ -49,7 +49,14 @@ describe("applyMigrations", () => {
 	test("creates the v1 tables on an empty database", () => {
 		const db = new Database(":memory:");
 		expect(applyMigrations(db)).toBe(MIGRATIONS.length);
-		expect(tableNames(db)).toEqual(["entries", "hosts", "jobs", "repos"]);
+		expect(tableNames(db)).toEqual([
+			"entries",
+			"hosts",
+			"jobs",
+			"promotions",
+			"repos",
+			"rules",
+		]);
 	});
 
 	test("records the schema version in user_version", () => {
@@ -123,6 +130,99 @@ describe("applyMigrations", () => {
 		expect(row?.analysis_state).toBe("unanalysed");
 		expect(row?.kind).toBe("pr");
 		expect(row?.paths_truncated).toBe(0);
+	});
+});
+
+describe("migration 002", () => {
+	function columns(db: Database, table: string): string[] {
+		return db
+			.query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+			.all()
+			.map((row) => row.name);
+	}
+
+	test("creates promotions and rules", () => {
+		const db = openDatabase(":memory:");
+		applyMigrations(db);
+
+		expect(columns(db, "promotions")).toEqual([
+			"id",
+			"repo_id",
+			"branch",
+			"pr_number",
+			"pr_url",
+			"state",
+			"created_at",
+			"last_checked_at",
+		]);
+		expect(columns(db, "rules")).toEqual([
+			"id",
+			"repo_id",
+			"entry_id",
+			"kind",
+			"directive",
+			"rationale",
+			"scope_globs",
+			"confidence",
+			"source_comment_urls",
+			"status",
+			"promotion_id",
+			"file_slug",
+			"created_at",
+			"status_changed_at",
+		]);
+		db.close();
+	});
+
+	test("is version 2 and leaves 001 untouched", () => {
+		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2]);
+		expect(MIGRATIONS[0]?.name).toBe("hosts_repos_entries_jobs");
+		expect(MIGRATIONS[1]?.name).toBe("rules_promotions");
+	});
+
+	test("applies on top of an existing 001-only database", () => {
+		const db = openDatabase(":memory:");
+		// Simulate a database that stopped at 001.
+		const first = MIGRATIONS[0];
+		if (!first) throw new Error("migration 001 is missing");
+		db.exec(first.sql);
+		db.exec("PRAGMA user_version = 1");
+
+		expect(applyMigrations(db)).toBe(1);
+		expect(
+			db.query<{ user_version: number }, []>("PRAGMA user_version").get()
+				?.user_version,
+		).toBe(2);
+		db.close();
+	});
+
+	test("cascades rules away with their repo and nulls promotion_id on delete", () => {
+		const db = openDatabase(":memory:");
+		applyMigrations(db);
+		db.exec(`
+			INSERT INTO hosts VALUES ('github', 'GitHub', 'https://api.github.com', 'https://api.github.com/graphql', 'T');
+			INSERT INTO repos (id, host_id, name, created_at) VALUES ('r_1', 'github', 'acme/mono', '2026-08-23T00:00:00.000Z');
+			INSERT INTO entries (id, repo_id, number, title, author, url, updated_at, payload_json, created_at)
+				VALUES ('e_1', 'r_1', 1, 't', 'a', 'u', '2026-08-23T00:00:00.000Z', '{}', '2026-08-23T00:00:00.000Z');
+			INSERT INTO promotions (id, repo_id, branch, created_at) VALUES ('pm_1', 'r_1', 'notam/rules-1', '2026-08-23T00:00:00.000Z');
+			INSERT INTO rules (id, repo_id, entry_id, kind, directive, rationale, promotion_id, file_slug, created_at, status_changed_at)
+				VALUES ('ru_1', 'r_1', 'e_1', 'do', 'd', 'r', 'pm_1', 'd', '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z');
+		`);
+
+		db.exec("DELETE FROM promotions WHERE id = 'pm_1'");
+		expect(
+			db
+				.query<{ promotion_id: string | null }, []>(
+					"SELECT promotion_id FROM rules WHERE id = 'ru_1'",
+				)
+				.get()?.promotion_id,
+		).toBeNull();
+
+		db.exec("DELETE FROM repos WHERE id = 'r_1'");
+		expect(
+			db.query<{ c: number }, []>("SELECT COUNT(*) AS c FROM rules").get()?.c,
+		).toBe(0);
+		db.close();
 	});
 });
 
