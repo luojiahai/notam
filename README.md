@@ -291,7 +291,7 @@ They are what keep the tests cheap, and they are worth preserving:
    string.
 2. **`github/` is the only module that touches the network.** No other file calls
    `fetch`.
-3. **`analysis/` is the only module that spawns a subprocess.**
+3. **`analysis/` is the only module in `core/` that spawns a subprocess.**
 
 Everything else receives those as injected dependencies — which is why **no test
 touches the network and no test spawns the real `claude`**. The GitHub client is
