@@ -5,8 +5,6 @@ export type Migration = { version: number; name: string; sql: string };
 
 /**
  * Forward-only. Never edit a migration that has shipped — add a new one.
- * `rules` and `promotions` arrive in migration 002, added by the analysis and
- * promotion plan.
  */
 export const MIGRATIONS: Migration[] = [
 	{
@@ -69,6 +67,47 @@ CREATE TABLE jobs (
 );
 CREATE INDEX jobs_state_created ON jobs(state, created_at, id);
 CREATE UNIQUE INDEX jobs_pending_target ON jobs(kind, target_id) WHERE state IN ('queued', 'running');
+`,
+	},
+	{
+		version: 2,
+		name: "rules_promotions",
+		sql: `
+CREATE TABLE promotions (
+	id              TEXT PRIMARY KEY,
+	repo_id         TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+	branch          TEXT NOT NULL,
+	pr_number       INTEGER,
+	pr_url          TEXT,
+	state           TEXT NOT NULL DEFAULT 'open',
+	created_at      TEXT NOT NULL,
+	last_checked_at TEXT
+);
+CREATE INDEX promotions_repo_state ON promotions(repo_id, state);
+
+CREATE TABLE rules (
+	id                  TEXT PRIMARY KEY,
+	repo_id             TEXT NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+	entry_id            TEXT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+	kind                TEXT NOT NULL,
+	directive           TEXT NOT NULL,
+	rationale           TEXT NOT NULL,
+	scope_globs         TEXT NOT NULL DEFAULT '[]',
+	confidence          REAL NOT NULL DEFAULT 0,
+	source_comment_urls TEXT NOT NULL DEFAULT '[]',
+	status              TEXT NOT NULL DEFAULT 'draft',
+	promotion_id        TEXT REFERENCES promotions(id) ON DELETE SET NULL,
+	file_slug           TEXT NOT NULL,
+	created_at          TEXT NOT NULL,
+	status_changed_at   TEXT NOT NULL
+);
+CREATE INDEX rules_repo_status ON rules(repo_id, status);
+CREATE INDEX rules_entry ON rules(entry_id);
+CREATE INDEX rules_promotion ON rules(promotion_id);
+-- Spec section 2 accepts a long flat rule list and substitutes sorting by
+-- directive for clustering. This index is what makes that sort cheap; the
+-- collation matches listRules' ORDER BY, or the index would not be used.
+CREATE INDEX rules_repo_directive ON rules(repo_id, directive COLLATE NOCASE);
 `,
 	},
 ];
