@@ -22,7 +22,7 @@ import type {
 	RepoRow,
 	RuleRow,
 } from "../shared/types.ts";
-import { countEntriesByState } from "../store/entries.ts";
+import { countEntriesByState, listEntriesByIds } from "../store/entries.ts";
 import { listPromotions } from "../store/promotions.ts";
 import { countRulesByStatus } from "../store/rules.ts";
 
@@ -211,6 +211,28 @@ export function toPromotionPlanView(plan: PromotionPlan): PromotionPlanView {
 			path: collision.path,
 		})),
 	};
+}
+
+/**
+ * The rules table shows each rule's source pull request, so N rules would mean
+ * N entry lookups. One batched read instead. A rule whose entry is missing is a
+ * corrupted database, not a renderable row, so it throws rather than silently
+ * disappearing from the table.
+ */
+export function toRuleSummaries(db: Database, rules: RuleRow[]): RuleSummary[] {
+	const ids = [...new Set(rules.map((rule) => rule.entry_id))];
+	const entries = new Map(
+		listEntriesByIds(db, ids).map((entry) => [entry.id, entry]),
+	);
+	return rules.map((rule) => {
+		const entry = entries.get(rule.entry_id);
+		if (!entry) {
+			throw new Error(
+				`rule ${rule.id} references unknown entry ${rule.entry_id}`,
+			);
+		}
+		return toRuleSummary(rule, entry);
+	});
 }
 
 export function toRefreshSummaryView(
