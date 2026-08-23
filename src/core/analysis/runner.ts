@@ -24,20 +24,19 @@ export type RunnerOptions = {
  * `--tools ""` disables every built-in tool. Analysis reads text and returns
  * text; it must not be able to touch the filesystem (spec section 6).
  */
-export const BASE_ARGS: readonly string[] = [
+export const BASE_ARGS: readonly string[] = Object.freeze([
 	"--output-format",
 	"json",
 	"--tools",
 	"",
-];
+]);
 
 /** The only place in NOTAM that spawns a subprocess. */
 export function createClaudeRunner(options: RunnerOptions = {}): ClaudeRunner {
 	const env = options.env ?? process.env;
 
 	return async (request: RunnerRequest): Promise<RunnerResult> => {
-		const bin =
-			options.bin ?? Bun.which("claude", { PATH: env.PATH ?? "" }) ?? null;
+		const bin = options.bin ?? Bun.which("claude", { PATH: env.PATH ?? "" });
 		if (!bin) {
 			return {
 				ok: false,
@@ -54,12 +53,34 @@ export function createClaudeRunner(options: RunnerOptions = {}): ClaudeRunner {
 			...(request.model ? ["--model", request.model] : []),
 		];
 
-		const proc = Bun.spawn([bin, ...args], {
-			env,
-			stdin: new TextEncoder().encode(request.stdin),
-			stdout: "pipe",
-			stderr: "pipe",
-		});
+		// Bun.spawn throws synchronously (e.g. ENOENT) when `bin` is an explicit
+		// path that does not resolve to an executable — Bun.which already
+		// guards the PATH-resolution case, but an explicit `options.bin` skips
+		// that guard. Caught here so a bad path is reported as `{ ok: false,
+		// kind: "missing" }` rather than a rejected promise: callers rely on
+		// `RunnerResult` never throwing to decide retry policy.
+		let spawnError: unknown;
+		const spawn = () => {
+			try {
+				return Bun.spawn([bin, ...args], {
+					env,
+					stdin: new TextEncoder().encode(request.stdin),
+					stdout: "pipe",
+					stderr: "pipe",
+				});
+			} catch (cause) {
+				spawnError = cause;
+				return null;
+			}
+		};
+		const proc = spawn();
+		if (!proc) {
+			return {
+				ok: false,
+				kind: "missing",
+				message: `claude could not be executed at "${bin}": ${spawnError instanceof Error ? spawnError.message : String(spawnError)}`,
+			};
+		}
 
 		// A hand-rolled timer rather than Bun.spawn's `timeout`, because the
 		// caller has to be able to tell a timeout apart from any other kill: the

@@ -143,4 +143,20 @@ describe("createClaudeRunner", () => {
 		});
 		expect(result.ok).toBe(true);
 	});
+
+	test("reports a missing claude CLI at an explicitly configured path without throwing", async () => {
+		const explicit = join(dir, "does-not-exist");
+		const result = await createClaudeRunner({
+			bin: explicit,
+			env: { PATH: "" },
+		})({
+			instruction: "I",
+			stdin: "P",
+			timeoutMs: 5000,
+		});
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected a failure");
+		expect(result.kind).toBe("missing");
+		expect(result.message).toContain(explicit);
+	});
 });
