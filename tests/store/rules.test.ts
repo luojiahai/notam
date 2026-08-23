@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EntryRow, NewRule, RepoRow } from "../../src/shared/types.ts";
 import { insertPromotion } from "../../src/store/promotions.ts";
 import {
+	countRulesByEntryIds,
+	countRulesByPromotionIds,
 	countRulesByStatus,
 	deleteDraftRulesForEntry,
 	getRule,
@@ -278,5 +280,42 @@ describe("deleteDraftRulesForEntry", () => {
 
 	test("returns 0 when the entry has no drafts", () => {
 		expect(deleteDraftRulesForEntry(db, entry.id)).toBe(0);
+	});
+});
+
+describe("batched rule counts", () => {
+	test("countRulesByEntryIds zero-fills every id it was asked about", () => {
+		insertRules(
+			db,
+			repo.id,
+			entry.id,
+			[
+				{
+					kind: "do",
+					directive: "Add a test.",
+					rationale: "Because.",
+					scope_globs: [],
+					confidence: 0.9,
+					source_comment_urls: [],
+					file_slug: "add-a-test",
+				},
+			],
+			SEED_NOW,
+		);
+		expect(countRulesByEntryIds(db, [entry.id, "e_none"])).toEqual({
+			[entry.id]: 1,
+			e_none: 0,
+		});
+		expect(countRulesByEntryIds(db, [entry.id], "draft")).toEqual({
+			[entry.id]: 1,
+		});
+		expect(countRulesByEntryIds(db, [entry.id], "verified")).toEqual({
+			[entry.id]: 0,
+		});
+		expect(countRulesByEntryIds(db, [])).toEqual({});
+	});
+
+	test("countRulesByPromotionIds counts only linked rules", () => {
+		expect(countRulesByPromotionIds(db, ["pm_1"])).toEqual({ pm_1: 0 });
 	});
 });
