@@ -14,6 +14,8 @@ import {
 } from "./api/hooks.ts";
 import { EntriesTab } from "./components/EntriesTab.tsx";
 import { EntryDrawer } from "./components/EntryDrawer.tsx";
+import { RuleDrawer } from "./components/RuleDrawer.tsx";
+import { RulesTab } from "./components/RulesTab.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
@@ -163,9 +165,10 @@ export function App() {
 					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
 				/>
 			) : (
-				<div className="table-wrap">
-					<p className="secondary">Rules for {repo?.name}</p>
-				</div>
+				<RulesTab
+					repoId={repoId}
+					onOpenRule={(id) => setDrawer({ kind: "rule", id })}
+				/>
 			)}
 			{drawer?.kind === "entry" && (
 				<EntryDrawer
@@ -174,6 +177,9 @@ export function App() {
 					onReanalyse={(entryId) => analyse.mutate([entryId])}
 					onOpenRule={(ruleId) => setDrawer({ kind: "rule", id: ruleId })}
 				/>
+			)}
+			{drawer?.kind === "rule" && (
+				<RuleDrawer ruleId={drawer.id} onClose={() => setDrawer(null)} />
 			)}
 		</Shell>
 	);
