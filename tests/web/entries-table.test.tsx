@@ -41,7 +41,6 @@ type Props = Parameters<typeof EntriesTable>[0];
 function build(overrides: Partial<Props> = {}) {
 	const calls = {
 		analysed: [] as string[][],
-		all: 0,
 		state: [] as string[],
 		q: [] as string[],
 		opened: [] as string[],
@@ -55,9 +54,6 @@ function build(overrides: Partial<Props> = {}) {
 		onQueryChange: (next) => calls.q.push(next),
 		onOpenEntry: (id) => calls.opened.push(id),
 		onAnalyse: (ids) => calls.analysed.push(ids),
-		onAnalyseAllUnanalysed: () => {
-			calls.all++;
-		},
 		batch: { queued: 0, running: 0 },
 		loading: false,
 		...overrides,
@@ -145,7 +141,7 @@ describe("EntriesTable", () => {
 			),
 		).toBeDefined();
 		await userEvent.click(
-			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
+			within(dialog).getByRole("button", { name: /^analyse$/i }),
 		);
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
@@ -181,7 +177,7 @@ describe("EntriesTable", () => {
 			),
 		).toBeDefined();
 		await userEvent.click(
-			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
+			within(dialog).getByRole("button", { name: /^analyse$/i }),
 		);
 		expect(calls.analysed).toEqual([["e_1", "e_2"]]);
 	});
@@ -204,7 +200,7 @@ describe("EntriesTable", () => {
 		expect(calls.analysed).toEqual([]);
 	});
 
-	test("a failed entry shows its stored error and a Retry action", async () => {
+	test("a failed entry shows its stored error and an Analyse action", async () => {
 		const calls = draw({
 			entries: [
 				entry({
@@ -216,17 +212,19 @@ describe("EntriesTable", () => {
 		expect(
 			screen.getByText(/claude exited with code 1: model overloaded/),
 		).toBeDefined();
-		// No drafts on this entry, so the guard has nothing to confirm and
-		// Retry re-runs analysis in one click.
-		await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		// No drafts on this entry, so the guard has nothing to confirm and the
+		// row action re-runs analysis in one click.
+		await userEvent.click(
+			screen.getByRole("button", { name: /^analyse #4821$/i }),
+		);
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
 
-	test("Retry on a failed entry with drafts confirms the count first", async () => {
+	test("re-running a failed entry with drafts confirms the count first", async () => {
 		// A re-analysis that fails leaves the previous run's drafts in place
 		// (src/core/analysis/index.ts), so a failed entry can still carry
-		// draft_rule_count > 0. Retry is a re-analysis too, so it must not
-		// bypass the discard-count guard.
+		// draft_rule_count > 0. A row action on a failed entry is a
+		// re-analysis too, so it must not bypass the discard-count guard.
 		const calls = draw({
 			entries: [
 				entry({
@@ -237,7 +235,9 @@ describe("EntriesTable", () => {
 				}),
 			],
 		});
-		await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		await userEvent.click(
+			screen.getByRole("button", { name: /^analyse #4821$/i }),
+		);
 		// Nothing has been sent yet.
 		expect(calls.analysed).toEqual([]);
 		const dialog = screen.getByRole("dialog");
@@ -247,7 +247,7 @@ describe("EntriesTable", () => {
 			),
 		).toBeDefined();
 		await userEvent.click(
-			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
+			within(dialog).getByRole("button", { name: /^analyse$/i }),
 		);
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
@@ -314,7 +314,7 @@ describe("EntriesTable", () => {
 		).toBeDefined();
 	});
 
-	test("a mutation failure is shown verbatim in the bulk bar", () => {
+	test("a mutation failure is shown verbatim in the toolbar", () => {
 		draw({ error: "No entry with id e_9" });
 		expect(screen.getByText("No entry with id e_9")).toBeDefined();
 	});
@@ -329,12 +329,151 @@ describe("EntriesTable", () => {
 		expect(screen.getByText(/2 running, 4 queued/)).toBeDefined();
 	});
 
-	test("Analyse all unanalysed is offered with its count", async () => {
-		const calls = draw();
+	/**
+	 * The actions column used to have three shapes for one verb: a bare button
+	 * on a failed row, a ⋯ menu on an analysed one, and nothing at all on an
+	 * unanalysed row. Every row now offers the same Analyse action, named for
+	 * its entry so five of them do not share one accessible name. Queued and
+	 * running rows carry it too, disabled — covered separately below.
+	 */
+	test("every actionable row offers Analyse, whatever its state", async () => {
+		const calls = draw({
+			entries: [
+				entry(),
+				entry({ id: "e_2", number: 4822, analysis_state: "analysed" }),
+				entry({ id: "e_3", number: 4823, analysis_state: "failed" }),
+			],
+		});
+		// No menu to open first: the button is on the row.
 		await userEvent.click(
-			screen.getByRole("button", { name: /analyse all 1 unanalysed/i }),
+			screen.getByRole("button", { name: /^analyse #4821$/i }),
 		);
-		expect(calls.all).toBe(1);
+		await userEvent.click(
+			screen.getByRole("button", { name: /^analyse #4822$/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /^analyse #4823$/i }),
+		);
+		expect(calls.analysed).toEqual([["e_1"], ["e_2"], ["e_3"]]);
+	});
+
+	/**
+	 * `queueEntries` already refuses to double-queue a busy entry and reports it
+	 * as skipped, so these rules are about not offering a button that does
+	 * nothing — not about protecting the queue.
+	 */
+	test("a queued or running row cannot be queued again", () => {
+		draw({
+			entries: [
+				entry({ analysis_state: "queued" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "running" }),
+				entry({ id: "e_3", number: 4823, analysis_state: "analysed" }),
+			],
+		});
+		const busy = (number: number) =>
+			screen.getByRole("button", {
+				name: new RegExp(`^analyse #${number}$`, "i"),
+			}) as HTMLButtonElement;
+		expect(busy(4821).disabled).toBe(true);
+		expect(busy(4822).disabled).toBe(true);
+		expect(busy(4823).disabled).toBe(false);
+	});
+
+	test("Analyse selected goes down when the whole selection is already busy", async () => {
+		const calls = draw({
+			entries: [
+				entry({ analysis_state: "queued" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "running" }),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		const button = screen.getByRole("button", {
+			name: /analyse selected \(2\)/i,
+		}) as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		await userEvent.click(button);
+		expect(calls.analysed).toEqual([]);
+	});
+
+	test("Analyse selected stays live while any of the selection is actionable", async () => {
+		// Select-all must keep working: the server skips the busy ids for us.
+		const calls = draw({
+			entries: [
+				entry({ analysis_state: "running" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "unanalysed" }),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /analyse selected \(2\)/i }),
+		);
+		expect(calls.analysed).toEqual([["e_1", "e_2"]]);
+	});
+
+	/**
+	 * Without this the new busy rule is unenforceable on the bulk button. The
+	 * rows it just queued leave the visible slice (they no longer match an
+	 * "unanalysed" chip), so `allBusy` falls back to the remembered rows, whose
+	 * `analysis_state` is frozen at selection time and still reads unanalysed —
+	 * leaving a live "Analyse selected (2)" whose every click is a no-op.
+	 */
+	test("dispatching the selection clears it", async () => {
+		const calls = draw({
+			entries: [entry(), entry({ id: "e_2", number: 4822 })],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /analyse selected \(2\)/i }),
+		);
+		expect(calls.analysed).toEqual([["e_1", "e_2"]]);
+		expect(screen.getByText("0 selected")).toBeDefined();
+		expect(
+			(
+				screen.getByRole("button", {
+					name: /analyse selected \(0\)/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true);
+	});
+
+	test("the confirmed dialog clears the selection it was raised for", async () => {
+		const calls = draw({
+			entries: [entry({ analysis_state: "analysed", draft_rule_count: 2 })],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /analyse selected \(1\)/i }),
+		);
+		await userEvent.click(
+			within(screen.getByRole("dialog")).getByRole("button", {
+				name: /^analyse$/i,
+			}),
+		);
+		expect(calls.analysed).toEqual([["e_1"]]);
+		expect(screen.getByText("0 selected")).toBeDefined();
+	});
+
+	test("a row's own Analyse leaves the selection alone", async () => {
+		// Clearing here would throw away a selection the user is still building.
+		const calls = draw({
+			entries: [entry(), entry({ id: "e_2", number: 4822 })],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /^analyse #4821$/i }),
+		);
+		expect(calls.analysed).toEqual([["e_1"]]);
+		expect(screen.getByText("2 selected")).toBeDefined();
 	});
 
 	test("clicking the title opens the drawer", async () => {

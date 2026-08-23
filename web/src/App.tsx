@@ -14,6 +14,7 @@ import {
 } from "./api/hooks.ts";
 import { EntriesTab } from "./components/EntriesTab.tsx";
 import { EntryDrawer } from "./components/EntryDrawer.tsx";
+import { RepoBar } from "./components/RepoBar.tsx";
 import { RuleDrawer } from "./components/RuleDrawer.tsx";
 import { RulesTab } from "./components/RulesTab.tsx";
 import { Shell } from "./components/Shell.tsx";
@@ -137,13 +138,8 @@ export function App() {
 
 	return (
 		<Shell
-			repoName={repo?.name ?? null}
 			version={meta.data?.version ?? ""}
 			warnings={warnings}
-			onSync={() => {
-				if (repoId) sync.mutate(repoId);
-			}}
-			syncing={sync.isPending}
 			sidebar={
 				<Sidebar
 					repos={repos.data ?? []}
@@ -159,6 +155,14 @@ export function App() {
 				/>
 			}
 		>
+			{repo && (
+				<RepoBar
+					repoName={repo.name}
+					syncedAt={repo.sync_watermark}
+					onSync={() => sync.mutate(repo.id)}
+					syncing={sync.isPending}
+				/>
+			)}
 			<div className="tabs" role="tablist">
 				<button
 					type="button"

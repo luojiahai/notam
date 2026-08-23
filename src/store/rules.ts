@@ -84,22 +84,17 @@ export function getRule(db: Database, id: string): RuleRow | null {
 export function listRules(
 	db: Database,
 	repoId: string,
-	options: { status?: RuleStatus; orderBy?: "created" | "directive" } = {},
+	options: { status?: RuleStatus } = {},
 ): RuleRow[] {
-	// Both fragments are literals chosen here, never caller-supplied text.
-	const order =
-		options.orderBy === "directive"
-			? "directive COLLATE NOCASE, id"
-			: "created_at DESC, id DESC";
 	const rows = options.status
 		? db
 				.query<RawRule, [string, string]>(
-					`SELECT * FROM rules WHERE repo_id = ? AND status = ? ORDER BY ${order}`,
+					"SELECT * FROM rules WHERE repo_id = ? AND status = ? ORDER BY created_at DESC, id DESC",
 				)
 				.all(repoId, options.status)
 		: db
 				.query<RawRule, [string]>(
-					`SELECT * FROM rules WHERE repo_id = ? ORDER BY ${order}`,
+					"SELECT * FROM rules WHERE repo_id = ? ORDER BY created_at DESC, id DESC",
 				)
 				.all(repoId);
 	return rows.map(hydrate);

@@ -1,3 +1,4 @@
+import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import type {
 	AnalysisState,
@@ -5,6 +6,7 @@ import type {
 	EntrySummary,
 } from "../../../src/shared/api.ts";
 import type { BatchState } from "../App.tsx";
+import { isBusy } from "../lib/analysis.ts";
 import { useSelection } from "../state/selection.ts";
 import { StatusPill } from "./Badge.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -20,7 +22,6 @@ export type EntriesTableProps = {
 	onQueryChange: (query: string) => void;
 	onOpenEntry: (entryId: string) => void;
 	onAnalyse: (entryIds: string[]) => void;
-	onAnalyseAllUnanalysed: () => void;
 	batch: BatchState;
 	loading: boolean;
 	/** The last mutation failure, verbatim from the server. */
@@ -47,7 +48,10 @@ function day(timestamp: string | null): string | null {
  */
 export function EntriesTable(props: EntriesTableProps) {
 	const selection = useSelection<EntrySummary>();
-	const [pending, setPending] = useState<string[] | null>(null);
+	const [pending, setPending] = useState<{
+		ids: string[];
+		clearAfter: boolean;
+	} | null>(null);
 
 	const visibleIds = props.entries.map((entry) => entry.id);
 	const allSelected =
@@ -88,15 +92,35 @@ export function EntriesTable(props: EntriesTableProps) {
 		}, 0);
 	}
 
-	function requestAnalyse(ids: string[]): void {
+	/**
+	 * `clearAfter` is set by the bulk action and only by it. Those rows are
+	 * queued the moment this returns, and a queued row usually stops matching
+	 * the active chip — so it leaves the visible slice, `allBusy` falls back to
+	 * the row remembered at selection time, and the button would sit there
+	 * enabled offering a click the server can only skip. Dropping the selection
+	 * is also what the user means: the work is handed off. A single row's own
+	 * button must not clear it — that would discard a selection still being
+	 * built.
+	 */
+	function requestAnalyse(ids: string[], clearAfter = false): void {
 		if (draftCountFor(ids) > 0) {
-			setPending(ids);
+			setPending({ ids, clearAfter });
 			return;
 		}
 		props.onAnalyse(ids);
+		if (clearAfter) selection.clear();
 	}
 
-	const pendingDrafts = pending === null ? 0 : draftCountFor(pending);
+	// The whole selection, not the visible slice: a row the filter hides is
+	// still going to be sent, so it still decides whether the action does
+	// anything. Disabled only when every one of them is busy — a mixed
+	// selection stays actionable and the server skips the busy ids.
+	const selected = selection.rows.map(
+		(entry) => visible.get(entry.id) ?? entry,
+	);
+	const allBusy = selected.length > 0 && selected.every(isBusy);
+
+	const pendingDrafts = pending === null ? 0 : draftCountFor(pending.ids);
 	const filtered = props.state !== "" || props.query !== "";
 
 	return (
@@ -115,13 +139,31 @@ export function EntriesTable(props: EntriesTableProps) {
 					onChange={(event) => props.onQueryChange(event.target.value)}
 				/>
 				<span className="spacer" />
-				<button
-					type="button"
-					onClick={props.onAnalyseAllUnanalysed}
-					disabled={props.counts.unanalysed === 0}
-				>
-					Analyse all {props.counts.unanalysed} unanalysed
-				</button>
+				{/*
+					The selection controls and the queue counter used to sit in a
+					footer of their own below the table. They are one row's worth of
+					chrome, and the table wants the height more than they did. Grouped
+					so a narrow window drops the set to a second line together.
+				*/}
+				<div className="toolbar-actions">
+					<span className="bulk-count" data-active={selection.size > 0}>
+						{selection.size} selected
+					</span>
+					<button
+						type="button"
+						className="btn-primary"
+						disabled={selection.size === 0 || allBusy}
+						onClick={() => requestAnalyse(selection.ids, true)}
+					>
+						<Sparkles className="icon" aria-hidden="true" />
+						Analyse selected ({selection.size})
+					</button>
+					{props.error && <span className="bulk-error">{props.error}</span>}
+					<span className="toolbar-divider" />
+					<span className="bulk-progress">
+						{props.batch.running} running, {props.batch.queued} queued
+					</span>
+				</div>
 			</div>
 
 			<div className="table-wrap">
@@ -220,29 +262,22 @@ export function EntriesTable(props: EntriesTableProps) {
 										<StatusPill status={entry.analysis_state} />
 									</td>
 									<td>
-										{entry.analysis_state === "failed" ? (
-											<button
-												type="button"
-												className="btn-sm"
-												onClick={() => requestAnalyse([entry.id])}
-											>
-												Retry
-											</button>
-										) : entry.analysis_state === "unanalysed" ? null : (
-											<details className="row-menu">
-												<summary aria-label={`Actions for #${entry.number}`}>
-													⋯
-												</summary>
-												<div className="row-menu-panel">
-													<button
-														type="button"
-														onClick={() => requestAnalyse([entry.id])}
-													>
-														Re-analyse
-													</button>
-												</div>
-											</details>
-										)}
+										{/*
+											One action for every state. The label is the same verb
+											the toolbar and the drawer use; the aria-label carries
+											the number so a table of them does not read as a column
+											of identical "Analyse" buttons.
+										*/}
+										<button
+											type="button"
+											className="btn-sm"
+											aria-label={`Analyse #${entry.number}`}
+											disabled={isBusy(entry)}
+											onClick={() => requestAnalyse([entry.id])}
+										>
+											<Sparkles className="icon" aria-hidden="true" />
+											Analyse
+										</button>
 									</td>
 								</tr>
 							))}
@@ -251,32 +286,14 @@ export function EntriesTable(props: EntriesTableProps) {
 				)}
 			</div>
 
-			<div className="bulk">
-				<span className="bulk-count" data-active={selection.size > 0}>
-					{selection.size} selected
-				</span>
-				<button
-					type="button"
-					className="btn-primary"
-					disabled={selection.size === 0}
-					onClick={() => requestAnalyse(selection.ids)}
-				>
-					Analyse selected ({selection.size})
-				</button>
-				{props.error && <span className="bulk-error">{props.error}</span>}
-				<span className="spacer" />
-				<span className="bulk-progress">
-					{props.batch.running} running, {props.batch.queued} queued
-				</span>
-			</div>
-
 			{pending && (
 				<Dialog
-					title="Re-analyse"
-					confirmLabel="Re-analyse"
+					title="Analyse"
+					confirmLabel="Analyse"
 					onCancel={() => setPending(null)}
 					onConfirm={() => {
-						props.onAnalyse(pending);
+						props.onAnalyse(pending.ids);
+						if (pending.clearAfter) selection.clear();
 						setPending(null);
 					}}
 				>

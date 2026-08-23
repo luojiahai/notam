@@ -41,8 +41,8 @@ export const queryKeys = {
 	entries: (repoId: string, state: string, q: string) =>
 		["entries", repoId, state, q] as const,
 	entry: (entryId: string) => ["entry", entryId] as const,
-	rules: (repoId: string, status: string, q: string, sort: string) =>
-		["rules", repoId, status, q, sort] as const,
+	rules: (repoId: string, status: string, q: string) =>
+		["rules", repoId, status, q] as const,
 	rule: (ruleId: string) => ["rule", ruleId] as const,
 	promotions: (repoId: string) => ["promotions", repoId] as const,
 };
@@ -99,15 +99,14 @@ export function useRules(
 	repoId: string | null,
 	status: RuleStatus | "",
 	q: string,
-	sort: "created" | "directive",
 ): UseQueryResult<RulesResponse> {
 	return useQuery({
 		enabled: repoId !== null,
-		queryKey: queryKeys.rules(repoId ?? "", status, q, sort),
+		queryKey: queryKeys.rules(repoId ?? "", status, q),
 		queryFn: () =>
 			request(
 				RulesResponseSchema,
-				`/api/repos/${repoId}/rules${query({ status, q, sort })}`,
+				`/api/repos/${repoId}/rules${query({ status, q })}`,
 			),
 	});
 }
@@ -162,19 +161,6 @@ export function useAnalyse() {
 	return useMutation<QueueResult, Error, string[]>({
 		mutationFn: (entryIds) =>
 			post(QueueResultSchema, "/api/entries/analyse", { entry_ids: entryIds }),
-		onSuccess: () => {
-			void client.invalidateQueries({ queryKey: ["entries"] });
-			void client.invalidateQueries({ queryKey: ["entry"] });
-			void client.invalidateQueries({ queryKey: queryKeys.repos });
-		},
-	});
-}
-
-export function useAnalyseUnanalysed() {
-	const client = useQueryClient();
-	return useMutation<QueueResult, Error, string>({
-		mutationFn: (repoId) =>
-			post(QueueResultSchema, `/api/repos/${repoId}/analyse-unanalysed`, {}),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["entries"] });
 			void client.invalidateQueries({ queryKey: ["entry"] });

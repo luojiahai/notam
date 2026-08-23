@@ -14,9 +14,8 @@ export function RulesTab({
 }) {
 	const [status, setStatus] = useState<RuleStatus | "">("");
 	const [query, setQuery] = useState("");
-	const [sort, setSort] = useState<"created" | "directive">("created");
 	const [promoting, setPromoting] = useState<string[] | null>(null);
-	const rules = useRules(repoId, status, query, sort);
+	const rules = useRules(repoId, status, query);
 	const setRuleStatus = useSetRuleStatus();
 
 	if (rules.error) return <TableError message={rules.error.message} />;
@@ -38,8 +37,6 @@ export function RulesTab({
 				onStatusChange={setStatus}
 				query={query}
 				onQueryChange={setQuery}
-				sort={sort}
-				onSortChange={setSort}
 				onOpenRule={onOpenRule}
 				onAbandon={(ruleIds) =>
 					setRuleStatus.mutate({ ruleIds, status: "abandoned" })

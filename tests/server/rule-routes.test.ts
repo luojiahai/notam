@@ -49,20 +49,6 @@ describe("rule routes", () => {
 		harness.close();
 	});
 
-	test("GET rules sorts by directive when asked — the manual clustering aid", async () => {
-		const harness = testContext();
-		seedRules(harness);
-		const body = RulesResponseSchema.parse(
-			await (
-				await harness.app.request(
-					`/api/repos/${harness.repoId}/rules?sort=directive`,
-				)
-			).json(),
-		);
-		expect(body.rules.map((rule) => rule.directive[0])).toEqual(["A", "Z"]);
-		harness.close();
-	});
-
 	test("GET rules filters by status and by substring", async () => {
 		const harness = testContext();
 		seedRules(harness);

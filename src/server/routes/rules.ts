@@ -14,13 +14,8 @@ export function ruleRoutes(ctx: AppContext): Hono {
 	app.get("/repos/:repoId/rules", (c) => {
 		const repo = requireRepo(ctx.db, c.req.param("repoId"));
 		const status = c.req.query("status");
-		// Spec section 9: sorting by directive is the manual substitute for the
-		// clustering v1 cut, so it is a first-class query parameter.
-		const orderBy =
-			c.req.query("sort") === "directive" ? "directive" : "created";
 		const rows = listRules(ctx.db, repo.id, {
 			status: status ? RuleStatusSchema.parse(status) : undefined,
-			orderBy,
 		});
 		const query = c.req.query("q") ?? "";
 		const matched = rows.filter((rule) => matchesRuleQuery(rule, query));

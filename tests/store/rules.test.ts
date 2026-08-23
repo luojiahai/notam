@@ -117,12 +117,6 @@ describe("reads", () => {
 		]);
 	});
 
-	test("listRules sorts by directive on request — the manual substitute for clustering", () => {
-		expect(
-			listRules(db, repo.id, { orderBy: "directive" }).map((r) => r.directive),
-		).toEqual(["Apple second", "Zebra first"]);
-	});
-
 	test("listRules filters by status", () => {
 		const rules = listRules(db, repo.id);
 		const first = rules[0];
@@ -140,7 +134,7 @@ describe("reads", () => {
 	});
 
 	test("listRulesByIds returns only the requested rules, in a stable order", () => {
-		const all = listRules(db, repo.id, { orderBy: "directive" });
+		const all = listRules(db, repo.id);
 		const ids = all.map((r) => r.id);
 		const picked = listRulesByIds(db, [ids[1] as string, ids[0] as string]);
 		expect(picked).toHaveLength(2);

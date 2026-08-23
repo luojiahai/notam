@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@tanstack/react-query": "^5",
 		"hono": "^4",
+		"lucide-react": "^1.33.0",
 		"react": "^19",
 		"react-dom": "^19",
 		"zod": "^4.4.3"

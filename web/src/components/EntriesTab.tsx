@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { AnalysisState } from "../../../src/shared/api.ts";
 import type { BatchState } from "../App.tsx";
-import { useAnalyse, useAnalyseUnanalysed, useEntries } from "../api/hooks.ts";
+import { useAnalyse, useEntries } from "../api/hooks.ts";
 import { EntriesTable } from "./EntriesTable.tsx";
 import { TableError } from "./TableState.tsx";
 
@@ -18,7 +18,6 @@ export function EntriesTab({
 	const [query, setQuery] = useState("");
 	const entries = useEntries(repoId, state, query);
 	const analyse = useAnalyse();
-	const analyseAll = useAnalyseUnanalysed();
 
 	if (entries.error) {
 		return <TableError message={entries.error.message} />;
@@ -43,11 +42,10 @@ export function EntriesTab({
 			onQueryChange={setQuery}
 			onOpenEntry={onOpenEntry}
 			onAnalyse={(ids) => analyse.mutate(ids)}
-			onAnalyseAllUnanalysed={() => analyseAll.mutate(repoId)}
 			batch={batch}
 			loading={entries.isPending}
 			// Verbatim server text: a queue refusal is only visible here.
-			error={analyse.error?.message ?? analyseAll.error?.message ?? null}
+			error={analyse.error?.message ?? null}
 		/>
 	);
 }

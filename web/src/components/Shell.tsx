@@ -2,49 +2,32 @@ import type { ReactNode } from "react";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 export type ShellProps = {
-	repoName: string | null;
 	version: string;
 	warnings: string[];
-	onSync: () => void;
-	syncing: boolean;
 	sidebar: ReactNode;
 	children: ReactNode;
 };
 
-export function Shell({
-	repoName,
-	version,
-	warnings,
-	onSync,
-	syncing,
-	sidebar,
-	children,
-}: ShellProps) {
+/**
+ * App-wide chrome only. The repository name and its Sync button used to sit in
+ * this header, which made a one-repository action look like a global one; both
+ * moved to `RepoBar`, above the tabs. What is left here — warnings, theme,
+ * version — is true of the whole process regardless of what is selected.
+ */
+export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 	return (
 		<div className="shell">
 			<header className="header">
 				<h1 className="brand">NOTAM</h1>
-				<span className="header-context" data-empty={repoName === null}>
-					{repoName ?? "no repository selected"}
-				</span>
 				<span className="spacer" />
-				<button
-					type="button"
-					className="btn-primary"
-					onClick={onSync}
-					disabled={syncing || !repoName}
-				>
-					{syncing ? "Syncing…" : "Sync"}
-				</button>
 				<ThemeToggle />
 				<span className="version">{version}</span>
 			</header>
 
 			{/*
-				Warnings used to sit in the header's flex row, where one long
-				sentence from the server squeezed the sync button off the end.
-				They are server text of unbounded length, so they get the full
-				width and wrap instead of competing with the controls.
+				Server text of unbounded length, so it gets the full width and
+				wraps. It used to sit in the header's flex row, where one long
+				sentence was enough to push the controls off the end.
 			*/}
 			<div className="banners">
 				{warnings.map((warning) => (

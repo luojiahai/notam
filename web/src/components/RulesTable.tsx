@@ -16,8 +16,6 @@ export type RulesTableProps = {
 	onStatusChange: (status: RuleStatus | "") => void;
 	query: string;
 	onQueryChange: (query: string) => void;
-	sort: "created" | "directive";
-	onSortChange: (sort: "created" | "directive") => void;
 	onOpenRule: (ruleId: string) => void;
 	onAbandon: (ruleIds: string[]) => void;
 	onVerify: (ruleIds: string[]) => void;
@@ -45,15 +43,15 @@ export function RulesTable(props: RulesTableProps) {
 	const allSelected =
 		visibleIds.length > 0 && visibleIds.every((id) => selection.has(id));
 
-	// A selection must never outlive the row set it was made in. The chip, the
-	// search box, and the sort all change which rows exist, and `clear` is
-	// stable, so this fires exactly on a context change — the repository switch
-	// is covered by App keying the tab on `repoId`.
+	// A selection must never outlive the row set it was made in. The chip and
+	// the search box change which rows exist, and `clear` is stable, so this
+	// fires exactly on a context change — the repository switch is covered by
+	// App keying the tab on `repoId`.
 	const { clear } = selection;
 	// biome-ignore lint/correctness/useExhaustiveDependencies: the context props are the trigger, not values the effect reads; `clear` is a stable useCallback.
 	useEffect(() => {
 		clear();
-	}, [props.status, props.query, props.sort]);
+	}, [props.status, props.query]);
 
 	// The whole selection, not the visible slice: a rule the current filter
 	// hides is still going to be sent, so it still has to be able to veto a
@@ -96,18 +94,45 @@ export function RulesTable(props: RulesTableProps) {
 					onChange={(event) => props.onQueryChange(event.target.value)}
 				/>
 				<span className="spacer" />
-				<button
-					type="button"
-					className="btn-toggle"
-					aria-pressed={props.sort === "directive"}
-					onClick={() =>
-						props.onSortChange(
-							props.sort === "directive" ? "created" : "directive",
-						)
-					}
-				>
-					Sort by directive
-				</button>
+				{/*
+					The selection controls sit here rather than in a footer of their
+					own, matching the entries tab. Four chips and three buttons will
+					not fit beside them on a narrow window, so they are grouped: the
+					set drops to a second line together instead of shedding one
+					button at a time.
+				*/}
+				<div className="toolbar-actions">
+					<span className="bulk-count" data-active={selection.size > 0}>
+						{selection.size} selected
+					</span>
+					<button
+						type="button"
+						className="btn-primary"
+						disabled={!allDraft}
+						onClick={() => props.onCreatePromotion(selection.ids)}
+					>
+						Create rules PR ({selection.size})
+					</button>
+					<button
+						type="button"
+						disabled={!allProposed}
+						onClick={() => props.onVerify(selection.ids)}
+					>
+						Mark verified
+					</button>
+					<button
+						type="button"
+						className="btn-danger"
+						disabled={selection.size === 0 || anyAbandoned}
+						onClick={() => props.onAbandon(selection.ids)}
+					>
+						Abandon
+					</button>
+					{selection.size > 0 && !allDraft && (
+						<span className="bulk-hint">Only draft rules can be promoted.</span>
+					)}
+					{props.error && <span className="bulk-error">{props.error}</span>}
+				</div>
 			</div>
 
 			<div className="table-wrap">
@@ -191,39 +216,6 @@ export function RulesTable(props: RulesTableProps) {
 						</tbody>
 					</table>
 				)}
-			</div>
-
-			<div className="bulk">
-				<span className="bulk-count" data-active={selection.size > 0}>
-					{selection.size} selected
-				</span>
-				<button
-					type="button"
-					className="btn-primary"
-					disabled={!allDraft}
-					onClick={() => props.onCreatePromotion(selection.ids)}
-				>
-					Create rules PR ({selection.size})
-				</button>
-				<button
-					type="button"
-					disabled={!allProposed}
-					onClick={() => props.onVerify(selection.ids)}
-				>
-					Mark verified
-				</button>
-				<button
-					type="button"
-					className="btn-danger"
-					disabled={selection.size === 0 || anyAbandoned}
-					onClick={() => props.onAbandon(selection.ids)}
-				>
-					Abandon
-				</button>
-				{selection.size > 0 && !allDraft && (
-					<span className="bulk-hint">Only draft rules can be promoted.</span>
-				)}
-				{props.error && <span className="bulk-error">{props.error}</span>}
 			</div>
 		</>
 	);
