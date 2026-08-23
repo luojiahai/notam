@@ -1,0 +1,55 @@
+{
+	"data": {
+		"repository": {
+			"pullRequest": {
+				"number": 4821,
+				"title": "Fix rounding in payments",
+				"body": "Rounds half-up to match the ledger.",
+				"url": "https://github.com/acme/mono/pull/4821",
+				"updatedAt": "2026-08-21T10:00:00Z",
+				"mergedAt": "2026-08-20T10:00:00Z",
+				"author": { "login": "dana" },
+				"labels": { "nodes": [{ "name": "bug" }] },
+				"reviews": {
+					"nodes": [
+						{
+							"author": { "login": "kim" },
+							"state": "CHANGES_REQUESTED",
+							"body": "Needs a regression test.",
+							"url": "https://github.com/acme/mono/pull/4821#pullrequestreview-1",
+							"submittedAt": "2026-08-19T09:00:00Z"
+						}
+					]
+				},
+				"reviewThreads": {
+					"nodes": [
+						{
+							"isResolved": true,
+							"path": "services/payments/round.ts",
+							"line": 42,
+							"comments": {
+								"nodes": [
+									{
+										"author": { "login": "kim" },
+										"body": "Always add a regression test alongside a bug fix.",
+										"url": "https://github.com/acme/mono/pull/4821#discussion_r1",
+										"createdAt": "2026-08-19T09:01:00Z"
+									}
+								]
+							}
+						}
+					]
+				},
+				"comments": { "nodes": [] },
+				"files": {
+					"pageInfo": { "hasNextPage": false, "endCursor": "Zg==" },
+					"nodes": [
+						{ "path": "services/payments/round.ts" },
+						{ "path": "services/payments/round.test.ts" }
+					]
+				}
+			}
+		},
+		"rateLimit": { "remaining": 4986, "resetAt": "2026-08-23T10:00:00Z" }
+	}
+}
