@@ -92,7 +92,7 @@ export async function syncRepo(
 
 		for (const node of page.nodes) {
 			const updatedAt = iso(node.updatedAt);
-			if (updatedAt <= floor) {
+			if (updatedAt < floor) {
 				reachedFloor = true;
 				break;
 			}

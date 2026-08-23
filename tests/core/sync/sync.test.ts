@@ -7,8 +7,12 @@ import type {
 	PRRef,
 	RepoRef,
 } from "../../../src/core/github/types.ts";
-import { type SyncDeps, syncRepo } from "../../../src/core/sync/index.ts";
-import type { RepoRow } from "../../../src/shared/types.ts";
+import {
+	createSyncHandler,
+	type SyncDeps,
+	syncRepo,
+} from "../../../src/core/sync/index.ts";
+import type { JobRow, RepoRow } from "../../../src/shared/types.ts";
 import { openDatabase } from "../../../src/store/db.ts";
 import { getEntryByNumber, listEntries } from "../../../src/store/entries.ts";
 import { upsertHost } from "../../../src/store/hosts.ts";
@@ -102,6 +106,21 @@ function deps(client: GitHubClient, extra: Partial<SyncDeps> = {}): SyncDeps {
 	return { db, clientFor: () => client, now: () => NOW, ...extra };
 }
 
+/** A `sync` job fixture: only `target_id` matters to `createSyncHandler`. */
+function makeJob(targetId: string): JobRow {
+	return {
+		id: "job-1",
+		kind: "sync",
+		target_id: targetId,
+		state: "running",
+		attempts: 1,
+		error: null,
+		created_at: NOW.toISOString(),
+		started_at: NOW.toISOString(),
+		finished_at: null,
+	};
+}
+
 beforeEach(() => {
 	db = openDatabase(":memory:");
 	applyMigrations(db);
@@ -156,7 +175,7 @@ describe("syncRepo", () => {
 		expect(client.detailCalls).toEqual([3]);
 	});
 
-	test("stops at the watermark on a second sync and re-fetches nothing older", async () => {
+	test("re-scans PRs sharing the watermark's exact instant, but stops before anything strictly older", async () => {
 		const prs = [
 			pr(3, "2026-08-20T00:00:00Z", ["a.ts"]),
 			pr(2, "2026-08-10T00:00:00Z", ["b.ts"]),
@@ -172,7 +191,15 @@ describe("syncRepo", () => {
 		if (!refreshed) throw new Error("repo vanished");
 		const summary = await syncRepo(deps(second), refreshed);
 		expect(summary.created).toBe(1);
-		expect(second.detailCalls).toEqual([4]);
+		expect(summary.updated).toBe(1);
+		// #4 is strictly newer than the watermark and is fetched normally. #3's
+		// updated_at *is* the watermark instant (second precision, not unique
+		// across PRs) and must be re-fetched too, or a PR that shares that exact
+		// instant with the one that set the watermark would be dropped forever.
+		// #2 is strictly older than the watermark and must not be re-fetched —
+		// that's what proves the re-scan stays bounded rather than walking back
+		// into the whole window.
+		expect(second.detailCalls).toEqual([4, 3]);
 	});
 
 	test("advances the watermark to the newest updated_at seen", async () => {
@@ -293,5 +320,47 @@ describe("syncRepo", () => {
 		expect(events).toContain("page");
 		expect(events).toContain("stored");
 		expect(events).toContain("skipped");
+	});
+
+	test("throws when the repo references a host that isn't in the store", async () => {
+		// Built by hand rather than via upsertRepo: repos.host_id has a foreign
+		// key to hosts(id), so the store itself can never hold this row. This
+		// exercises syncRepo's own guard against a RepoRow it's handed directly.
+		const orphan: RepoRow = {
+			id: "r-orphan",
+			host_id: "no-such-host",
+			name: "acme/mono",
+			path_globs: [],
+			default_branch: "main",
+			window_days: 180,
+			prompt_template: null,
+			sync_watermark: null,
+			created_at: NOW.toISOString(),
+		};
+		await expect(syncRepo(deps(fakeClient([])), orphan)).rejects.toThrow(
+			/unknown host/,
+		);
+	});
+});
+
+describe("createSyncHandler", () => {
+	test("rejects when the job's target_id names an unknown repo, so the pool retries", async () => {
+		const handler = createSyncHandler(deps(fakeClient([])));
+		await expect(handler(makeJob("no-such-repo"))).rejects.toThrow(
+			/unknown repo/,
+		);
+	});
+
+	test("calls onSummary with the repo's sync summary for a real repo id", async () => {
+		const repo = makeRepo();
+		const client = fakeClient([pr(3, "2026-08-20T00:00:00Z", ["a.ts"])]);
+		const summaries: Array<{ repo: string; created: number }> = [];
+		const handler = createSyncHandler(deps(client), (summary) => {
+			summaries.push(summary);
+		});
+		await handler(makeJob(repo.id));
+		expect(summaries).toHaveLength(1);
+		expect(summaries[0]?.repo).toBe("acme/mono");
+		expect(summaries[0]?.created).toBe(1);
 	});
 });
