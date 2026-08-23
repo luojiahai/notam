@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { backupDatabase, ensureParentDir, openDatabase } from "./db.ts";
+import { backupDatabase, openDatabase } from "./db.ts";
 
 export type Migration = { version: number; name: string; sql: string };
 
@@ -108,7 +108,8 @@ export async function migrateDatabase(
 	path: string,
 	now: Date = new Date(),
 ): Promise<{ db: Database; applied: number; backup: string | null }> {
-	if (path !== ":memory:") await ensureParentDir(path);
+	// openDatabase creates the parent directory itself, so nothing to do here
+	// beyond checking whether the file already existed before we touch it.
 	const existed = path !== ":memory:" && (await Bun.file(path).exists());
 	const db = openDatabase(path);
 	let backup: string | null = null;

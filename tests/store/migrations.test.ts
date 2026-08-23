@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { statSync } from "node:fs";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,6 +27,15 @@ function tableNames(db: Database): string[] {
 		.all();
 	return rows.map((r) => r.name).filter((n) => !n.startsWith("sqlite_"));
 }
+
+describe("openDatabase", () => {
+	test("creates a missing nested parent directory at mode 0700", () => {
+		const path = join(dir, "sub", "nested", "notam.db");
+		openDatabase(path).close();
+		const stat = statSync(join(dir, "sub", "nested"));
+		expect(stat.mode & 0o777).toBe(0o700);
+	});
+});
 
 describe("MIGRATIONS", () => {
 	test("are numbered from 1 with no gaps and no duplicates", () => {
@@ -166,5 +176,13 @@ describe("migrateDatabase", () => {
 		db.close();
 		expect(applied).toBe(MIGRATIONS.length);
 		expect(backup).toBe(join(dir, "notam.db.2026-08-23T09-15-00-000Z.bak"));
+	});
+
+	test("creates a missing nested directory at mode 0700", async () => {
+		const path = join(dir, "sub", "nested", "notam.db");
+		const { db } = await migrateDatabase(path);
+		db.close();
+		const stat = statSync(join(dir, "sub", "nested"));
+		expect(stat.mode & 0o777).toBe(0o700);
 	});
 });
