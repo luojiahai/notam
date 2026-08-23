@@ -1,3 +1,4 @@
+import type { Database } from "bun:sqlite";
 import {
 	defaultConfigPath,
 	defaultDbPath,
@@ -7,7 +8,7 @@ import {
 import { refreshPromotions } from "../core/promotion/refresh.ts";
 import { createApp } from "../server/app.ts";
 import { type AppContext, createContext } from "../server/context.ts";
-import { listen } from "../server/listen.ts";
+import { type Listener, listen } from "../server/listen.ts";
 import {
 	defaultWebDistPath,
 	loadAssetsFromDirectory,
@@ -24,6 +25,8 @@ export type RunOptions = {
 	env?: Record<string, string | undefined>;
 	/** Injected so no test ever launches a browser. */
 	openBrowser?: (url: string) => void;
+	/** Injected by tests so a stalled-drain assertion need not take seconds. */
+	drainTimeoutMs?: number;
 };
 
 export type RunningServer = {
@@ -32,6 +35,45 @@ export type RunningServer = {
 	ctx: AppContext;
 	stop: () => Promise<void>;
 };
+
+/**
+ * How long shutdown waits for in-flight jobs before closing the database
+ * anyway.
+ *
+ * A runner's AbortSignal only gates claiming the *next* job; a handler already
+ * inside a stalled GitHub connection is not interruptible from here, and the
+ * clients issue their requests without a signal of their own. Waiting forever
+ * would make Ctrl-C hostage to a hung socket, so the drain is best effort:
+ * whatever is still running when this elapses is left `running` and reclaimed
+ * by the next boot, which is exactly the state a crash produces anyway.
+ */
+export const SHUTDOWN_DRAIN_TIMEOUT_MS = 5_000;
+
+/**
+ * The one way this module tears a booted server down, used by both `stop()` and
+ * the boot failure path, so neither can drift into closing the database under a
+ * running handler or leaving a bound socket behind.
+ */
+async function shutdownServer(
+	ctx: AppContext,
+	db: Database,
+	listener: Listener | undefined,
+	timeoutMs: number,
+): Promise<void> {
+	ctx.shutdown();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	await Promise.race([
+		Promise.all([ctx.syncRunner.idle(), ctx.analyseRunner.idle()]),
+		new Promise<void>((resolve) => {
+			timer = setTimeout(resolve, timeoutMs);
+		}),
+	]);
+	// Otherwise a drain that finished early keeps the process alive for the rest
+	// of the timeout.
+	if (timer !== undefined) clearTimeout(timer);
+	await listener?.stop();
+	db.close();
+}
 
 function launchBrowser(url: string): void {
 	const command =
@@ -69,7 +111,9 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 	// UNIQUE violation from applyConfig, an unreadable web/dist, an explicit
 	// --port that is taken — so the whole block unwinds as one, the way
 	// runSync's own try/finally does.
+	const drainTimeoutMs = options.drainTimeoutMs ?? SHUTDOWN_DRAIN_TIMEOUT_MS;
 	let ctx: AppContext | undefined;
+	let listener: Listener | undefined;
 	try {
 		if (backup) {
 			options.log(
@@ -99,7 +143,7 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 		const assets = await loadAssetsFromDirectory(defaultWebDistPath(env));
 		const app = createApp(ctx, assets);
 
-		const listener = listen({
+		listener = listen({
 			fetch: app.fetch,
 			port: options.port ?? config.server.port,
 			autoIncrement: options.port === undefined,
@@ -119,27 +163,22 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 		if (options.open) (options.openBrowser ?? launchBrowser)(listener.url);
 
 		const started = ctx;
+		const bound = listener;
 		return {
-			url: listener.url,
-			port: listener.port,
+			url: bound.url,
+			port: bound.port,
 			ctx: started,
-			stop: async () => {
-				started.shutdown();
-				// The abort only signals; a handler mid-statement still holds the
-				// database. Closing under it would throw inside the drain, where
-				// nothing surfaces it, and leave the job `running` for the next
-				// boot to reclaim.
-				await Promise.all([
-					started.syncRunner.idle(),
-					started.analyseRunner.idle(),
-				]);
-				await listener.stop();
-				db.close();
-			},
+			// The abort only signals; a handler mid-statement still holds the
+			// database. Closing under it would throw inside the drain, where
+			// nothing surfaces it, and leave the job `running` for the next boot
+			// to reclaim.
+			stop: () => shutdownServer(started, db, bound, drainTimeoutMs),
 		};
 	} catch (error) {
-		ctx?.shutdown();
-		db.close();
+		// The same teardown as `stop()`: the reclaim above may already have
+		// kicked a handler into flight, and `listen` may already have bound.
+		if (ctx) await shutdownServer(ctx, db, listener, drainTimeoutMs);
+		else db.close();
 		throw error;
 	}
 }

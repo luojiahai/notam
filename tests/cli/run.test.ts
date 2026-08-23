@@ -206,6 +206,93 @@ describe("startServer", () => {
 		}
 	});
 
+	test("stops even when a job's handler never settles", async () => {
+		const home = await tempHome();
+		const server = await startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: () => {},
+			openBrowser: () => {},
+			drainTimeoutMs: 50,
+		});
+
+		// A handler that never settles is the shape of a sync stuck on a GitHub
+		// socket: the runner's AbortSignal only gates claiming the *next* job, so
+		// nothing in this process can interrupt it. Shutdown must still finish.
+		let claimed: () => void = () => {};
+		const running = new Promise<void>((resolve) => {
+			claimed = resolve;
+		});
+		const runner = server.ctx.analyseRunner as unknown as {
+			options: { handlers: Record<string, () => Promise<void>> };
+		};
+		runner.options.handlers.analyse = () => {
+			claimed();
+			return new Promise<void>(() => {});
+		};
+		server.ctx.queue.enqueue("analyse", "hangs-forever");
+		server.ctx.analyseRunner.kick();
+		await running;
+		expect(server.ctx.queue.count("running")).toBe(1);
+
+		const startedAt = Date.now();
+		await server.stop();
+		// Bounded by drainTimeoutMs, not by the handler; the job stays `running`
+		// and the next boot reclaims it.
+		expect(Date.now() - startedAt).toBeLessThan(2000);
+	});
+
+	test("leaves no job stranded when boot fails after a reclaim", async () => {
+		const home = await tempHome();
+		const seeded = await migrateDatabase(defaultDbPath(home));
+		const seedQueue = new JobQueue(seeded.db);
+		for (let i = 0; i < 5; i++) {
+			if (!seedQueue.enqueue("analyse", `no-such-entry-${i}`))
+				throw new Error("setup failed: could not enqueue the job");
+		}
+		if (!seedQueue.claim())
+			throw new Error("setup failed: could not claim the job");
+		seeded.db.close();
+
+		// A boot that reclaims (and so kicks) work and *then* fails must unwind
+		// through the same teardown as stop(): report the real error, leave no
+		// socket bound, and leave the jobs table in a state the next boot can
+		// pick up rather than mid-flight.
+		const occupied = await startServer({
+			home: await tempHome(),
+			port: 0,
+			open: false,
+			env,
+			log: () => {},
+			openBrowser: () => {},
+		});
+		try {
+			await expect(
+				startServer({
+					home,
+					port: occupied.port,
+					open: false,
+					env,
+					log: () => {},
+					openBrowser: () => {},
+				}),
+			).rejects.toThrow(String(occupied.port));
+		} finally {
+			await occupied.stop();
+		}
+
+		const after = await migrateDatabase(defaultDbPath(home));
+		try {
+			const queue = new JobQueue(after.db);
+			expect(queue.count("running")).toBe(0);
+			expect(queue.count("failed")).toBe(5);
+		} finally {
+			after.db.close();
+		}
+	});
+
 	test("fails loudly when an explicit port is already taken", async () => {
 		const first = await startServer({
 			home: await tempHome(),
