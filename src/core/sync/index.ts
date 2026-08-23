@@ -7,7 +7,7 @@ import { getRepo, setWatermark } from "../../store/repos.ts";
 // GitHubError is a type/class import, not a network call: syncRepo still
 // never calls fetch itself, which stays github/'s job alone. It is needed
 // here to discriminate "this PR is gone" (404/410, a counted skip) from every
-// other failure (still fatal) — see finding I5.
+// other failure (still fatal).
 import { GitHubError } from "../github/client.ts";
 import {
 	type GitHubClient,
@@ -39,7 +39,7 @@ export type SyncSummary = {
 	 * fetchPRDetail (deleted or made inaccessible between the list call and the
 	 * detail call) or a listing node with a timestamp that fails to parse.
 	 * Counted separately from `skipped` — that's the user's own glob filter
-	 * excluding a PR, a different fact from a PR having vanished. See finding I5.
+	 * excluding a PR, a different fact from a PR having vanished.
 	 */
 	missing: number;
 	watermark: string | null;
@@ -61,7 +61,7 @@ function iso(timestamp: string): string {
 }
 
 /**
- * Spec section 5. Lists merged PRs newest-first and walks back until updated_at
+ * Lists merged PRs newest-first and walks back until updated_at
  * drops below max(watermark, now - window_days).
  *
  * The watermark is written once, after pagination terminates, and never
@@ -119,8 +119,8 @@ export async function syncRepo(
 				updatedAt = iso(node.updatedAt);
 			} catch (error) {
 				// A malformed timestamp on one listing node must not wedge the
-				// whole repository (finding I5): skip just this node, counted, and
-				// keep walking the rest of the page.
+				// whole repository: skip just this node, counted, and keep walking
+				// the rest of the page.
 				if (error instanceof RangeError) {
 					summary.missing++;
 					deps.onProgress?.({
@@ -144,7 +144,7 @@ export async function syncRepo(
 				detail = await client.fetchPRDetail(ref, node.number);
 			} catch (error) {
 				// A PR deleted or made inaccessible between the list call and the
-				// detail call is a counted skip, not a fatal error (finding I5) —
+				// detail call is a counted skip, not a fatal error —
 				// otherwise this one PR would wedge the repository's sync forever,
 				// since the watermark never advances past a thrown job. Every other
 				// status, and every non-GitHubError, still throws: a bad token must
@@ -193,8 +193,8 @@ export async function syncRepo(
 			// the files side (github/client.ts). Silently breaking here would
 			// commit `highest` — page 1's maximum — as the watermark, and every
 			// PR the aborted pagination never reached would be skipped
-			// *permanently* on every future run (finding I4). Throwing leaves the
-			// watermark unmoved, exactly as the doc comment above promises.
+			// *permanently* on every future run. Throwing leaves the watermark
+			// unmoved, exactly as the doc comment above promises.
 			throw new GitHubError(
 				`${repo.name}: pagination reported another page but returned no cursor`,
 			);

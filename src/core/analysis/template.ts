@@ -5,7 +5,7 @@ import { ConfigError, expandHome } from "../config/load.ts";
  * The argv half of the analyser call. Fixed, and NOT overridable by a
  * repository's prompt_template: a tuned template changes what the model is
  * shown, never what it must return, so the UI can only ever be handed a rule
- * shape it can render (spec section 6).
+ * shape it can render.
  */
 export const INSTRUCTION = `You are extracting the team's tacit engineering agreements from a merged pull request's review conversation.
 
@@ -33,7 +33,7 @@ Rules:
 - source_comment_urls must be URLs that appear in the supplied conversation. Do not invent them.
 - If the conversation carries no enforceable agreement, reply with an empty array: [].`;
 
-/** Spec section 6: exactly one repair attempt, re-prompted with the validator's own error text. */
+/** Exactly one repair attempt, re-prompted with the validator's own error text. */
 export function repairInstruction(error: string): string {
 	return `${INSTRUCTION}
 
@@ -116,7 +116,7 @@ function renderComments(payload: EntryPayload): string {
 /**
  * Says out loud when NOTAM knows it is looking at a partial picture, so the
  * model can lower its confidence rather than scoping a rule from a file list
- * that was cut off (spec section 5's paths_truncated).
+ * that was cut off (`paths_truncated`).
  */
 function renderTruncation(payload: EntryPayload): string {
 	const notes: string[] = [];

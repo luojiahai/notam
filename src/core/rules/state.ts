@@ -3,7 +3,7 @@ import type { RuleRow, RuleStatus } from "../../shared/types.ts";
 import { getRule, updateRuleStatus } from "../../store/rules.ts";
 
 /**
- * Spec section 8. `abandoned` is reachable from anywhere and is terminal: it
+ * `abandoned` is reachable from anywhere and is terminal: it
  * records a decision the user made, and un-deciding it is not a transition but
  * a fresh analysis.
  *

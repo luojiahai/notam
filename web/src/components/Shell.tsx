@@ -9,10 +9,10 @@ export type ShellProps = {
 };
 
 /**
- * App-wide chrome only. The repository name and its Sync button used to sit in
- * this header, which made a one-repository action look like a global one; both
- * moved to `RepoBar`, above the tabs. What is left here — warnings, theme,
- * version — is true of the whole process regardless of what is selected.
+ * App-wide chrome only: warnings, theme, version — each true of the whole
+ * process regardless of what is selected. Anything scoped to a single
+ * repository belongs in `RepoBar`, above the tabs; in this header a
+ * one-repository action reads as a global one.
  */
 export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 	return (
@@ -26,8 +26,8 @@ export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 
 			{/*
 				Server text of unbounded length, so it gets the full width and
-				wraps. It used to sit in the header's flex row, where one long
-				sentence was enough to push the controls off the end.
+				wraps. It stays out of the header's flex row, where one long
+				sentence is enough to push the controls off the end.
 			*/}
 			<div className="banners">
 				{warnings.map((warning) => (

@@ -19,10 +19,10 @@ function day(timestamp: string | null): string | null {
 }
 
 /**
- * Sync used to sit in the global header, beside the brand, where it read as an
- * app-wide action. It is not one: it pulls merged pull requests for a single
- * repository. This bar puts it on the repository it acts on, above the tabs
- * rather than inside one, so it stays reachable from Rules as well as Entries.
+ * Sync is not an app-wide action: it pulls merged pull requests for a single
+ * repository, so it belongs on the repository it acts on rather than in the
+ * global header beside the brand. This bar sits above the tabs rather than
+ * inside one, so it stays reachable from Rules as well as Entries.
  */
 export function RepoBar({ repoName, syncedAt, onSync, syncing }: RepoBarProps) {
 	const synced = day(syncedAt);

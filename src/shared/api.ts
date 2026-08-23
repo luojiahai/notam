@@ -9,8 +9,8 @@ import type {
 /**
  * The one wire contract. The server validates request bodies against these
  * schemas and the browser validates responses against the same ones, so a field
- * can never mean two things in two places (spec section 3: "one schema module
- * shared by server and frontend").
+ * can never mean two things in two places: one schema module, shared by
+ * server and frontend.
  *
  * The *composite* shapes here are deliberately not the row types from
  * shared/types.ts — a row is a storage shape, a summary is what a table renders,
@@ -110,7 +110,7 @@ export const EntrySummarySchema = z.object({
 	rule_count: count,
 	/**
 	 * Only the drafts, because only drafts are discarded by a re-analysis. This
-	 * is the number spec section 6's confirmation dialog has to say out loud.
+	 * is the number the confirmation dialog has to say out loud.
 	 */
 	draft_rule_count: count,
 });
@@ -272,7 +272,7 @@ export const AnalyseRequestSchema = z.object({ entry_ids: idList });
 /**
  * `proposed` and `draft` are absent on purpose. A rule becomes `proposed` only
  * by being promoted, and returns to `draft` only when the status refresh finds
- * its pull request closed — neither is a button (spec section 8).
+ * its pull request closed — neither is a button.
  */
 export const RuleStatusRequestSchema = z.object({
 	rule_ids: idList,

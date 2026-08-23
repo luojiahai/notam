@@ -23,10 +23,10 @@ function client(): QueryClient {
 }
 
 /**
- * Before the fix, the loading/plan-error branch hand-rolled the dialog shell
- * and dropped `Dialog`'s visible `<h2>{title}</h2>`, leaving the title only
- * in `aria-label`. These assert a real `heading` role is on screen, not just
- * an accessible name a screen reader would announce.
+ * The loading and plan-error branches go through `Dialog` rather than
+ * hand-rolling its shell, so they keep its visible `<h2>{title}</h2>` instead
+ * of carrying the title in `aria-label` alone. These assert a real `heading`
+ * role is on screen, not just an accessible name a screen reader announces.
  */
 describe("PromotionFlow", () => {
 	test("shows a visible title while the plan is in flight", () => {

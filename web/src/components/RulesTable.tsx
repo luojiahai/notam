@@ -59,7 +59,7 @@ export function RulesTable(props: RulesTableProps) {
 	const visible = new Map(props.rules.map((rule) => [rule.id, rule]));
 	const selected = selection.rows.map((rule) => visible.get(rule.id) ?? rule);
 
-	// The button states encode spec section 8's state machine. The server
+	// The button states encode the rule lifecycle's state machine. The server
 	// re-checks every one of them — this only keeps the user from being told
 	// "409" for something the screen could have greyed out.
 	const allDraft =

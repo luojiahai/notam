@@ -320,7 +320,7 @@ describe("applyServerEvent", () => {
 	test("a failed sync hands its error text on, and the next sync clears it", () => {
 		// The only place a sync failure exists in the browser: no route exposes
 		// `jobs.error`, so an event dropped here is a failure the user never
-		// hears about (spec section 14).
+		// hears about.
 		const client = new QueryClient();
 		const seen: (string | null)[] = [];
 		const failed: ServerEvent = {
@@ -473,9 +473,9 @@ describe("App", () => {
 	});
 
 	/**
-	 * Sync moved out of the global header, where it read as an app-wide action
-	 * and rendered — disabled — even with nothing selected. It belongs to a
-	 * repository now, so with no repository there is no control at all.
+	 * Sync belongs to a repository, not to the app, so with no repository there
+	 * is no control at all — not a disabled one, which is what a header-level
+	 * Sync renders when nothing is selected.
 	 */
 	test("offers no sync control until a repository is selected", async () => {
 		globalThis.fetch = ((input: unknown) => {

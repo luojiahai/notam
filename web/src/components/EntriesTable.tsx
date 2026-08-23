@@ -78,7 +78,7 @@ export function EntriesTable(props: EntriesTableProps) {
 	const visible = new Map(props.entries.map((entry) => [entry.id, entry]));
 
 	/**
-	 * Spec section 6: a re-run that would discard drafts must say how many.
+	 * A re-run that would discard drafts must say how many.
 	 *
 	 * The count comes from the visible row where there is one and from the
 	 * remembered selected row otherwise, so an id the current filter hides
@@ -140,10 +140,10 @@ export function EntriesTable(props: EntriesTableProps) {
 				/>
 				<span className="spacer" />
 				{/*
-					The selection controls and the queue counter used to sit in a
-					footer of their own below the table. They are one row's worth of
-					chrome, and the table wants the height more than they did. Grouped
-					so a narrow window drops the set to a second line together.
+					The selection controls and the queue counter live in the toolbar
+					rather than a footer of their own below the table: they are one
+					row's worth of chrome, and the table wants the height more.
+					Grouped so a narrow window drops the set to a second line together.
 				*/}
 				<div className="toolbar-actions">
 					<span className="bulk-count" data-active={selection.size > 0}>

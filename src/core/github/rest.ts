@@ -25,7 +25,7 @@ export type RestClientOptions = {
 type ContentEntry = { type?: string; name?: string };
 
 /**
- * Spec section 7: no clone. Reading a ref, a commit, and a tree and then writing
+ * No clone. Reading a ref, a commit, and a tree and then writing
  * blobs costs a handful of requests regardless of repository size, and the same
  * endpoints exist on GHES.
  */
@@ -235,7 +235,7 @@ export class RestGitHubClient implements GitDataClient {
 			}
 
 			if (!response.ok) {
-				// Verbatim, per spec section 7: a protected branch or a missing
+				// Verbatim: a protected branch or a missing
 				// scope is something the user has to read to act on.
 				throw new GitHubError(
 					`${label}: ${response.status} ${await safeText(response)}`,

@@ -27,11 +27,11 @@ export type RefreshSummary = {
 };
 
 /**
- * Spec section 7's status refresh. Only `open` promotions are read, so a merged
+ * The status refresh. Only `open` promotions are read, so a merged
  * or closed one is never polled again.
  *
  * A merged promotion does NOT verify its rules: verification is always a manual
- * decision (spec section 8). A closed-unmerged one returns its still-`proposed`
+ * decision. A closed-unmerged one returns its still-`proposed`
  * rules to `draft`; rules the user already moved to `verified` or `abandoned`
  * are left exactly where they are.
  */

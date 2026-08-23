@@ -317,7 +317,7 @@ describe("promotion routes", () => {
 			await (await post(harness, "/api/promotions/refresh", {})).json(),
 		);
 		expect(summary.merged).toBe(1);
-		// Spec section 8: verification is always a manual decision.
+		// Verification is always a manual decision.
 		expect(listRulesByEntry(harness.db, harness.entryId)[0]?.status).toBe(
 			"proposed",
 		);

@@ -25,9 +25,9 @@ export type SlugAssignment = {
 	slug: string;
 	/**
 	 * `"base-branch"` means a file with this base slug already exists on the
-	 * target branch — the case spec section 7 requires the confirmation dialog to
-	 * name. `"batch"` means two rules in this same selection wanted the same
-	 * name. `null` means it was free.
+	 * target branch — the case the confirmation dialog has to name. `"batch"`
+	 * means two rules in this same selection wanted the same name. `null` means
+	 * it was free.
 	 */
 	collided: "base-branch" | "batch" | null;
 };

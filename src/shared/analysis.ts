@@ -1,11 +1,11 @@
 import { z } from "zod";
 
 /**
- * Spec section 6's output contract. This schema is deliberately NOT overridable
+ * The analyser's output contract. This schema is deliberately NOT overridable
  * by a repository's prompt_template: the UI renders exactly this shape, so a
  * tuned prompt can change what the analyser looks for but never what it returns.
  *
- * Lives in shared/ because plan 3's web client validates the same payload.
+ * Lives in shared/ because the web client validates the same payload.
  */
 export const AnalysedRuleSchema = z.object({
 	kind: z.enum(["do", "dont"]),

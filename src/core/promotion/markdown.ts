@@ -29,7 +29,7 @@ function yamlScope(globs: string[]): string {
 }
 
 /**
- * Spec section 7's file format. `notam: true` is the marker that lets a
+ * The rule file format. `notam: true` is the marker that lets a
  * repository tell NOTAM-authored rules from hand-written ones.
  */
 export function renderRuleFile(rule: RuleRow, sourceUrl: string): string {

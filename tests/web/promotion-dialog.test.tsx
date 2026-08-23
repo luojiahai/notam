@@ -74,7 +74,7 @@ describe("PromotionDialog", () => {
 		expect(screen.getAllByText(/main/).length).toBeGreaterThan(0);
 	});
 
-	test("names the collision in the spec's own words", () => {
+	test("spells out that promoting adds a second file", () => {
 		draw();
 		expect(
 			screen.getByText(

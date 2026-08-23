@@ -49,8 +49,8 @@ describe("backupDatabase", () => {
 	test("creates the backup copy at mode 0600", async () => {
 		const path = join(dir, "notam.db");
 		openDatabase(path).close();
-		// Prove the fix does real work, not just carry the source file's mode:
-		// widen the source before backing it up.
+		// Prove the backup sets the mode itself rather than carrying the source
+		// file's: widen the source before backing it up.
 		chmodSync(path, 0o644);
 
 		const backup = await backupDatabase(

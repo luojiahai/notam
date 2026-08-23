@@ -6,8 +6,7 @@ import {
 } from "./static.ts";
 
 /**
- * Picks the single-page app this process serves. The order is the whole of
- * plan 4's contribution to the server:
+ * Picks the single-page app this process serves, in this order:
  *
  * 1. An explicit `NOTAM_WEB_DIST` always wins. It is what `bun run dev:web` and
  *    the Playwright end-to-end point at, and an override a binary could

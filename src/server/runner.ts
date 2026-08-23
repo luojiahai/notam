@@ -12,7 +12,7 @@ export type JobRunnerOptions = {
 };
 
 /**
- * A long-lived wrapper around plan 1's `runPool`.
+ * A long-lived wrapper around `runPool`.
  *
  * `runPool` is a one-shot: its workers exit as soon as the queue is empty,
  * which is exactly right for `notam sync` and exactly wrong for a server, where

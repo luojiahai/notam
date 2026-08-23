@@ -70,7 +70,7 @@ export type EntryPayload = {
 	 * GraphQL page cap (see the MAX_* constants in core/github/queries.ts) and
 	 * so may be missing conversation GitHub actually has. Real pagination past
 	 * the caps is a later plan's job; this flag exists so a row synced before
-	 * that plan lands is never mistaken for a complete one — see finding I3.
+	 * that plan lands is never mistaken for a complete one.
 	 */
 	conversation_truncated: boolean;
 	reviews: PayloadReview[];
@@ -141,7 +141,7 @@ export type RuleRow = {
 	/**
 	 * The base kebab slug, derived from the directive when the rule is created.
 	 * Collision suffixes are applied at promotion time and never written back, so
-	 * this stays stable across re-promotion (spec section 4).
+	 * this stays stable across re-promotion.
 	 */
 	file_slug: string;
 	created_at: string;
