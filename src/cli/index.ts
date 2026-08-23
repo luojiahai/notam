@@ -4,16 +4,20 @@ import { ConfigError } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
 import { VERSION } from "../version.ts";
 import { runInit } from "./init.ts";
+import { runRun } from "./run.ts";
 import { runSync } from "./sync.ts";
 
 const USAGE = `NOTAM — Notes On Team Agreements & Methods
 
 Usage:
-  notam init [--force]              Write a commented ~/.notam/config.yaml
-  notam sync [--repo <owner/repo>]  Sync merged pull requests, then exit
-  notam version                     Print the version
+  notam run [--port <n>] [--no-open]  Start the local UI on 127.0.0.1:4317
+  notam init [--force]                Write a commented ~/.notam/config.yaml
+  notam sync [--repo <owner/repo>]    Sync merged pull requests, then exit
+  notam version                       Print the version
 
 Options:
+  --port <n>            Bind this exact port instead of the configured one
+  --no-open             Do not open a browser
   --repo <owner/repo>   Sync only this repository
   --concurrency <n>     Repositories to sync at once (default 1)
   --force               Overwrite an existing config
@@ -21,6 +25,7 @@ Options:
 
 Environment:
   NOTAM_HOME            Overrides the home directory holding ~/.notam
+  NOTAM_WEB_DIST        Overrides where the built web UI is read from
 `;
 
 /** Tests point this at a temporary directory instead of the real home. */
@@ -66,6 +71,26 @@ export async function main(
 			case "--version":
 				log(VERSION);
 				return 0;
+
+			case "run": {
+				const raw = flagValue(rest, "--port");
+				const port = raw === undefined ? undefined : Number(raw);
+				if (
+					port !== undefined &&
+					(!Number.isInteger(port) || port < 1 || port > 65535)
+				) {
+					throw new ConfigError(
+						"--port must be an integer between 1 and 65535",
+					);
+				}
+				return await runRun({
+					home,
+					port,
+					open: !rest.includes("--no-open"),
+					log,
+					env,
+				});
+			}
 
 			case "init":
 				await runInit({ home, force: rest.includes("--force"), log });
