@@ -164,4 +164,58 @@ describe("JobRunner", () => {
 		expect(runner.busy).toBe(false);
 		db.close();
 	});
+
+	test("a kick() reentrant from onEvent never starts a second concurrent pool", async () => {
+		const { db, queue } = queueOf();
+		let inFlight = 0;
+		let peak = 0;
+		const done: string[] = [];
+		for (const target of ["a", "b", "c"]) queue.enqueue("analyse", target);
+		const runner = new JobRunner({
+			queue,
+			handlers: {
+				analyse: async (job) => {
+					inFlight++;
+					peak = Math.max(peak, inFlight);
+					await Bun.sleep(5);
+					inFlight--;
+					done.push(job.target_id);
+				},
+			},
+			concurrency: 2,
+			onEvent: (event) => {
+				// A plausible Task 4 wiring: react to a job starting by kicking
+				// again. This fires synchronously, before the first `await` in
+				// `runPool`'s workers, and must coalesce into the same drain
+				// rather than spinning up a second concurrent pool.
+				if (event.type === "started") runner.kick();
+			},
+		});
+		runner.kick();
+		await runner.idle();
+		expect(peak).toBeLessThanOrEqual(2);
+		expect(done.sort()).toEqual(["a", "b", "c"]);
+		expect(queue.count("done")).toBe(3);
+		db.close();
+	});
+
+	test("a throwing onError does not produce an unhandled rejection", async () => {
+		const { db, queue } = queueOf();
+		queue.enqueue("analyse", "e_1");
+		const runner = new JobRunner({
+			queue,
+			handlers: { analyse: async () => {} },
+			concurrency: 1,
+			onEvent: () => {
+				throw new Error("onEvent boom");
+			},
+			onError: () => {
+				throw new Error("onError boom");
+			},
+		});
+		runner.kick();
+		await runner.idle();
+		expect(runner.busy).toBe(false);
+		db.close();
+	});
 });

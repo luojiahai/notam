@@ -39,7 +39,14 @@ export class JobRunner {
 			this.again = true;
 			return;
 		}
-		this.draining = this.drain();
+		// `drain()` (and the `runPool()` workers it awaits) run synchronously up
+		// to their first `await`, which can fire an `onEvent` callback before
+		// this assignment would otherwise complete. Deferring the call itself to
+		// a microtask means `this.draining` is already non-null by the time any
+		// reentrant `kick()` — e.g. from inside that `onEvent` callback — can
+		// observe it, so a reentrant call always takes the coalescing branch
+		// above instead of starting a second, concurrent pool.
+		this.draining = Promise.resolve().then(() => this.drain());
 	}
 
 	get busy(): boolean {
@@ -73,7 +80,12 @@ export class JobRunner {
 				});
 			} while (this.again && !this.stopped);
 		} catch (error) {
-			this.options.onError?.(error);
+			try {
+				this.options.onError?.(error);
+			} catch {
+				// A drain must never reject into an unhandled rejection, even when
+				// the caller's own `onError` throws.
+			}
 		} finally {
 			this.draining = null;
 		}
