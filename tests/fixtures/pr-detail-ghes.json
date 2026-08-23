@@ -1,0 +1,42 @@
+{
+	"data": {
+		"repository": {
+			"pullRequest": {
+				"number": 118,
+				"title": "Drop the legacy retry loop",
+				"body": null,
+				"url": "https://ghe.acme.net/acme/internal/pull/118",
+				"updatedAt": "2026-08-17T12:00:00Z",
+				"mergedAt": "2026-08-17T11:00:00Z",
+				"author": null,
+				"labels": null,
+				"reviews": { "nodes": [] },
+				"reviewThreads": {
+					"nodes": [
+						{
+							"isResolved": false,
+							"path": null,
+							"line": null,
+							"comments": {
+								"nodes": [
+									{
+										"author": { "login": "sam" },
+										"body": "Never swallow an exception without logging it.",
+										"url": "https://ghe.acme.net/acme/internal/pull/118#discussion_r9",
+										"createdAt": "2026-08-16T12:00:00Z"
+									}
+								]
+							}
+						}
+					]
+				},
+				"comments": { "nodes": [null] },
+				"files": {
+					"pageInfo": { "hasNextPage": false, "endCursor": null },
+					"nodes": [{ "path": "libs/retry/loop.ts" }]
+				}
+			}
+		},
+		"rateLimit": { "remaining": 4999, "resetAt": "2026-08-23T10:00:00Z" }
+	}
+}

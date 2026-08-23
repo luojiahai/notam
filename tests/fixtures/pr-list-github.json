@@ -1,0 +1,22 @@
+{
+	"data": {
+		"repository": {
+			"pullRequests": {
+				"pageInfo": { "hasNextPage": true, "endCursor": "Y3Vyc29yOjI=" },
+				"nodes": [
+					{
+						"number": 4821,
+						"updatedAt": "2026-08-21T10:00:00Z",
+						"mergedAt": "2026-08-20T10:00:00Z"
+					},
+					{
+						"number": 4815,
+						"updatedAt": "2026-08-18T08:30:00Z",
+						"mergedAt": "2026-08-18T08:00:00Z"
+					}
+				]
+			}
+		},
+		"rateLimit": { "remaining": 4987, "resetAt": "2026-08-23T10:00:00Z" }
+	}
+}
