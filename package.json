@@ -4,11 +4,15 @@
 	"private": true,
 	"type": "module",
 	"module": "src/cli/index.ts",
+	"bin": {
+		"notam": "src/cli/index.ts"
+	},
 	"scripts": {
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
-		"format": "biome check --write ."
+		"format": "biome check --write .",
+		"start": "bun run src/cli/index.ts"
 	},
 	"dependencies": {
 		"zod": "^4.4.3"
