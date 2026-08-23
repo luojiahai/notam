@@ -63,10 +63,14 @@ export async function refreshPromotions(
 			const host = getHost(deps.db, repo.host_id);
 			if (!host) throw new Error(`unknown host ${repo.host_id}`);
 
+			// One instant for the whole iteration: `checkedAt` and, in the closed
+			// branch below, `transitionRules` both carry it, instead of each
+			// calling deps.now() separately and risking two different instants.
+			const now = deps.now();
 			const state = await deps
 				.clientFor(host)
 				.getPRState(parseRepoName(repo.name), promotion.pr_number);
-			const checkedAt = deps.now().toISOString();
+			const checkedAt = now.toISOString();
 			summary.checked++;
 			options.onProgress?.({
 				type: "checked",
@@ -90,7 +94,7 @@ export async function refreshPromotions(
 						deps.db,
 						stranded.map((rule) => rule.id),
 						"draft",
-						deps.now(),
+						now,
 					);
 				})();
 				summary.closed++;

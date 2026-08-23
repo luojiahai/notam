@@ -89,6 +89,24 @@ reproducing the original failure.
 		expect(rendered).toContain('  - "we\\"ird\\\\path/**"');
 	});
 
+	test("escapes a newline in a glob so the frontmatter stays parseable", () => {
+		const rendered = renderRuleFile(
+			rule({ scope_globs: ["services/payments/**\ninjected: true"] }),
+			"https://x/1",
+		);
+		expect(rendered).toContain('  - "services/payments/**\\ninjected: true"');
+		// No raw newline snuck through: the glob line is exactly one YAML line.
+		expect(rendered).not.toContain("payments/**\ninjected");
+	});
+
+	test("escapes carriage returns and tabs in a glob", () => {
+		const rendered = renderRuleFile(
+			rule({ scope_globs: ["a\r\tb"] }),
+			"https://x/1",
+		);
+		expect(rendered).toContain('  - "a\\r\\tb"');
+	});
+
 	test("always ends with exactly one trailing newline", () => {
 		const rendered = renderRuleFile(rule(), "https://x/1");
 		expect(rendered.endsWith("\n")).toBe(true);

@@ -300,5 +300,9 @@ describe("promoteRules", () => {
 		await expect(promoteRules(deps(client), plan)).rejects.toThrow(
 			/abandoned|cannot move/i,
 		);
+		// The pre-network check must catch this before any pull request is
+		// opened: no request was ever sent, and nothing was written.
+		expect(client.requests).toEqual([]);
+		expect(listPromotions(db, repo.id)).toEqual([]);
 	});
 });

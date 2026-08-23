@@ -9,10 +9,18 @@ export function rulePath(slug: string): string {
 /**
  * Double-quoted YAML. Globs start with `*` and contain `[`, `{`, and `:` often
  * enough that leaving them bare would eventually produce a file the team's own
- * tooling cannot parse.
+ * tooling cannot parse. `scope_globs` is an unconstrained `z.array(z.string())`
+ * (src/shared/analysis.ts), so a model-authored glob can contain a raw newline,
+ * carriage return, or tab; escaping backslashes first — before introducing any
+ * new backslashes of our own — keeps this order-safe against double-escaping.
  */
 function yamlString(value: string): string {
-	return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+	return `"${value
+		.replace(/\\/g, "\\\\")
+		.replace(/"/g, '\\"')
+		.replace(/\n/g, "\\n")
+		.replace(/\r/g, "\\r")
+		.replace(/\t/g, "\\t")}"`;
 }
 
 function yamlScope(globs: string[]): string {

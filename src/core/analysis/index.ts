@@ -107,63 +107,72 @@ export async function analyseEntry(
 		return { entryId: entry.id, state: "failed", rules: 0, error };
 	};
 
-	let stdin: string;
+	// Everything from here on runs after the entry has been marked `running`.
+	// Plan 3 injects both `onProgress` and `runner`, so an unexpected throw from
+	// either of them — or from the transaction below — is a supported case, not
+	// a hypothetical: without this guard it would escape analyseEntry entirely
+	// and strand the entry `running` forever, with `last_error` still null.
 	try {
-		const template = await loadTemplate(repo.prompt_template);
-		stdin = renderTemplate(template, entry);
+		let stdin: string;
+		try {
+			const template = await loadTemplate(repo.prompt_template);
+			stdin = renderTemplate(template, entry);
+		} catch (error) {
+			return fail(describe(error));
+		}
+
+		const attempt = async (instruction: string): Promise<Attempt> => {
+			let lastError = "the analyser produced no output";
+			for (let n = 1; n <= maxTransportAttempts; n++) {
+				onProgress?.({ type: "attempt", entryId: entry.id, attempt: n });
+				const run = await runner({ instruction, stdin, model, timeoutMs });
+				if (run.ok) {
+					const parsed = parseAnalyserOutput(run.stdout);
+					return parsed.ok
+						? { ok: true, rules: parsed.rules }
+						: { ok: false, error: parsed.error, repairable: true };
+				}
+				lastError = run.message;
+				if (run.kind === "missing") {
+					return { ok: false, error: run.message, repairable: false };
+				}
+				if (n < maxTransportAttempts) await sleep(backoffMs(n));
+			}
+			return { ok: false, error: lastError, repairable: false };
+		};
+
+		let outcome = await attempt(INSTRUCTION);
+		if (!outcome.ok && outcome.repairable) {
+			onProgress?.({
+				type: "repairing",
+				entryId: entry.id,
+				error: outcome.error,
+			});
+			outcome = await attempt(repairInstruction(outcome.error));
+		}
+		if (!outcome.ok) return fail(outcome.error);
+
+		const timestamp = now();
+		const rules = outcome.rules;
+		db.transaction(() => {
+			deleteDraftRulesForEntry(db, entry.id);
+			insertRules(db, repo.id, entry.id, rules.map(toNewRule), timestamp);
+			setAnalysisState(db, entry.id, "analysed", {
+				analysedAt: timestamp.toISOString(),
+				error: null,
+			});
+		})();
+
+		onProgress?.({ type: "analysed", entryId: entry.id, rules: rules.length });
+		return {
+			entryId: entry.id,
+			state: "analysed",
+			rules: rules.length,
+			error: null,
+		};
 	} catch (error) {
 		return fail(describe(error));
 	}
-
-	const attempt = async (instruction: string): Promise<Attempt> => {
-		let lastError = "the analyser produced no output";
-		for (let n = 1; n <= maxTransportAttempts; n++) {
-			onProgress?.({ type: "attempt", entryId: entry.id, attempt: n });
-			const run = await runner({ instruction, stdin, model, timeoutMs });
-			if (run.ok) {
-				const parsed = parseAnalyserOutput(run.stdout);
-				return parsed.ok
-					? { ok: true, rules: parsed.rules }
-					: { ok: false, error: parsed.error, repairable: true };
-			}
-			lastError = run.message;
-			if (run.kind === "missing") {
-				return { ok: false, error: run.message, repairable: false };
-			}
-			if (n < maxTransportAttempts) await sleep(backoffMs(n));
-		}
-		return { ok: false, error: lastError, repairable: false };
-	};
-
-	let outcome = await attempt(INSTRUCTION);
-	if (!outcome.ok && outcome.repairable) {
-		onProgress?.({
-			type: "repairing",
-			entryId: entry.id,
-			error: outcome.error,
-		});
-		outcome = await attempt(repairInstruction(outcome.error));
-	}
-	if (!outcome.ok) return fail(outcome.error);
-
-	const timestamp = now();
-	const rules = outcome.rules;
-	db.transaction(() => {
-		deleteDraftRulesForEntry(db, entry.id);
-		insertRules(db, repo.id, entry.id, rules.map(toNewRule), timestamp);
-		setAnalysisState(db, entry.id, "analysed", {
-			analysedAt: timestamp.toISOString(),
-			error: null,
-		});
-	})();
-
-	onProgress?.({ type: "analysed", entryId: entry.id, rules: rules.length });
-	return {
-		entryId: entry.id,
-		state: "analysed",
-		rules: rules.length,
-		error: null,
-	};
 }
 
 /**

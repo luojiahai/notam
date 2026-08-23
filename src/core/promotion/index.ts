@@ -10,10 +10,10 @@ import { getEntry } from "../../store/entries.ts";
 import { getHost } from "../../store/hosts.ts";
 import { insertPromotion } from "../../store/promotions.ts";
 import { getRepo } from "../../store/repos.ts";
-import { listRulesByIds } from "../../store/rules.ts";
+import { getRule, listRulesByIds } from "../../store/rules.ts";
 import { type GitDataClient, parseRepoName } from "../github/types.ts";
 import { resolveSlugs } from "../rules/slug.ts";
-import { transitionRules } from "../rules/state.ts";
+import { canTransition, transitionRules } from "../rules/state.ts";
 import {
 	type PRBodyItem,
 	promotionTitle,
@@ -182,6 +182,26 @@ export async function promoteRules(
 		sourceUrl: file.sourceUrl,
 		sourceNumber: file.sourceNumber,
 	}));
+
+	// A cheap re-read immediately before the network call, not after it: the
+	// plan forbids re-validating after createPRWithFiles (that cannot close the
+	// dialog-to-confirm race either), but a check here costs nothing and
+	// narrows that race from dialog-duration to sub-millisecond by catching the
+	// common case — a rule abandoned while the dialog sat open — before any
+	// pull request is opened.
+	for (const file of plan.files) {
+		const current = getRule(deps.db, file.rule.id);
+		if (!current) {
+			throw new PromotionError(
+				`rule ${file.rule.id} no longer exists and cannot be promoted`,
+			);
+		}
+		if (!canTransition(current.status, "proposed")) {
+			throw new PromotionError(
+				`rule ${current.id} cannot move from ${current.status} to proposed`,
+			);
+		}
+	}
 
 	const client = deps.clientFor(plan.host);
 	const created = await client.createPRWithFiles(

@@ -254,6 +254,110 @@ describe("createPRWithFiles", () => {
 			client(fetchImpl, { maxRetries: 1 }).createPRWithFiles(REPO, request),
 		).rejects.toThrow(GitHubError);
 	});
+
+	test("does not retry the non-idempotent POST /git/refs on a 500 — issues it exactly once", async () => {
+		let refsCalls = 0;
+		const fetchImpl = (async (url: string | URL) => {
+			const path = String(url).slice(API.length);
+			if (path === "/repos/acme/mono/git/ref/heads/main")
+				return new Response(JSON.stringify({ object: { sha: "base-commit" } }));
+			if (path === "/repos/acme/mono/git/commits/base-commit")
+				return new Response(JSON.stringify({ tree: { sha: "base-tree" } }));
+			if (path === "/repos/acme/mono/git/blobs")
+				return new Response(JSON.stringify({ sha: "blob-sha" }));
+			if (path === "/repos/acme/mono/git/trees")
+				return new Response(JSON.stringify({ sha: "new-tree" }));
+			if (path === "/repos/acme/mono/git/commits")
+				return new Response(JSON.stringify({ sha: "new-commit" }));
+			if (path === "/repos/acme/mono/git/refs") {
+				refsCalls++;
+				return new Response("upstream boom", { status: 500 });
+			}
+			throw new Error("the pull request endpoint must never be reached");
+		}) as unknown as typeof fetch;
+
+		await expect(
+			client(fetchImpl).createPRWithFiles(REPO, request),
+		).rejects.toThrow(/upstream boom/);
+		expect(refsCalls).toBe(1);
+	});
+
+	test("does not retry the non-idempotent POST /pulls on a 500 — issues it exactly once", async () => {
+		let pullsCalls = 0;
+		const fetchImpl = (async (url: string | URL) => {
+			const path = String(url).slice(API.length);
+			if (path === "/repos/acme/mono/git/ref/heads/main")
+				return new Response(JSON.stringify({ object: { sha: "base-commit" } }));
+			if (path === "/repos/acme/mono/git/commits/base-commit")
+				return new Response(JSON.stringify({ tree: { sha: "base-tree" } }));
+			if (path === "/repos/acme/mono/git/blobs")
+				return new Response(JSON.stringify({ sha: "blob-sha" }));
+			if (path === "/repos/acme/mono/git/trees")
+				return new Response(JSON.stringify({ sha: "new-tree" }));
+			if (path === "/repos/acme/mono/git/commits")
+				return new Response(JSON.stringify({ sha: "new-commit" }));
+			if (path === "/repos/acme/mono/git/refs")
+				return new Response(JSON.stringify({}));
+			if (path === "/repos/acme/mono/pulls") {
+				pullsCalls++;
+				return new Response("upstream boom", { status: 500 });
+			}
+			throw new Error(`unexpected path ${path}`);
+		}) as unknown as typeof fetch;
+
+		await expect(
+			client(fetchImpl).createPRWithFiles(REPO, request),
+		).rejects.toThrow(/upstream boom/);
+		expect(pullsCalls).toBe(1);
+	});
+
+	test("does not retry the non-idempotent POST /pulls on a network error — issues it exactly once", async () => {
+		let pullsCalls = 0;
+		const fetchImpl = (async (url: string | URL) => {
+			const path = String(url).slice(API.length);
+			if (path === "/repos/acme/mono/git/ref/heads/main")
+				return new Response(JSON.stringify({ object: { sha: "base-commit" } }));
+			if (path === "/repos/acme/mono/git/commits/base-commit")
+				return new Response(JSON.stringify({ tree: { sha: "base-tree" } }));
+			if (path === "/repos/acme/mono/git/blobs")
+				return new Response(JSON.stringify({ sha: "blob-sha" }));
+			if (path === "/repos/acme/mono/git/trees")
+				return new Response(JSON.stringify({ sha: "new-tree" }));
+			if (path === "/repos/acme/mono/git/commits")
+				return new Response(JSON.stringify({ sha: "new-commit" }));
+			if (path === "/repos/acme/mono/git/refs")
+				return new Response(JSON.stringify({}));
+			if (path === "/repos/acme/mono/pulls") {
+				pullsCalls++;
+				throw new TypeError("socket reset");
+			}
+			throw new Error(`unexpected path ${path}`);
+		}) as unknown as typeof fetch;
+
+		await expect(
+			client(fetchImpl).createPRWithFiles(REPO, request),
+		).rejects.toThrow(/socket reset/);
+		expect(pullsCalls).toBe(1);
+	});
+
+	test("still retries the idempotent GET ref read on a 500 (control case)", async () => {
+		const { fetchImpl, calls } = happyPath();
+		let getCalls = 0;
+		const withFlakyGet = (async (url: string | URL, init?: RequestInit) => {
+			const path = String(url).slice(API.length);
+			if (path === "/repos/acme/mono/git/ref/heads/main") {
+				getCalls++;
+				if (getCalls === 1)
+					return new Response("upstream boom", { status: 500 });
+			}
+			return fetchImpl(url, init);
+		}) as unknown as typeof fetch;
+
+		const result = await client(withFlakyGet).createPRWithFiles(REPO, request);
+		expect(getCalls).toBe(2);
+		expect(result.number).toBe(99);
+		expect(calls.length).toBeGreaterThan(0);
+	});
 });
 
 describe("getPRState", () => {

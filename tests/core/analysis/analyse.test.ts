@@ -294,6 +294,38 @@ describe("analyseEntry — transport failure", () => {
 		expect(result.state).toBe("failed");
 	});
 
+	test("a runner that throws outright leaves the entry failed, not stranded running", async () => {
+		const runner: ClaudeRunner = async () => {
+			throw new Error("runner exploded");
+		};
+		const result = await analyseEntry(deps(runner), entry, repo);
+
+		expect(result.state).toBe("failed");
+		expect(result.error).toContain("runner exploded");
+		const after = getEntry(db, entry.id);
+		expect(after?.analysis_state).toBe("failed");
+		expect(after?.last_error).toContain("runner exploded");
+	});
+
+	test("an onProgress callback that throws leaves the entry failed, not stranded running", async () => {
+		const runner = replies(ok([RULE]));
+		const onProgress = (event: { type: string }) => {
+			if (event.type === "attempt")
+				throw new Error("progress handler exploded");
+		};
+		const result = await analyseEntry(
+			deps(runner, { onProgress }),
+			entry,
+			repo,
+		);
+
+		expect(result.state).toBe("failed");
+		expect(result.error).toContain("progress handler exploded");
+		const after = getEntry(db, entry.id);
+		expect(after?.analysis_state).toBe("failed");
+		expect(after?.last_error).toContain("progress handler exploded");
+	});
+
 	test("a template that cannot be read fails the entry without spawning anything", async () => {
 		const runner = replies(ok([RULE]));
 		const result = await analyseEntry(

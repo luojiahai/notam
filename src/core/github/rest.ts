@@ -48,6 +48,8 @@ export class RestGitHubClient implements GitDataClient {
 				repo,
 				"GET",
 				`/repos/${slug(repo)}/contents/.claude/rules?ref=${encodeURIComponent(branch)}`,
+				undefined,
+				{ idempotent: true },
 			);
 			if (!Array.isArray(entries)) return [];
 			return entries
@@ -71,6 +73,8 @@ export class RestGitHubClient implements GitDataClient {
 			repo,
 			"GET",
 			`/repos/${slug(repo)}/git/ref/heads/${request.baseBranch}`,
+			undefined,
+			{ idempotent: true },
 		);
 		const baseCommitSha = ref.object.sha;
 
@@ -78,6 +82,8 @@ export class RestGitHubClient implements GitDataClient {
 			repo,
 			"GET",
 			`/repos/${slug(repo)}/git/commits/${baseCommitSha}`,
+			undefined,
+			{ idempotent: true },
 		);
 
 		const tree: {
@@ -92,6 +98,7 @@ export class RestGitHubClient implements GitDataClient {
 				"POST",
 				`/repos/${slug(repo)}/git/blobs`,
 				{ content: file.content, encoding: "utf-8" },
+				{ idempotent: true },
 			);
 			tree.push({
 				path: file.path,
@@ -106,6 +113,7 @@ export class RestGitHubClient implements GitDataClient {
 			"POST",
 			`/repos/${slug(repo)}/git/trees`,
 			{ base_tree: commit.tree.sha, tree },
+			{ idempotent: true },
 		);
 
 		const newCommit = await this.request<{ sha: string }>(
@@ -117,12 +125,19 @@ export class RestGitHubClient implements GitDataClient {
 				tree: newTree.sha,
 				parents: [baseCommitSha],
 			},
+			{ idempotent: true },
 		);
 
-		await this.request(repo, "POST", `/repos/${slug(repo)}/git/refs`, {
-			ref: `refs/heads/${request.branch}`,
-			sha: newCommit.sha,
-		});
+		await this.request(
+			repo,
+			"POST",
+			`/repos/${slug(repo)}/git/refs`,
+			{
+				ref: `refs/heads/${request.branch}`,
+				sha: newCommit.sha,
+			},
+			{ idempotent: false },
+		);
 
 		const pull = await this.request<{ number: number; html_url: string }>(
 			repo,
@@ -134,6 +149,7 @@ export class RestGitHubClient implements GitDataClient {
 				base: request.baseBranch,
 				body: request.body,
 			},
+			{ idempotent: false },
 		);
 
 		return {
@@ -149,17 +165,30 @@ export class RestGitHubClient implements GitDataClient {
 			repo,
 			"GET",
 			`/repos/${slug(repo)}/pulls/${number}`,
+			undefined,
+			{ idempotent: true },
 		);
 		if (pull.merged === true) return "merged";
 		return pull.state === "open" ? "open" : "closed";
 	}
 
+	/**
+	 * `idempotent` gates the transport retry loop, not the caller's own
+	 * business logic. `GET` and the three content-addressed Git Data POSTs
+	 * (`blobs`, `trees`, `commits`) are safe to re-issue on a network error or a
+	 * 5xx: the same content always yields the same sha. `POST /git/refs` and
+	 * `POST /pulls` are not — re-issuing either one after the response was lost
+	 * risks creating a second ref or a second pull request, so those two callers
+	 * pass `idempotent: false` and this loop makes exactly one attempt.
+	 */
 	private async request<T>(
 		repo: RepoRef,
 		method: "GET" | "POST",
 		path: string,
 		body?: unknown,
+		options: { idempotent?: boolean } = {},
 	): Promise<T> {
+		const idempotent = options.idempotent ?? method === "GET";
 		const label = `${repo.owner}/${repo.name}`;
 		let retries = 0;
 		let paused = false;
@@ -180,7 +209,7 @@ export class RestGitHubClient implements GitDataClient {
 					...(body === undefined ? {} : { body: JSON.stringify(body) }),
 				});
 			} catch (err) {
-				if (retries >= this.maxRetries) {
+				if (!idempotent || retries >= this.maxRetries) {
 					throw new GitHubError(
 						`${label}: network error: ${err instanceof Error ? err.message : String(err)}`,
 					);
@@ -199,7 +228,7 @@ export class RestGitHubClient implements GitDataClient {
 				}
 			}
 
-			if (response.status >= 500 && retries < this.maxRetries) {
+			if (idempotent && response.status >= 500 && retries < this.maxRetries) {
 				retries++;
 				await this.sleep(500 * 2 ** (retries - 1));
 				continue;
