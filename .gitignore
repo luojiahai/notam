@@ -12,3 +12,6 @@ build/
 web/dist/
 test-results/
 playwright-report/
+.agents/
+.claude/
+skills-lock.json
