@@ -11,6 +11,7 @@
 		"test": "bun run test:server && bun run test:web",
 		"test:server": "bun test tests/shared tests/store tests/jobs tests/core tests/server tests/cli tests/scripts tests/integration",
 		"test:web": "bun test --preload ./tests/web/happy-dom.ts tests/web",
+		"test:binary": "bun test tests/binary",
 		"test:e2e": "bunx playwright test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
