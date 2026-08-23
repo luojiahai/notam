@@ -41,27 +41,40 @@ export function defaultWebDistPath(
 	);
 }
 
-export async function loadAssetsFromDirectory(
-	dir: string,
-): Promise<AssetSource> {
-	const assets: AssetSource = new Map();
+/**
+ * Every file under `dir`, as sorted web-root paths (`/index.html`).
+ *
+ * Sorted because `scripts/build-binary.ts` renders a generated module from
+ * this list, and a generated file whose line order depends on readdir order is
+ * a diff that changes for no reason.
+ */
+export async function listAssetPaths(dir: string): Promise<string[]> {
 	let names: string[];
 	try {
 		names = await readdir(dir, { recursive: true });
 	} catch {
 		// A checkout that has never run `bun run build:web` is a normal state,
 		// not an error. createStaticHandler renders a page saying so.
-		return assets;
+		return [];
 	}
+	const paths: string[] = [];
 	for (const name of names) {
-		const absolute = join(dir, name);
-		const file = Bun.file(absolute);
 		// readdir(recursive) yields directories too; Bun.file on one is not
 		// readable, and `exists()` is false for it.
-		if (!(await file.exists())) continue;
-		assets.set(`/${name.split("\\").join("/")}`, {
-			contentType: contentTypeFor(name),
-			bytes: await file.arrayBuffer(),
+		if (!(await Bun.file(join(dir, name)).exists())) continue;
+		paths.push(`/${name.split("\\").join("/")}`);
+	}
+	return paths.sort();
+}
+
+export async function loadAssetsFromDirectory(
+	dir: string,
+): Promise<AssetSource> {
+	const assets: AssetSource = new Map();
+	for (const path of await listAssetPaths(dir)) {
+		assets.set(path, {
+			contentType: contentTypeFor(path),
+			bytes: await Bun.file(join(dir, path.slice(1))).arrayBuffer(),
 		});
 	}
 	return assets;

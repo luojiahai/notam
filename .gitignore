@@ -2,6 +2,7 @@
 docs/superpowers/
 node_modules/
 dist/
+build/
 *.db
 .DS_Store
 *.db-wal

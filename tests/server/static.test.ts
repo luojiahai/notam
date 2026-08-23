@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	createStaticHandler,
+	listAssetPaths,
 	loadAssetsFromDirectory,
 } from "../../src/server/static.ts";
 import { testContext } from "./helpers.ts";
@@ -39,6 +40,20 @@ describe("loadAssetsFromDirectory", () => {
 	test("a missing directory is an empty source, not a crash", async () => {
 		const assets = await loadAssetsFromDirectory("/definitely/not/here");
 		expect(assets.size).toBe(0);
+	});
+});
+
+describe("listAssetPaths", () => {
+	test("returns every file as a sorted web-root path", async () => {
+		expect(await listAssetPaths(await fixtureDir())).toEqual([
+			"/assets/app-abc123.css",
+			"/assets/app-abc123.js",
+			"/index.html",
+		]);
+	});
+
+	test("a missing directory is an empty list, not a crash", async () => {
+		expect(await listAssetPaths("/definitely/not/here")).toEqual([]);
 	});
 });
 

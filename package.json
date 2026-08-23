@@ -9,13 +9,15 @@
 	},
 	"scripts": {
 		"test": "bun run test:server && bun run test:web",
-		"test:server": "bun test tests/shared tests/store tests/jobs tests/core tests/server tests/cli tests/integration",
+		"test:server": "bun test tests/shared tests/store tests/jobs tests/core tests/server tests/cli tests/scripts tests/integration",
 		"test:web": "bun test --preload ./tests/web/happy-dom.ts tests/web",
 		"test:e2e": "bunx playwright test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"format": "biome check --write .",
 		"build:web": "bunx vite build --config web/vite.config.ts",
+		"build:binary": "bun run scripts/build-binary.ts",
+		"build:binaries": "bun run scripts/build-binary.ts --all",
 		"dev:web": "bunx vite --config web/vite.config.ts",
 		"start": "bun run src/cli/index.ts"
 	},
