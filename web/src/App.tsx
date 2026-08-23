@@ -11,6 +11,7 @@ import {
 	useRepos,
 	useSync,
 } from "./api/hooks.ts";
+import { EntriesTab } from "./components/EntriesTab.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
@@ -78,7 +79,8 @@ export function App() {
 	const repos = useRepos();
 	const [repoId, setRepoId] = useState<string | null>(null);
 	const [tab, setTab] = useState<"entries" | "rules">("entries");
-	const [drawer, setDrawer] = useState<DrawerTarget>(null);
+	// `drawer` itself is read by Task 14's drawer panel, not yet wired here.
+	const [, setDrawer] = useState<DrawerTarget>(null);
 	const [batch, setBatch] = useState<BatchState>({ queued: 0, running: 0 });
 
 	// Select the first repository as soon as one is known, and never fight the
@@ -148,17 +150,21 @@ export function App() {
 					Rules
 				</button>
 			</div>
-			<div className="table-wrap">
-				{repoId === null ? (
+			{repoId === null ? (
+				<div className="table-wrap">
 					<p className="secondary">Select a repository.</p>
-				) : (
-					<p className="secondary">
-						{tab === "entries" ? "Entries" : "Rules"} for {repo?.name} —{" "}
-						{batch.running} running, {batch.queued} queued
-						{drawer ? ` — drawer: ${drawer.kind} ${drawer.id}` : ""}
-					</p>
-				)}
-			</div>
+				</div>
+			) : tab === "entries" ? (
+				<EntriesTab
+					repoId={repoId}
+					batch={batch}
+					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
+				/>
+			) : (
+				<div className="table-wrap">
+					<p className="secondary">Rules for {repo?.name}</p>
+				</div>
+			)}
 		</Shell>
 	);
 }
