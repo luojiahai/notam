@@ -102,12 +102,30 @@ describe("createClaudeRunner", () => {
 	});
 
 	test("kills a hung process and reports a timeout", async () => {
-		await fakeClaude(`/bin/sleep 30`);
+		// Backgrounding with `&` then `wait`, not a bare `sleep 30`: a shell
+		// exec-optimises a command that is its last action (bash does this for
+		// a plain trailing `sleep 30`, so the shell process *becomes* sleep and
+		// a SIGKILL to the direct child lands squarely on it). `&` forces a real
+		// fork on every POSIX shell — the script has to keep running after it
+		// (into `wait`), so the shell can't replace itself with sleep. That
+		// leaves a grandchild that survives a SIGKILL to the shell and keeps
+		// holding the stdout/stderr pipes open, which is exactly the scenario
+		// (`claude` as a forking wrapper script) the runner has to survive.
+		await fakeClaude(`/bin/sleep 30 &\nwait`);
 		const started = Bun.nanoseconds();
 		const result = await runner()({
 			instruction: "I",
 			stdin: "P",
-			timeoutMs: 200,
+			// 2000, not 200: on some hosts (observed locally on macOS) the very
+			// first exec of a freshly-written, freshly-chmod'd script carries a
+			// few hundred ms of OS-level overhead before the shell runs a single
+			// instruction — nothing to do with this bug. At 200ms that overhead
+			// alone can beat the kill to the punch, so the shell never reaches
+			// `sleep 30 &` and no grandchild is ever created — the test would
+			// then "pass" for the wrong reason even against the bug. 2000ms
+			// leaves comfortable headroom for that startup cost everywhere,
+			// while still containing "200" for the assertion below.
+			timeoutMs: 2000,
 		});
 		const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
 
@@ -115,7 +133,10 @@ describe("createClaudeRunner", () => {
 		if (result.ok) throw new Error("expected a failure");
 		expect(result.kind).toBe("timeout");
 		expect(result.message).toContain("200");
-		expect(elapsedMs).toBeLessThan(5000);
+		// Loose enough to absorb scheduler/CI jitter, but tight enough that a
+		// return path which waits out the grandchild (the bug) still fails it:
+		// that path doesn't return until the 30s `sleep` exits.
+		expect(elapsedMs).toBeLessThan(3000);
 	});
 
 	test("reports a missing claude CLI without throwing", async () => {
