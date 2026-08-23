@@ -19,6 +19,7 @@
 		"build:web": "bunx vite build --config web/vite.config.ts",
 		"build:binary": "bun run scripts/build-binary.ts",
 		"build:binaries": "bun run scripts/build-binary.ts --all",
+		"checksums": "bun run scripts/checksums.ts --dir dist",
 		"dev:web": "bunx vite --config web/vite.config.ts",
 		"start": "bun run src/cli/index.ts"
 	},
