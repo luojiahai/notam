@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseArgs } from "../../scripts/build-binary.ts";
+import { parseArgs, webDistImportBase } from "../../scripts/build-binary.ts";
 import { hostPlatform } from "../../scripts/entry-module.ts";
 
 describe("parseArgs", () => {
@@ -51,5 +51,15 @@ describe("parseArgs", () => {
 
 	test("rejects an unknown flag", () => {
 		expect(() => parseArgs(["--fast"])).toThrow('Unknown flag "--fast"');
+	});
+});
+
+describe("webDistImportBase", () => {
+	test("leaves an already-relative result alone", () => {
+		expect(webDistImportBase("build", "web/dist")).toBe("../web/dist");
+	});
+
+	test("prefixes a bare descendant with ./ so bun build resolves it as a path, not a package", () => {
+		expect(webDistImportBase("build", "build/spa")).toBe("./spa");
 	});
 });

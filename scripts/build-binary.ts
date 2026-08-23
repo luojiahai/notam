@@ -24,6 +24,21 @@ import {
 /** Fixed, because the generated entrypoint imports `../src/...` relatively. */
 const BUILD_DIR = "build";
 
+/**
+ * The specifier the generated entrypoint imports web assets through, relative
+ * to `BUILD_DIR`. `relative()` omits a leading `./` whenever the target is a
+ * plain descendant (e.g. `--web-dist build/spa` relative to `build` is just
+ * `"spa"`), and a bare specifier like that is resolved by `bun build` as a
+ * *package* rather than a path. Prefixing restores the relative form without
+ * disturbing the `../`-style results `relative()` already produces correctly.
+ */
+export function webDistImportBase(buildDir: string, webDist: string): string {
+	const base = relative(resolve(buildDir), resolve(webDist))
+		.split("\\")
+		.join("/");
+	return base.startsWith(".") ? base : `./${base}`;
+}
+
 export type BuildOptions = {
 	platforms: Platform[];
 	version: string;
@@ -91,9 +106,7 @@ export async function buildBinaries(options: BuildOptions): Promise<string[]> {
 	await mkdir(options.outDir, { recursive: true });
 
 	const entryPath = join(BUILD_DIR, "entry.ts");
-	const base = relative(resolve(BUILD_DIR), resolve(options.webDist))
-		.split("\\")
-		.join("/");
+	const base = webDistImportBase(BUILD_DIR, options.webDist);
 	await Bun.write(entryPath, renderEntryModule(paths, base));
 
 	const built: string[] = [];
