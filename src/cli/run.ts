@@ -7,12 +7,9 @@ import {
 } from "../core/config/load.ts";
 import { refreshPromotions } from "../core/promotion/refresh.ts";
 import { createApp } from "../server/app.ts";
+import { resolveAssets } from "../server/assets.ts";
 import { type AppContext, createContext } from "../server/context.ts";
 import { type Listener, listen } from "../server/listen.ts";
-import {
-	defaultWebDistPath,
-	loadAssetsFromDirectory,
-} from "../server/static.ts";
 import { applyConfig } from "../store/bootstrap.ts";
 import { migrateDatabase } from "../store/migrations.ts";
 
@@ -140,7 +137,7 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 			ctx.analyseRunner.kick();
 		}
 
-		const assets = await loadAssetsFromDirectory(defaultWebDistPath(env));
+		const assets = await resolveAssets(env);
 		const app = createApp(ctx, assets);
 
 		listener = listen({

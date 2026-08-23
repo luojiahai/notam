@@ -102,19 +102,44 @@ describe("createClaudeRunner", () => {
 	});
 
 	test("kills a hung process and reports a timeout", async () => {
-		await fakeClaude(`/bin/sleep 30`);
+		// A shell running `sleep 30` as its last command still forks a real
+		// child to run it — `ps` shows a distinct pid for `sleep`, with the
+		// shell as its parent, on both bash and dash. So a bare trailing
+		// `sleep 30` already produces the grandchild this test needs; nothing
+		// here relies on defeating a shell optimisation, because there isn't
+		// one to defeat. `&` then `wait` is belt-and-braces: it makes that
+		// fork unconditional and timing-independent — the shell has to keep
+		// running past the backgrounded job (into `wait`), so there is no way
+		// for it to still be executing `sleep` itself when it's killed. That
+		// grandchild surviving a SIGKILL to the shell, still holding the
+		// stdout/stderr pipes open, is exactly the scenario (`claude` as a
+		// forking wrapper script) the runner has to survive.
+		await fakeClaude(`/bin/sleep 30 &\nwait`);
 		const started = Bun.nanoseconds();
 		const result = await runner()({
 			instruction: "I",
 			stdin: "P",
-			timeoutMs: 200,
+			// 2000, not 200: on some hosts (observed locally on macOS) the very
+			// first exec of a freshly-written, freshly-chmod'd script carries a
+			// few hundred ms of OS-level overhead before the shell runs a single
+			// instruction — nothing to do with this bug. At 200ms that overhead
+			// alone can beat the kill to the punch, so the shell never reaches
+			// `sleep 30 &` and no grandchild is ever created — the test would
+			// then "pass" for the wrong reason even against the bug. 2000ms
+			// leaves comfortable headroom for that startup cost everywhere.
+			timeoutMs: 2000,
 		});
 		const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
 
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected a failure");
 		expect(result.kind).toBe("timeout");
-		expect(result.message).toContain("200");
+		expect(result.message).toContain("2000ms");
+		// Deliberately loose: a hung process here means ~30s (the fake's
+		// `sleep 30`), so anything under several seconds already tells the two
+		// cases apart decisively. Kept at 5000, not tightened toward the
+		// 2000ms timeout, to leave headroom against scheduler contention on a
+		// shared CI runner rather than trade a flaky gate for a tighter bound.
 		expect(elapsedMs).toBeLessThan(5000);
 	});
 

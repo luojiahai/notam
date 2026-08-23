@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      # install.sh is POSIX sh, not bash: tests/install/install.test.ts spawns
+      # `sh`, and ubuntu-latest's /bin/sh is dash, so this is what actually
+      # proves install.sh runs under dash and not just under bash-as-sh.
+      - name: Unit, integration, and installer tests
+        run: bun run test
+
+      # Before Playwright: the end-to-end points the server at web/dist.
+      - name: Build the web UI
+        run: bun run build:web
+
+      - name: Install Playwright's browser
+        run: bunx playwright install --with-deps chromium
+
+      - name: End-to-end
+        run: bun run test:e2e
+
+      - name: Compiled binary smoke test
+        run: bun run test:binary
+
+      # Spec section 13: build all four targets on every pull request, so
+      # packaging breakage is caught before a tag depends on it. Runs through
+      # the documented `build:binaries` alias so that alias is exercised too.
+      - name: Build all four release targets
+        run: bun run build:binaries --version 0.0.0-ci
+
+      # Runs through the documented `checksums` alias so that alias is
+      # exercised too.
+      - name: Checksum them
+        run: |
+          bun run checksums
+          ls -la dist
+
+      - name: Upload the Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+          if-no-files-found: ignore
