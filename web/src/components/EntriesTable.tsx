@@ -177,7 +177,7 @@ export function EntriesTable(props: EntriesTableProps) {
 									{entry.analysis_state === "failed" ? (
 										<button
 											type="button"
-											onClick={() => props.onAnalyse([entry.id])}
+											onClick={() => requestAnalyse([entry.id])}
 										>
 											Retry
 										</button>

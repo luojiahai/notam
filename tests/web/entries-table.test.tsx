@@ -134,6 +134,42 @@ describe("EntriesTable", () => {
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
 
+	test("bulk re-analysis names the combined draft count across the selection", async () => {
+		const calls = draw({
+			entries: [
+				entry({
+					analysis_state: "analysed",
+					rule_count: 3,
+					draft_rule_count: 3,
+				}),
+				entry({
+					id: "e_2",
+					number: 4822,
+					analysis_state: "analysed",
+					rule_count: 2,
+					draft_rule_count: 2,
+				}),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /analyse selected \(2\)/i }),
+		);
+		expect(calls.analysed).toEqual([]);
+		const dialog = screen.getByRole("dialog");
+		expect(
+			within(dialog).getByText(
+				"This will discard 5 draft rules and re-run analysis.",
+			),
+		).toBeDefined();
+		await userEvent.click(
+			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
+		);
+		expect(calls.analysed).toEqual([["e_1", "e_2"]]);
+	});
+
 	test("cancelling the confirmation sends nothing", async () => {
 		const calls = draw({
 			entries: [entry({ analysis_state: "analysed", draft_rule_count: 1 })],
@@ -164,7 +200,39 @@ describe("EntriesTable", () => {
 		expect(
 			screen.getByText(/claude exited with code 1: model overloaded/),
 		).toBeDefined();
+		// No drafts on this entry, so the guard has nothing to confirm and
+		// Retry re-runs analysis in one click.
 		await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		expect(calls.analysed).toEqual([["e_1"]]);
+	});
+
+	test("Retry on a failed entry with drafts confirms the count first", async () => {
+		// A re-analysis that fails leaves the previous run's drafts in place
+		// (src/core/analysis/index.ts), so a failed entry can still carry
+		// draft_rule_count > 0. Retry is a re-analysis too, so it must not
+		// bypass the discard-count guard.
+		const calls = draw({
+			entries: [
+				entry({
+					analysis_state: "failed",
+					last_error: "claude exited with code 1: model overloaded",
+					rule_count: 2,
+					draft_rule_count: 2,
+				}),
+			],
+		});
+		await userEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+		// Nothing has been sent yet.
+		expect(calls.analysed).toEqual([]);
+		const dialog = screen.getByRole("dialog");
+		expect(
+			within(dialog).getByText(
+				"This will discard 2 draft rules and re-run analysis.",
+			),
+		).toBeDefined();
+		await userEvent.click(
+			within(dialog).getByRole("button", { name: /^re-analyse$/i }),
+		);
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
 
