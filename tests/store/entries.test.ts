@@ -7,6 +7,7 @@ import {
 	countEntriesByState,
 	getEntryByNumber,
 	listEntries,
+	listEntriesByIds,
 	listEntriesByState,
 	setAnalysisState,
 	upsertEntry,
@@ -14,6 +15,7 @@ import {
 import { upsertHost } from "../../src/store/hosts.ts";
 import { applyMigrations } from "../../src/store/migrations.ts";
 import { setWatermark, upsertRepo } from "../../src/store/repos.ts";
+import { normalisedEntry, SEED_NOW, seedDatabase } from "../helpers/seed.ts";
 
 const NOW = new Date("2026-08-23T09:00:00.000Z");
 
@@ -263,5 +265,17 @@ describe("analysis state", () => {
 			analysed: 0,
 			failed: 1,
 		});
+	});
+});
+
+describe("listEntriesByIds", () => {
+	test("returns only the ids asked for, and nothing for an empty list", () => {
+		const { db, repo, entry } = seedDatabase();
+		upsertEntry(db, repo.id, normalisedEntry({ number: 4822 }), SEED_NOW);
+		expect(listEntriesByIds(db, [])).toEqual([]);
+		const found = listEntriesByIds(db, [entry.id, "e_missing"]);
+		expect(found.map((row) => row.id)).toEqual([entry.id]);
+		expect(found[0]?.payload.number).toBe(4821);
+		db.close();
 	});
 });

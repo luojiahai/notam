@@ -8,18 +8,36 @@
 		"notam": "src/cli/index.ts"
 	},
 	"scripts": {
-		"test": "bun test",
+		"test": "bun run test:server && bun run test:web",
+		"test:server": "bun test tests/shared tests/store tests/jobs tests/core tests/server tests/cli tests/integration",
+		"test:web": "bun test --preload ./tests/web/happy-dom.ts tests/web",
+		"test:e2e": "bunx playwright test",
 		"typecheck": "tsc --noEmit",
 		"lint": "biome check .",
 		"format": "biome check --write .",
+		"build:web": "bunx vite build --config web/vite.config.ts",
+		"dev:web": "bunx vite --config web/vite.config.ts",
 		"start": "bun run src/cli/index.ts"
 	},
 	"dependencies": {
+		"@tanstack/react-query": "^5",
+		"hono": "^4",
+		"react": "^19",
+		"react-dom": "^19",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.10",
+		"@happy-dom/global-registrator": "^19",
+		"@playwright/test": "^1",
+		"@testing-library/dom": "^10",
+		"@testing-library/react": "^16",
+		"@testing-library/user-event": "^14",
 		"@types/bun": "^1.4.0",
-		"typescript": "^7.0.2"
+		"@types/react": "^19",
+		"@types/react-dom": "^19",
+		"@vitejs/plugin-react": "^5",
+		"typescript": "^7.0.2",
+		"vite": "^7"
 	}
 }

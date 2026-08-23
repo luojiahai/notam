@@ -202,3 +202,18 @@ export function countEntriesByState(
 	for (const row of rows) counts[row.analysis_state as AnalysisState] = row.c;
 	return counts;
 }
+
+/**
+ * Batched sibling of getEntry, so a rules table of N rows resolves its N
+ * provenance links in one query instead of N. Unknown ids are simply absent.
+ */
+export function listEntriesByIds(db: Database, ids: string[]): EntryRow[] {
+	if (ids.length === 0) return [];
+	const placeholders = ids.map(() => "?").join(",");
+	return db
+		.query<RawEntry, string[]>(
+			`SELECT * FROM entries WHERE id IN (${placeholders}) ORDER BY updated_at DESC, number DESC`,
+		)
+		.all(...ids)
+		.map(hydrate);
+}

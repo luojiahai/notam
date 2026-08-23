@@ -105,6 +105,13 @@ describe("notam (no command)", () => {
 		expect(result.output).toContain("Usage");
 	});
 
+	test("--help documents the run command", async () => {
+		const result = await notam(["--help"]);
+		expect(result.exitCode).toBe(0);
+		expect(result.output).toContain("notam run");
+		expect(result.output).toContain("--no-open");
+	});
+
 	test("names the unknown command it was given", async () => {
 		const result = await notam(["frobnicate"]);
 		expect(result.exitCode).not.toBe(0);

@@ -167,6 +167,51 @@ export function deleteDraftRulesForEntry(
 		.run(entryId).changes;
 }
 
+function countBy(
+	db: Database,
+	column: "entry_id" | "promotion_id",
+	ids: string[],
+	status?: RuleStatus,
+): Record<string, number> {
+	if (ids.length === 0) return {};
+	// Zero-filled so a caller can index the result directly rather than
+	// remembering to coalesce; the column name is a literal from this
+	// function's own signature, never caller text.
+	const counts: Record<string, number> = {};
+	for (const id of ids) counts[id] = 0;
+	const placeholders = ids.map(() => "?").join(",");
+	const clause = status ? " AND status = ?" : "";
+	const params = status ? [...ids, status] : ids;
+	const rows = db
+		.query<{ key: string; c: number }, string[]>(
+			`SELECT ${column} AS key, COUNT(*) AS c FROM rules WHERE ${column} IN (${placeholders})${clause} GROUP BY ${column}`,
+		)
+		.all(...params);
+	for (const row of rows) counts[row.key] = row.c;
+	return counts;
+}
+
+/**
+ * How many rules each entry produced. Pass a status to count only those —
+ * `"draft"` is what the re-analysis confirmation dialog needs, because drafts
+ * are the only rules a re-run discards.
+ */
+export function countRulesByEntryIds(
+	db: Database,
+	ids: string[],
+	status?: RuleStatus,
+): Record<string, number> {
+	return countBy(db, "entry_id", ids, status);
+}
+
+/** How many rules each promotion carries, for the sidebar's badges. */
+export function countRulesByPromotionIds(
+	db: Database,
+	ids: string[],
+): Record<string, number> {
+	return countBy(db, "promotion_id", ids);
+}
+
 /**
  * A blunt setter with no opinion about legality. Call it ONLY from
  * `core/rules/state.ts` — that module owns which transitions are legal, and a
