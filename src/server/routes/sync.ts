@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { SyncStarted } from "../../shared/api.ts";
 import type { AppContext } from "../context.ts";
 import { requireRepo } from "../lookup.ts";
 
@@ -14,7 +15,13 @@ export function syncRoutes(ctx: AppContext): Hono {
 		const repo = requireRepo(ctx.db, c.req.param("repoId"));
 		const job = ctx.queue.enqueue("sync", repo.id);
 		ctx.syncRunner.kick();
-		return c.json({ job_id: job?.id ?? null, already_running: job === null });
+		// Annotated, so drift from the shared wire schema is a compile error here
+		// rather than a parse failure in the browser.
+		const response: SyncStarted = {
+			job_id: job?.id ?? null,
+			already_running: job === null,
+		};
+		return c.json(response);
 	});
 
 	return app;

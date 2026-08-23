@@ -21,7 +21,6 @@
 	},
 	"dependencies": {
 		"@tanstack/react-query": "^5",
-		"@tanstack/react-table": "^8",
 		"hono": "^4",
 		"react": "^19",
 		"react-dom": "^19",

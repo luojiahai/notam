@@ -165,11 +165,19 @@ export function createContext(options: ContextOptions): AppContext {
 		},
 	};
 
+	// A drain-level throw is not a job failure — no entry row records it — so
+	// without this it vanishes entirely. The terminal is the only console this
+	// process has.
+	const onDrainError = (error: unknown) => {
+		console.error("Job runner drain failed:", error);
+	};
+
 	const analyseRunner = new JobRunner({
 		queue,
 		concurrency: config.analysis.concurrency,
 		handlers: { analyse: createAnalyseHandler(analysisDeps) },
 		onEvent: publishBatch,
+		onError: onDrainError,
 	});
 
 	const syncRunner = new JobRunner({
@@ -215,6 +223,7 @@ export function createContext(options: ContextOptions): AppContext {
 				});
 			}
 		},
+		onError: onDrainError,
 	});
 
 	const promotionDeps: PromotionDeps = { db, clientFor: gitDataFor, now };

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ConfigError } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
 import { PromotionError } from "../core/promotion/index.ts";
 import { RuleTransitionError } from "../core/rules/state.ts";
@@ -20,6 +21,14 @@ export class HttpError extends Error {
  * A GitHubError is 502 and not 500: the failure is upstream, and spec section 7
  * requires GitHub's own text to reach the user verbatim, which `messageFor`
  * below guarantees by never rewriting an Error's message.
+ *
+ * A ConfigError is 503 and not 500, because it can genuinely reach a request:
+ * `applyConfig` is additive, so a host removed from config.yaml — or one whose
+ * `token_env` was renamed — keeps its rows, and the clients resolve their
+ * tokens from those rows lazily. The server is running and the code is fine;
+ * this one repository cannot be served until the environment is fixed, and the
+ * message says exactly which variable to set. Keeping it out of the 500 band
+ * also keeps 500 meaning "unexpected", which is what app.ts logs.
  */
 export function statusFor(error: unknown): number {
 	if (error instanceof HttpError) return error.status;
@@ -27,6 +36,7 @@ export function statusFor(error: unknown): number {
 	if (error instanceof PromotionError) return 400;
 	if (error instanceof RuleTransitionError) return 409;
 	if (error instanceof GitHubError) return 502;
+	if (error instanceof ConfigError) return 503;
 	return 500;
 }
 

@@ -43,15 +43,11 @@ export function ruleRoutes(ctx: AppContext): Hono {
 	 */
 	app.post("/rules/status", async (c) => {
 		const body = await readBody(c, RuleStatusRequestSchema);
+		// Validate the whole selection before moving any of it, the way
+		// /entries/analyse does, and let `requireRule` own the 404 envelope so
+		// there is only ever one copy of ApiErrorSchema's shape.
+		for (const id of body.rule_ids) requireRule(ctx.db, id);
 		const rules = listRulesByIds(ctx.db, body.rule_ids);
-		if (rules.length !== new Set(body.rule_ids).size) {
-			const found = new Set(rules.map((rule) => rule.id));
-			const missing = body.rule_ids.filter((id) => !found.has(id));
-			return c.json(
-				{ error: { message: `No rule with id ${missing.join(", ")}` } },
-				404,
-			);
-		}
 		const updated = transitionRules(
 			ctx.db,
 			rules.map((rule) => rule.id),

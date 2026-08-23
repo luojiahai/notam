@@ -96,7 +96,13 @@ export function startGitHubStub(): Promise<GitHubStub> {
 					});
 				}
 				return send(404, { message: `stub has no route for ${path}` });
-			})();
+			})().catch((error: unknown) => {
+				// Without this a malformed body would reject into an unhandled
+				// rejection and leave the client hanging until Playwright's
+				// timeout, hiding whatever actually went wrong.
+				response.writeHead(500, { "content-type": "application/json" });
+				response.end(JSON.stringify({ message: String(error) }));
+			});
 		},
 	);
 

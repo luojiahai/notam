@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { GitHubError } from "../../src/core/github/client.ts";
+import { createApp } from "../../src/server/app.ts";
+import { createContext } from "../../src/server/context.ts";
 import type { ServerEvent } from "../../src/shared/api.ts";
 import {
 	PromotionPlanSchema,
@@ -10,8 +12,8 @@ import { getEntryByNumber, upsertEntry } from "../../src/store/entries.ts";
 import { listPromotions } from "../../src/store/promotions.ts";
 import { upsertRepo } from "../../src/store/repos.ts";
 import { insertRules, listRulesByEntry } from "../../src/store/rules.ts";
-import { normalisedEntry, SEED_NOW } from "../helpers/seed.ts";
-import { testContext } from "./helpers.ts";
+import { normalisedEntry, SEED_NOW, seedDatabase } from "../helpers/seed.ts";
+import { TEST_CONFIG, testContext } from "./helpers.ts";
 
 function seedDraft(harness: ReturnType<typeof testContext>) {
 	return insertRules(
@@ -31,6 +33,44 @@ function seedDraft(harness: ReturnType<typeof testContext>) {
 		],
 		SEED_NOW,
 	);
+}
+
+/** A second repository with one entry and one draft rule of its own. */
+function seedOtherRepo(harness: ReturnType<typeof testContext>) {
+	const repo = upsertRepo(
+		harness.db,
+		"github",
+		{
+			host: "github",
+			name: "acme/other",
+			path_globs: ["**"],
+			default_branch: "main",
+			window_days: 180,
+		},
+		SEED_NOW,
+	);
+	upsertEntry(harness.db, repo.id, normalisedEntry({ number: 77 }), SEED_NOW);
+	const entry = getEntryByNumber(harness.db, repo.id, 77);
+	if (!entry) throw new Error("second entry vanished");
+	const [rule] = insertRules(
+		harness.db,
+		repo.id,
+		entry.id,
+		[
+			{
+				kind: "dont",
+				directive: "Never round money with floats.",
+				rationale: "Money is integers.",
+				scope_globs: [],
+				confidence: 0.8,
+				source_comment_urls: [],
+				file_slug: "never-round-money-with-floats",
+			},
+		],
+		SEED_NOW,
+	);
+	if (!rule) throw new Error("second rule vanished");
+	return { repo, rule };
 }
 
 function post(
@@ -196,40 +236,7 @@ describe("promotion routes", () => {
 		const harness = testContext();
 		const [mine] = seedDraft(harness);
 		if (!mine) throw new Error("seed rule vanished");
-		const other = upsertRepo(
-			harness.db,
-			"github",
-			{
-				host: "github",
-				name: "acme/other",
-				path_globs: ["**"],
-				default_branch: "main",
-				window_days: 180,
-			},
-			SEED_NOW,
-		);
-		const normalised = normalisedEntry({ number: 77 });
-		upsertEntry(harness.db, other.id, normalised, SEED_NOW);
-		const otherEntry = getEntryByNumber(harness.db, other.id, 77);
-		if (!otherEntry) throw new Error("second entry vanished");
-		const [theirs] = insertRules(
-			harness.db,
-			other.id,
-			otherEntry.id,
-			[
-				{
-					kind: "dont",
-					directive: "Never round money with floats.",
-					rationale: "Money is integers.",
-					scope_globs: [],
-					confidence: 0.8,
-					source_comment_urls: [],
-					file_slug: "never-round-money-with-floats",
-				},
-			],
-			SEED_NOW,
-		);
-		if (!theirs) throw new Error("second rule vanished");
+		const theirs = seedOtherRepo(harness).rule;
 		const response = await post(harness, "/api/promotions", {
 			rule_ids: [mine.id, theirs.id],
 		});
@@ -315,6 +322,98 @@ describe("promotion routes", () => {
 			"proposed",
 		);
 		harness.close();
+	});
+
+	test("refresh scoped to a repository leaves every other repository alone", async () => {
+		const harness = testContext();
+		const [mine] = seedDraft(harness);
+		if (!mine) throw new Error("seed rule vanished");
+		const theirs = seedOtherRepo(harness);
+		const minePromotion = PromotionSummarySchema.parse(
+			await (
+				await post(harness, "/api/promotions", { rule_ids: [mine.id] })
+			).json(),
+		);
+		const theirPromotion = PromotionSummarySchema.parse(
+			await (
+				await post(harness, "/api/promotions", { rule_ids: [theirs.rule.id] })
+			).json(),
+		);
+
+		harness.gitData.prState = "merged";
+		const summary = RefreshSummarySchema.parse(
+			await (
+				await post(harness, "/api/promotions/refresh", {
+					repo_id: theirs.repo.id,
+				})
+			).json(),
+		);
+
+		// Both promotions are open and both would report "merged" if checked;
+		// only the named repository's may have been.
+		expect(summary.checked).toBe(1);
+		expect(summary.merged).toBe(1);
+		const states = new Map(
+			listPromotions(harness.db).map((promotion) => [
+				promotion.id,
+				promotion.state,
+			]),
+		);
+		expect(states.get(theirPromotion.id)).toBe("merged");
+		expect(states.get(minePromotion.id)).toBe("open");
+		harness.close();
+	});
+
+	/**
+	 * `applyConfig` is additive, so a host removed from config.yaml — or one
+	 * whose `token_env` was renamed — keeps its rows and its repositories keep
+	 * appearing. The clients resolve their tokens from those rows lazily, so
+	 * the ConfigError lands inside a request. It is a configuration problem,
+	 * not a bug: 503 with the variable named, not an anonymous 500.
+	 */
+	test("a host whose token variable is unset answers 503 naming the variable", async () => {
+		const seeded = seedDatabase();
+		const ctx = createContext({
+			db: seeded.db,
+			config: TEST_CONFIG,
+			configPath: "/tmp/notam-test/config.yaml",
+			dbPath: ":memory:",
+			now: () => SEED_NOW,
+			version: "test",
+			claudeAvailable: true,
+			// No gitDataFor: this is the production client factory, resolving its
+			// token from an environment that no longer carries it.
+			env: {},
+		});
+		const app = createApp(ctx);
+		const [rule] = insertRules(
+			seeded.db,
+			seeded.repo.id,
+			seeded.entry.id,
+			[
+				{
+					kind: "do",
+					directive: "Always add a regression test alongside a bug fix.",
+					rationale: "Reviewers blocked untested payment fixes.",
+					scope_globs: [],
+					confidence: 0.9,
+					source_comment_urls: [],
+					file_slug: "always-add-a-regression-test",
+				},
+			],
+			SEED_NOW,
+		);
+		if (!rule) throw new Error("seed rule vanished");
+		const response = await app.request("/api/promotions/plan", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: [rule.id] }),
+		});
+		expect(response.status).toBe(503);
+		const body = (await response.json()) as { error: { message: string } };
+		expect(body.error.message).toContain("NOTAM_TEST_TOKEN");
+		ctx.shutdown();
+		seeded.db.close();
 	});
 
 	test("refresh with nothing open reports an empty summary", async () => {

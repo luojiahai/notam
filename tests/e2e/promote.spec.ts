@@ -74,7 +74,9 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
 	child?.kill("SIGTERM");
 	await stub?.close();
-	rmSync(home, { recursive: true, force: true });
+	// Guarded: a beforeAll that died before assigning `home` would otherwise
+	// throw here and bury the real failure.
+	if (home) rmSync(home, { recursive: true, force: true });
 });
 
 test("unanalysed → analyse → review rules → create promotion PR", async ({

@@ -131,6 +131,25 @@ describe("rule routes", () => {
 		harness.close();
 	});
 
+	test("an unknown rule id is a 404 in the shared envelope, and moves nothing", async () => {
+		const harness = testContext();
+		const rules = seedRules(harness);
+		const ids = rules.map((rule) => rule.id);
+		const response = await harness.app.request("/api/rules/status", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				rule_ids: [...ids, "ru_nope"],
+				status: "abandoned",
+			}),
+		});
+		expect(response.status).toBe(404);
+		const body = (await response.json()) as { error: { message: string } };
+		expect(body.error.message).toBe("No rule with id ru_nope");
+		expect(getRule(harness.db, ids[0] as string)?.status).toBe("draft");
+		harness.close();
+	});
+
 	test("an illegal transition is a 409 and changes nothing", async () => {
 		const harness = testContext();
 		const rules = seedRules(harness);

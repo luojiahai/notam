@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { isLoopbackHost } from "../../src/server/app.ts";
 import {
 	EntriesResponseSchema,
 	EntryDetailSchema,
@@ -122,5 +123,58 @@ describe("read routes", () => {
 		expect(response.status).toBe(404);
 		expect(response.headers.get("content-type")).toContain("application/json");
 		harness.close();
+	});
+});
+
+/**
+ * Binding 127.0.0.1 keeps the network off this port; it does not keep a
+ * browser off it. A page whose DNS re-resolves to 127.0.0.1 would be
+ * same-origin to the browser and there is no authentication behind these
+ * routes, so a foreign Host header is refused outright.
+ */
+describe("host guard", () => {
+	test("a foreign Host is refused before any route runs", async () => {
+		const harness = testContext();
+		const response = await harness.app.request("/api/repos", {
+			headers: { host: "evil.com" },
+		});
+		expect(response.status).toBe(403);
+		const body = (await response.json()) as { error: { message: string } };
+		expect(body.error.message).toContain("evil.com");
+		harness.close();
+	});
+
+	test("the guard covers the SPA and the event stream too, not just /api", async () => {
+		const harness = testContext();
+		for (const path of ["/", "/api/events"]) {
+			const response = await harness.app.request(path, {
+				headers: { host: "attacker.example" },
+			});
+			expect(response.status).toBe(403);
+		}
+		harness.close();
+	});
+
+	test("loopback hosts, with or without a port, are allowed", async () => {
+		const harness = testContext();
+		for (const host of ["127.0.0.1:4317", "localhost:4317", "localhost"]) {
+			const response = await harness.app.request("/api/repos", {
+				headers: { host },
+			});
+			expect(response.status).toBe(200);
+		}
+		harness.close();
+	});
+
+	test("isLoopbackHost accepts only the loopback names", () => {
+		expect(isLoopbackHost("127.0.0.1:8787")).toBe(true);
+		expect(isLoopbackHost("LocalHost:8787")).toBe(true);
+		expect(isLoopbackHost("[::1]:8787")).toBe(true);
+		expect(isLoopbackHost("evil.com")).toBe(false);
+		// The one that matters: a name that merely contains a loopback name.
+		expect(isLoopbackHost("127.0.0.1.evil.com")).toBe(false);
+		expect(isLoopbackHost("localhost.evil.com:8787")).toBe(false);
+		expect(isLoopbackHost(undefined)).toBe(false);
+		expect(isLoopbackHost("")).toBe(false);
 	});
 });

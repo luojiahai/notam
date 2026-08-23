@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { queueEntries } from "../../core/analysis/index.ts";
-import { AnalyseRequestSchema, AnalysisStateSchema } from "../../shared/api.ts";
+import {
+	AnalyseRequestSchema,
+	AnalysisStateSchema,
+	type EntriesResponse,
+} from "../../shared/api.ts";
 import { listEntries, listEntriesByState } from "../../store/entries.ts";
 import { countRulesByEntryIds, listRulesByEntry } from "../../store/rules.ts";
 import { readBody } from "../body.ts";
@@ -25,7 +29,9 @@ export function entryRoutes(ctx: AppContext): Hono {
 		const ids = matched.map((entry) => entry.id);
 		const ruleCounts = countRulesByEntryIds(ctx.db, ids);
 		const draftCounts = countRulesByEntryIds(ctx.db, ids, "draft");
-		return c.json({
+		// Annotated, so drift from the shared wire schema is a compile error here
+		// rather than a parse failure in the browser.
+		const response: EntriesResponse = {
 			entries: matched.map((entry) =>
 				toEntrySummary(
 					entry,
@@ -37,7 +43,8 @@ export function entryRoutes(ctx: AppContext): Hono {
 			// Unfiltered on purpose: the chips show the whole picture even when
 			// one of them is active.
 			counts: entryCounts(ctx.db, repo.id),
-		});
+		};
+		return c.json(response);
 	});
 
 	app.get("/entries/:entryId", (c) => {
