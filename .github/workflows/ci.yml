@@ -13,6 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Its own job, so a missing changeset is a red check in half a minute rather
+  # than something buried behind Playwright. The version pull request is exempt
+  # because it *spends* the changesets: it deletes every one of them while
+  # editing package.json and CHANGELOG.md, and so would fail the gate that
+  # Changesets itself asks for.
+  changeset:
+    name: Changeset
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.head_ref != 'changeset-release/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
+
+      - run: bun install --frozen-lockfile
+
+      # `changeset status --since` exits 1 when packages changed and no
+      # changeset says how. A pull request that truly changes nothing a user
+      # could observe still declares that, with `bun run changeset --empty`.
+      - name: Every change declares its release
+        run: bun run changeset:status
+
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 30
