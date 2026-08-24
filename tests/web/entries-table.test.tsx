@@ -596,9 +596,4 @@ describe("stopping an analysis", () => {
 		expect(calls.cancelledAll).toBe(1);
 		expect(calls.cancelled).toEqual([]);
 	});
-
-	test("the acknowledgement is shown as a status, not as an error", () => {
-		draw({ status: "Stopped 12" });
-		expect(screen.getByText("Stopped 12")).toBeTruthy();
-	});
 });

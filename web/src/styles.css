@@ -1116,16 +1116,6 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	/* Server text of unbounded length, now sharing a row with the controls. */
 	max-width: 22rem;
 }
-/*
- * The neutral half of the toolbar's feedback: what a press just did, as
- * opposed to `.bulk-error`, which is why one failed. Kept visually quiet —
- * "Stopped 12" is a confirmation, not something to act on.
- */
-.bulk-status {
-	color: var(--text-muted);
-	font-size: 0.75rem;
-	white-space: nowrap;
-}
 .bulk-progress {
 	font-family: var(--font-mono);
 	font-size: 0.6875rem;

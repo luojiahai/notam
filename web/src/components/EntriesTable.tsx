@@ -26,8 +26,6 @@ export type EntriesTableProps = {
 	loading: boolean;
 	/** The last mutation failure, verbatim from the server. */
 	error?: string | null;
-	/** What the last press did, in the user's own terms. Not a failure. */
-	status?: string | null;
 };
 
 const STATE_LABELS: Record<AnalysisState, string> = {
@@ -183,7 +181,6 @@ export function EntriesTable(props: EntriesTableProps) {
 						Stop selected ({selection.size})
 					</button>
 					{props.error && <span className="bulk-error">{props.error}</span>}
-					{props.status && <span className="bulk-status">{props.status}</span>}
 					<span className="toolbar-divider" />
 					{/*
 						Counted from this repository's own entry states — the source

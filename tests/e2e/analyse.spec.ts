@@ -39,7 +39,6 @@ test("analyse → stop → the entry returns to unanalysed and is analysable aga
 	await expect(page.getByText(/0 running, 0 queued/)).toBeVisible({
 		timeout: 30_000,
 	});
-	await expect(page.getByText("Stopped 2")).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Unanalysed 2" }),
 	).toBeVisible();

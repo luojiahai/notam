@@ -254,11 +254,6 @@ export function App() {
 					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
 					onCancel={(ids) => cancelAnalysis.mutate(ids)}
 					onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
-					stopped={
-						cancelAnalysis.data?.cancelled.length ??
-						cancelRepoAnalysis.data?.cancelled.length ??
-						null
-					}
 				/>
 			) : (
 				<RulesTab
