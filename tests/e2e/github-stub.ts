@@ -20,6 +20,8 @@ export type GitHubStub = {
 	blobs: CreatedBlob[];
 	/** Flip to make the next getPRState answer "merged". */
 	merged: boolean;
+	/** Resolves once the GraphQL listing has been asked for, so a test knows a sync is in flight. */
+	listingRequested: Promise<void>;
 	close: () => Promise<void>;
 };
 
@@ -46,6 +48,10 @@ export function startGitHubStub(): Promise<GitHubStub> {
 	const blobs: CreatedBlob[] = [];
 	const state = { merged: false };
 	let nextSha = 1;
+	let announceListing!: () => void;
+	const listingRequested = new Promise<void>((done) => {
+		announceListing = done;
+	});
 
 	const server = createServer(
 		(request: IncomingMessage, response: ServerResponse) => {
@@ -57,6 +63,19 @@ export function startGitHubStub(): Promise<GitHubStub> {
 					response.end(JSON.stringify(payload));
 				};
 				const sha = () => `sha${nextSha++}`;
+
+				/*
+				 * The listing never answers. Sync's only way out is the abort
+				 * signal, which is exactly the state a user reaches for Stop in:
+				 * a request that is going to sit there. The socket is left open
+				 * deliberately — closing it would look like a network failure
+				 * and drive the retry path instead.
+				 */
+				if (path === "/graphql") {
+					await readBody(request);
+					announceListing();
+					return;
+				}
 
 				// The pre-flight: no .claude/rules directory yet.
 				if (path.endsWith("/contents/.claude/rules")) {
@@ -113,6 +132,7 @@ export function startGitHubStub(): Promise<GitHubStub> {
 				url: `http://127.0.0.1:${port}`,
 				pulls,
 				blobs,
+				listingRequested,
 				get merged() {
 					return state.merged;
 				},
