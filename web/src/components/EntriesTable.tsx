@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, Square } from "lucide-react";
 import { useEffect, useState } from "react";
 import type {
 	AnalysisState,
@@ -21,9 +21,13 @@ export type EntriesTableProps = {
 	onQueryChange: (query: string) => void;
 	onOpenEntry: (entryId: string) => void;
 	onAnalyse: (entryIds: string[]) => void;
+	onCancel: (entryIds: string[]) => void;
+	onCancelAll: () => void;
 	loading: boolean;
 	/** The last mutation failure, verbatim from the server. */
 	error?: string | null;
+	/** What the last press did, in the user's own terms. Not a failure. */
+	status?: string | null;
 };
 
 const STATE_LABELS: Record<AnalysisState, string> = {
@@ -117,6 +121,11 @@ export function EntriesTable(props: EntriesTableProps) {
 		(entry) => visible.get(entry.id) ?? entry,
 	);
 	const allBusy = selected.length > 0 && selected.every(isBusy);
+	// The mirror of `allBusy`, and deliberately not its negation: a mixed
+	// selection is actionable by both buttons, and the server skips whichever
+	// ids the press does not apply to.
+	const anyBusy = selected.some(isBusy);
+	const pendingWork = props.counts.running + props.counts.queued;
 
 	const pendingDrafts = pending === null ? 0 : draftCountFor(pending.ids);
 	const filtered = props.state !== "" || props.query !== "";
@@ -156,7 +165,25 @@ export function EntriesTable(props: EntriesTableProps) {
 						<Sparkles className="icon" aria-hidden="true" />
 						Analyse selected ({selection.size})
 					</button>
+					{/*
+						Clears the selection for the same reason the Analyse button
+						does: a stopped row leaves the Queued and Running chips, so
+						keeping it selected would leave both buttons disabled over
+						ids that are no longer anywhere on screen.
+					*/}
+					<button
+						type="button"
+						disabled={!anyBusy}
+						onClick={() => {
+							props.onCancel(selection.ids);
+							selection.clear();
+						}}
+					>
+						<Square className="icon" aria-hidden="true" />
+						Stop selected ({selection.size})
+					</button>
 					{props.error && <span className="bulk-error">{props.error}</span>}
+					{props.status && <span className="bulk-status">{props.status}</span>}
 					<span className="toolbar-divider" />
 					{/*
 						Counted from this repository's own entry states — the source
@@ -165,12 +192,23 @@ export function EntriesTable(props: EntriesTableProps) {
 						analysis must not reflow the toolbar under the button that
 						started it.
 					*/}
-					<span
-						className="bulk-progress"
-						data-active={props.counts.running + props.counts.queued > 0}
-					>
+					<span className="bulk-progress" data-active={pendingWork > 0}>
 						{props.counts.running} running, {props.counts.queued} queued
 					</span>
+					{/*
+						Beside the counter it empties, rather than in the repository
+						bar: the two read as one statement, and the count is what
+						tells the user what the button is about to do.
+					*/}
+					<button
+						type="button"
+						className="btn-sm"
+						disabled={pendingWork === 0}
+						onClick={props.onCancelAll}
+					>
+						<Square className="icon" aria-hidden="true" />
+						Stop all
+					</button>
 				</div>
 			</div>
 
@@ -269,12 +307,14 @@ export function EntriesTable(props: EntriesTableProps) {
 									<td>
 										<StatusPill status={entry.analysis_state} />
 									</td>
-									<td>
+									<td className="row-actions">
 										{/*
-											One action for every state. The label is the same verb
-											the toolbar and the drawer use; the aria-label carries
-											the number so a table of them does not read as a column
-											of identical "Analyse" buttons.
+											Two controls rather than one that changes verb: a row
+											transitions under the pointer, and a position the user
+											has learned is disabled while busy must not become a
+											live Stop at exactly the moment it is busy. The
+											aria-labels carry the number so a column of them does
+											not read as identical buttons.
 										*/}
 										<button
 											type="button"
@@ -285,6 +325,15 @@ export function EntriesTable(props: EntriesTableProps) {
 										>
 											<Sparkles className="icon" aria-hidden="true" />
 											Analyse
+										</button>
+										<button
+											type="button"
+											className="btn-sm btn-icon"
+											aria-label={`Stop analysing #${entry.number}`}
+											disabled={!isBusy(entry)}
+											onClick={() => props.onCancel([entry.id])}
+										>
+											<Square className="icon" aria-hidden="true" />
 										</button>
 									</td>
 								</tr>

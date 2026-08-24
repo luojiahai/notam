@@ -6,6 +6,7 @@ import { useServerEvents } from "./api/events.ts";
 import {
 	queryKeys,
 	useAnalyse,
+	useCancelAnalysis,
 	useCancelSync,
 	useMeta,
 	usePromotions,
@@ -132,6 +133,7 @@ export function App() {
 	const cancelSync = useCancelSync();
 	const refresh = useRefreshPromotions();
 	const analyse = useAnalyse();
+	const cancelAnalysis = useCancelAnalysis();
 
 	const recordProgress = useCallback(
 		(id: string, totals: SyncProgress | null) => {
@@ -177,6 +179,7 @@ export function App() {
 			: []),
 		...(sync.error ? [sync.error.message] : []),
 		...(cancelSync.error ? [cancelSync.error.message] : []),
+		...(cancelAnalysis.error ? [cancelAnalysis.error.message] : []),
 	];
 
 	return (
@@ -256,6 +259,7 @@ export function App() {
 					entryId={drawer.id}
 					onClose={() => setDrawer(null)}
 					onReanalyse={(entryId) => analyse.mutate([entryId])}
+					onCancel={(entryId) => cancelAnalysis.mutate([entryId])}
 					onOpenRule={(ruleId) => setDrawer({ kind: "rule", id: ruleId })}
 				/>
 			)}

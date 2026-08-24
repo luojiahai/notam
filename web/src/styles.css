@@ -362,6 +362,16 @@ button:disabled {
 }
 
 /*
+ * A button carrying only an icon: square, so a column of them lines up with
+ * the labelled buttons beside them rather than collapsing to the icon's width.
+ */
+.btn-icon {
+	padding: 0;
+	width: 1.5rem;
+	justify-content: center;
+}
+
+/*
  * Lucide draws at 24px on a 2px stroke. Sized down here rather than per call
  * site so every icon in the app matches, and `em` so a small button's icon
  * shrinks with its text instead of overwhelming it.
@@ -1106,6 +1116,16 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	/* Server text of unbounded length, now sharing a row with the controls. */
 	max-width: 22rem;
 }
+/*
+ * The neutral half of the toolbar's feedback: what a press just did, as
+ * opposed to `.bulk-error`, which is why one failed. Kept visually quiet —
+ * "Stopped 12" is a confirmation, not something to act on.
+ */
+.bulk-status {
+	color: var(--text-muted);
+	font-size: 0.75rem;
+	white-space: nowrap;
+}
 .bulk-progress {
 	font-family: var(--font-mono);
 	font-size: 0.6875rem;
@@ -1558,4 +1578,16 @@ a.quote-author:hover {
 		/* biome-ignore lint/complexity/noImportantStyles: as above. */
 		transition-duration: 0.001ms !important;
 	}
+}
+
+/*
+ * The row's Analyse and Stop pair. Nowrap because the cell is the narrowest in
+ * the table and the two must never stack, which would change the row's height
+ * for as long as an analysis is running.
+ */
+.row-actions {
+	display: flex;
+	gap: 0.25rem;
+	align-items: center;
+	white-space: nowrap;
 }

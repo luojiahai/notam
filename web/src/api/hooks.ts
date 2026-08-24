@@ -7,6 +7,8 @@ import {
 import { z } from "zod";
 import {
 	type AnalysisState,
+	type CancelResult,
+	CancelResultSchema,
 	type EntriesResponse,
 	EntriesResponseSchema,
 	type EntryDetail,
@@ -21,6 +23,8 @@ import {
 	QueueResultSchema,
 	RefreshSummarySchema,
 	type RefreshSummaryView,
+	type RepoAnalyseCancelled,
+	RepoAnalyseCancelledSchema,
 	type RepoSummary,
 	RepoSummarySchema,
 	type RuleDetail,
@@ -179,6 +183,47 @@ export function useAnalyse() {
 	return useMutation<QueueResult, Error, string[]>({
 		mutationFn: (entryIds) =>
 			post(QueueResultSchema, "/api/entries/analyse", { entry_ids: entryIds }),
+		onSuccess: () => {
+			void client.invalidateQueries({ queryKey: ["entries"] });
+			void client.invalidateQueries({ queryKey: ["entry"] });
+			void client.invalidateQueries({ queryKey: queryKeys.repos });
+		},
+	});
+}
+
+/**
+ * Stopping an analysis that has already finished is not an error: the entry
+ * comes back `skipped` and the refetch shows whatever actually happened.
+ *
+ * Invalidating immediately would race a run still unwinding inside its
+ * handler, so a refetch can briefly still show the entry busy. The entry event
+ * that follows the revert is what settles it.
+ */
+export function useCancelAnalysis() {
+	const client = useQueryClient();
+	return useMutation<CancelResult, Error, string[]>({
+		mutationFn: (entryIds) =>
+			post(CancelResultSchema, "/api/entries/analyse/cancel", {
+				entry_ids: entryIds,
+			}),
+		onSuccess: () => {
+			void client.invalidateQueries({ queryKey: ["entries"] });
+			void client.invalidateQueries({ queryKey: ["entry"] });
+			void client.invalidateQueries({ queryKey: queryKeys.repos });
+		},
+	});
+}
+
+/** Stops everything this repository has queued or running, in one press. */
+export function useCancelRepoAnalysis() {
+	const client = useQueryClient();
+	return useMutation<RepoAnalyseCancelled, Error, string>({
+		mutationFn: (repoId) =>
+			post(
+				RepoAnalyseCancelledSchema,
+				`/api/repos/${repoId}/analyse/cancel`,
+				{},
+			),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: ["entries"] });
 			void client.invalidateQueries({ queryKey: ["entry"] });
