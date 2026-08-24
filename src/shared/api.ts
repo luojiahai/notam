@@ -276,6 +276,23 @@ export const QueueResultSchema = z.object({
 	skipped: z.array(z.string()),
 });
 
+/**
+ * `skipped` is an entry that had nothing pending — a stop press that arrived
+ * after the work finished on its own. An outcome, never an error.
+ */
+export const CancelResultSchema = z.object({
+	cancelled: z.array(z.string()),
+	skipped: z.array(z.string()),
+});
+
+/**
+ * No `skipped` counterpart: nothing was named by the caller, so nothing can be
+ * reported absent.
+ */
+export const RepoAnalyseCancelledSchema = z.object({
+	cancelled: z.array(z.string()),
+});
+
 export const SyncStartedSchema = z.object({
 	job_id: z.string().nullable(),
 	/** True when a sync for this repository was already queued or running. */
@@ -379,6 +396,8 @@ export type PromotionPlanView = z.infer<typeof PromotionPlanSchema>;
 export type RefreshSummaryView = z.infer<typeof RefreshSummarySchema>;
 export type Meta = z.infer<typeof MetaSchema>;
 export type QueueResult = z.infer<typeof QueueResultSchema>;
+export type CancelResult = z.infer<typeof CancelResultSchema>;
+export type RepoAnalyseCancelled = z.infer<typeof RepoAnalyseCancelledSchema>;
 export type SyncStarted = z.infer<typeof SyncStartedSchema>;
 export type SyncCancelled = z.infer<typeof SyncCancelledSchema>;
 export type RepoSync = z.infer<typeof RepoSyncSchema>;

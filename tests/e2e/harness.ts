@@ -37,7 +37,9 @@ async function waitForServer(url: string): Promise<void> {
  * GitHub and a fake `claude` first on PATH. Each call owns its own port, home
  * and child process, which is why the Playwright config runs one worker.
  */
-export async function startHarness(): Promise<Harness> {
+export async function startHarness(
+	options: { hangingAnalyser?: boolean } = {},
+): Promise<Harness> {
 	const stub = await startGitHubStub();
 	const home = mkdtempSync(join(tmpdir(), "notam-e2e-"));
 
@@ -70,6 +72,9 @@ export async function startHarness(): Promise<Harness> {
 				NOTAM_E2E_TOKEN: "t0ken",
 				NOTAM_WEB_DIST: join(root, "web", "dist"),
 				NOTAM_FAKE_CLAUDE_COUNTER: join(home, "claude-counter"),
+				// Whole-server, which is granularity enough: Playwright runs one
+				// worker and each harness owns its own child process.
+				NOTAM_FAKE_CLAUDE_HANG: options.hangingAnalyser ? "1" : "",
 			},
 		},
 	);

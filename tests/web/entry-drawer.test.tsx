@@ -91,6 +91,7 @@ describe("EntryDrawerView", () => {
 			<EntryDrawerView
 				entry={detail()}
 				onReanalyse={() => {}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -109,6 +110,7 @@ describe("EntryDrawerView", () => {
 			<EntryDrawerView
 				entry={detail()}
 				onReanalyse={() => {}}
+				onCancel={() => {}}
 				onOpenRule={(id) => opened.push(id)}
 			/>,
 		);
@@ -126,6 +128,7 @@ describe("EntryDrawerView", () => {
 			<EntryDrawerView
 				entry={detail({ paths_truncated: true })}
 				onReanalyse={() => {}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -137,6 +140,7 @@ describe("EntryDrawerView", () => {
 			<EntryDrawerView
 				entry={detail({ conversation_truncated: true })}
 				onReanalyse={() => {}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -151,6 +155,7 @@ describe("EntryDrawerView", () => {
 				onReanalyse={() => {
 					clicks++;
 				}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -175,6 +180,7 @@ describe("EntryDrawerView", () => {
 				onReanalyse={() => {
 					clicks++;
 				}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -192,6 +198,7 @@ describe("EntryDrawerView", () => {
 					draft_rule_count: 0,
 				})}
 				onReanalyse={() => {}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
@@ -215,11 +222,45 @@ describe("EntryDrawerView", () => {
 				onReanalyse={() => {
 					clicks++;
 				}}
+				onCancel={() => {}}
 				onOpenRule={() => {}}
 			/>,
 		);
 		expect(screen.getByText(/did not finish within 120000ms/)).toBeDefined();
 		await userEvent.click(screen.getByRole("button", { name: /^analyse$/i }));
 		expect(clicks).toBe(1);
+	});
+	test("offers Stop beside Analyse, live only while the entry is busy", async () => {
+		const stopped: number[] = [];
+		render(
+			<EntryDrawerView
+				entry={detail({ analysis_state: "running" })}
+				onReanalyse={() => {}}
+				onCancel={() => stopped.push(1)}
+				onOpenRule={() => {}}
+			/>,
+		);
+		const analyse = screen.getByRole("button", {
+			name: /^analyse$/i,
+		}) as HTMLButtonElement;
+		expect(analyse.disabled).toBe(true);
+
+		await userEvent.click(screen.getByRole("button", { name: /^stop$/i }));
+		expect(stopped).toEqual([1]);
+	});
+
+	test("takes Stop down for an entry with nothing running", () => {
+		render(
+			<EntryDrawerView
+				entry={detail()}
+				onReanalyse={() => {}}
+				onCancel={() => {}}
+				onOpenRule={() => {}}
+			/>,
+		);
+		expect(
+			(screen.getByRole("button", { name: /^stop$/i }) as HTMLButtonElement)
+				.disabled,
+		).toBe(true);
 	});
 });

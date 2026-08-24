@@ -7,9 +7,13 @@ import { TableError } from "./TableState.tsx";
 export function EntriesTab({
 	repoId,
 	onOpenEntry,
+	onCancel,
+	onCancelAll,
 }: {
 	repoId: string;
 	onOpenEntry: (entryId: string) => void;
+	onCancel: (entryIds: string[]) => void;
+	onCancelAll: () => void;
 }) {
 	const [state, setState] = useState<AnalysisState | "">("");
 	const [query, setQuery] = useState("");
@@ -39,6 +43,8 @@ export function EntriesTab({
 			onQueryChange={setQuery}
 			onOpenEntry={onOpenEntry}
 			onAnalyse={(ids) => analyse.mutate(ids)}
+			onCancel={onCancel}
+			onCancelAll={onCancelAll}
 			loading={entries.isPending}
 			// Verbatim server text: a queue refusal is only visible here.
 			error={analyse.error?.message ?? null}

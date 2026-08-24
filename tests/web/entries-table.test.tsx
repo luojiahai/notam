@@ -41,6 +41,8 @@ type Props = Parameters<typeof EntriesTable>[0];
 function build(overrides: Partial<Props> = {}) {
 	const calls = {
 		analysed: [] as string[][],
+		cancelled: [] as string[][],
+		cancelledAll: 0,
 		state: [] as string[],
 		q: [] as string[],
 		opened: [] as string[],
@@ -54,6 +56,10 @@ function build(overrides: Partial<Props> = {}) {
 		onQueryChange: (next) => calls.q.push(next),
 		onOpenEntry: (id) => calls.opened.push(id),
 		onAnalyse: (ids) => calls.analysed.push(ids),
+		onCancel: (ids) => calls.cancelled.push(ids),
+		onCancelAll: () => {
+			calls.cancelledAll++;
+		},
 		loading: false,
 		...overrides,
 	};
@@ -488,5 +494,106 @@ describe("EntriesTable", () => {
 			screen.getByRole("button", { name: "Fix rounding in payments" }),
 		);
 		expect(calls.opened).toEqual(["e_1"]);
+	});
+});
+
+describe("stopping an analysis", () => {
+	test("only a busy row offers a live Stop, and it never replaces Analyse", () => {
+		draw({
+			entries: [
+				entry({ analysis_state: "queued" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "running" }),
+				entry({ id: "e_3", number: 4823, analysis_state: "analysed" }),
+			],
+		});
+		const stop = (number: number) =>
+			screen.getByRole("button", {
+				name: new RegExp(`^stop analysing #${number}$`, "i"),
+			}) as HTMLButtonElement;
+
+		expect(stop(4821).disabled).toBe(false);
+		expect(stop(4822).disabled).toBe(false);
+		expect(stop(4823).disabled).toBe(true);
+		// Both controls are present in every state: a verb that changes under
+		// the pointer is what the pair exists to avoid.
+		expect(
+			screen.getByRole("button", { name: /^analyse #4821$/i }),
+		).toBeTruthy();
+	});
+
+	test("a row's Stop sends only that row", async () => {
+		const calls = draw({
+			entries: [
+				entry({ analysis_state: "running" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "running" }),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("button", { name: /^stop analysing #4822$/i }),
+		);
+		expect(calls.cancelled).toEqual([["e_2"]]);
+	});
+
+	test("Stop selected stays live while any of the selection is busy", async () => {
+		const calls = draw({
+			entries: [
+				entry({ analysis_state: "running" }),
+				entry({ id: "e_2", number: 4822, analysis_state: "analysed" }),
+			],
+		});
+		await userEvent.click(screen.getAllByRole("checkbox")[1] as HTMLElement);
+		await userEvent.click(screen.getAllByRole("checkbox")[2] as HTMLElement);
+
+		const stop = screen.getByRole("button", {
+			name: /^stop selected/i,
+		}) as HTMLButtonElement;
+		expect(stop.disabled).toBe(false);
+		// The mixed selection goes whole: the server skips what it cannot stop.
+		await userEvent.click(stop);
+		expect(calls.cancelled).toEqual([["e_1", "e_2"]]);
+	});
+
+	test("Stop selected goes down when nothing in the selection is busy", async () => {
+		draw({ entries: [entry({ analysis_state: "analysed" })] });
+		await userEvent.click(screen.getAllByRole("checkbox")[1] as HTMLElement);
+
+		expect(
+			(
+				screen.getByRole("button", {
+					name: /^stop selected/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true);
+	});
+
+	test("dispatching a stop clears the selection it was raised for", async () => {
+		draw({ entries: [entry({ analysis_state: "running" })] });
+		await userEvent.click(screen.getAllByRole("checkbox")[1] as HTMLElement);
+		await userEvent.click(
+			screen.getByRole("button", { name: /^stop selected/i }),
+		);
+
+		// Stopped rows leave the Queued and Running chips, so a selection kept
+		// here would point at ids no longer on screen.
+		expect(screen.getByText("0 selected")).toBeTruthy();
+	});
+
+	test("Stop all goes down when the counter it sits beside reads zero", () => {
+		draw({ counts: { ...counts, running: 0, queued: 0 } });
+		expect(
+			(
+				screen.getByRole("button", {
+					name: /^stop all$/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true);
+	});
+
+	test("Stop all sweeps the repository, not the selection", async () => {
+		const calls = draw({ counts: { ...counts, running: 1, queued: 2 } });
+		await userEvent.click(screen.getByRole("button", { name: /^stop all$/i }));
+
+		expect(calls.cancelledAll).toBe(1);
+		expect(calls.cancelled).toEqual([]);
 	});
 });

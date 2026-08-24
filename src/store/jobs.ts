@@ -135,6 +135,33 @@ export function selectJobs(db: Database, state?: JobState): JobRow[] {
 	return rows.map(hydrate);
 }
 
+/**
+ * The pending analyse jobs for one repository's entries.
+ *
+ * `jobs.target_id` is polymorphic — an analyse job targets an entry, a sync job
+ * a repo — so the repository filter has to come through `entries`. Read from
+ * the jobs table rather than from `entries.analysis_state`, because the jobs
+ * table is what can be vouched for: an entry labelled busy with nothing behind
+ * it is drift for `requeueRunningEntries` to repair at startup, not work for a
+ * cancel to act on.
+ */
+export function selectPendingAnalyseJobsForRepo(
+	db: Database,
+	repoId: string,
+): JobRow[] {
+	return db
+		.query<RawJob, [string]>(
+			`SELECT jobs.* FROM jobs
+			 JOIN entries ON entries.id = jobs.target_id
+			 WHERE jobs.kind = 'analyse'
+			   AND jobs.state IN ('queued', 'running')
+			   AND entries.repo_id = ?
+			 ORDER BY jobs.created_at, jobs.id`,
+		)
+		.all(repoId)
+		.map(hydrate);
+}
+
 export function countJobs(db: Database, state: JobState): number {
 	const row = db
 		.query<{ c: number }, [string]>(

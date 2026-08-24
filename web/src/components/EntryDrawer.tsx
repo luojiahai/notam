@@ -1,4 +1,4 @@
-import { Sparkles } from "lucide-react";
+import { Sparkles, Square } from "lucide-react";
 import { useState } from "react";
 import type { EntryDetail } from "../../../src/shared/api.ts";
 import { useEntry } from "../api/hooks.ts";
@@ -34,10 +34,12 @@ function ReviewState({ state }: { state: string }) {
 export function EntryDrawerView({
 	entry,
 	onReanalyse,
+	onCancel,
 	onOpenRule,
 }: {
 	entry: EntryDetail;
 	onReanalyse: () => void;
+	onCancel: () => void;
 	onOpenRule: (ruleId: string) => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
@@ -69,6 +71,11 @@ export function EntryDrawerView({
 				<p className="notice notice-error">{entry.last_error}</p>
 			)}
 
+			{/*
+				The pair the row has, labelled rather than icon-only: the reason
+				the row abbreviates its Stop is that a column of them would read
+				as identical buttons, and there is no column here.
+			*/}
 			<div className="drawer-actions">
 				<button
 					type="button"
@@ -77,6 +84,10 @@ export function EntryDrawerView({
 				>
 					<Sparkles className="icon" aria-hidden="true" />
 					Analyse
+				</button>
+				<button type="button" disabled={!isBusy(entry)} onClick={onCancel}>
+					<Square className="icon" aria-hidden="true" />
+					Stop
 				</button>
 			</div>
 
@@ -227,11 +238,13 @@ export function EntryDrawer({
 	entryId,
 	onClose,
 	onReanalyse,
+	onCancel,
 	onOpenRule,
 }: {
 	entryId: string;
 	onClose: () => void;
 	onReanalyse: (entryId: string) => void;
+	onCancel: (entryId: string) => void;
 	onOpenRule: (ruleId: string) => void;
 }) {
 	const entry = useEntry(entryId);
@@ -247,6 +260,7 @@ export function EntryDrawer({
 				<EntryDrawerView
 					entry={entry.data}
 					onReanalyse={() => onReanalyse(entryId)}
+					onCancel={() => onCancel(entryId)}
 					onOpenRule={onOpenRule}
 				/>
 			)}
