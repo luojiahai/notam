@@ -17,6 +17,7 @@ import type {
 import type { SyncProgress } from "../../web/src/App.tsx";
 import { App, applyServerEvent, invalidationsFor } from "../../web/src/App.tsx";
 import { useEntry, useRule } from "../../web/src/api/hooks.ts";
+import { Shell } from "../../web/src/components/Shell.tsx";
 import { Sidebar } from "../../web/src/components/Sidebar.tsx";
 
 const repo: RepoSummary = {
@@ -61,6 +62,23 @@ function wrap(ui: ReactElement) {
 		<QueryClientProvider client={client}>{ui}</QueryClientProvider>,
 	);
 }
+
+describe("Shell", () => {
+	test("renders the expansion beside the wordmark, outside the heading", () => {
+		wrap(
+			<Shell version="1.0.0" warnings={[]} sidebar={null}>
+				{null}
+			</Shell>,
+		);
+		expect(
+			screen.getByText("Notes On Team Agreements & Methods"),
+		).toBeDefined();
+		// The expansion is chrome, not the page's heading. Moving it inside the
+		// `h1` would rewrite the accessible name of the only level-one heading
+		// there is, and nothing else would notice.
+		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("NOTAM");
+	});
+});
 
 describe("Sidebar", () => {
 	test("lists repositories with their entry counts", () => {
