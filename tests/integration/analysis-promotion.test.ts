@@ -162,6 +162,7 @@ describe("analyse a repository and promote what it found", () => {
 			failed: 0,
 			retried: 0,
 			cancelled: 0,
+			interrupted: 0,
 		});
 		expect(runner.peak()).toBeGreaterThan(1);
 		expect(countEntriesByState(db, repo.id)).toEqual({

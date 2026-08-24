@@ -76,6 +76,17 @@ export const RuleCountsSchema = z.object({
 	abandoned: count,
 });
 
+/**
+ * The counts a sync reports: the same four whether it is still walking pages or
+ * has finished, so a live tally and the total it settles on cannot drift apart.
+ */
+export const SyncTotalsSchema = z.object({
+	scanned: count,
+	created: count,
+	updated: count,
+	skipped: count,
+});
+
 /** What sync is doing for a repository right now. `idle` means no job is pending. */
 export const SyncStateSchema = z.enum(["idle", "queued", "running"]);
 
@@ -338,22 +349,17 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
 		running: count,
 	}),
 	/**
-	 * `progress` carries the running totals of a sync still walking pages. It
-	 * is throttled per repository, so it is a live tally rather than one event
-	 * per pull request. `scanned` is the number that keeps moving while sync
-	 * walks pull requests it already has, which is most of a repeat run.
-	 *
-	 * There is no total to divide by — GitHub's listing is cursor-paginated
-	 * with no count — so this is a rising tally, never a percentage.
+	 * `progress` carries the running totals of a sync still walking pages,
+	 * throttled per repository, so it is a live tally rather than one event per
+	 * pull request. There is no total to divide by — GitHub's listing is
+	 * cursor-paginated with no count — so it is a rising count, never a
+	 * percentage.
 	 */
 	z.object({
 		type: z.literal("sync"),
 		repo_id: z.string(),
 		phase: z.enum(["started", "progress", "finished", "failed", "cancelled"]),
-		scanned: count,
-		created: count,
-		updated: count,
-		skipped: count,
+		...SyncTotalsSchema.shape,
 		error: z.string().nullable(),
 	}),
 	z.object({ type: z.literal("rules"), repo_id: z.string() }),
@@ -382,6 +388,7 @@ export type QueueResult = z.infer<typeof QueueResultSchema>;
 export type SyncStarted = z.infer<typeof SyncStartedSchema>;
 export type SyncCancelled = z.infer<typeof SyncCancelledSchema>;
 export type RepoSync = z.infer<typeof RepoSyncSchema>;
+export type SyncTotals = z.infer<typeof SyncTotalsSchema>;
 export type SyncState = z.infer<typeof SyncStateSchema>;
 export type SyncOutcome = z.infer<typeof SyncOutcomeSchema>;
 export type EntriesResponse = z.infer<typeof EntriesResponseSchema>;

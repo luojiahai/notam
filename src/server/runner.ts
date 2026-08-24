@@ -1,4 +1,9 @@
-import { type JobHandler, type PoolEvent, runPool } from "../jobs/pool.ts";
+import {
+	type JobHandler,
+	POOL_STOPPED,
+	type PoolEvent,
+	runPool,
+} from "../jobs/pool.ts";
 import type { JobQueue } from "../jobs/queue.ts";
 import type { JobKind, JobRow } from "../shared/types.ts";
 
@@ -60,11 +65,6 @@ export class JobRunner {
 		return this.draining !== null;
 	}
 
-	/** Jobs currently claimed by this runner. Exposed so a test can prove no controller leaks. */
-	get inFlight(): number {
-		return this.controllers.size;
-	}
-
 	/**
 	 * Cancels one job, running or merely queued. Returns false when there was
 	 * nothing to cancel, which is the honest answer for a job that already
@@ -95,7 +95,9 @@ export class JobRunner {
 
 	stop(): void {
 		this.stopped = true;
-		this.controller.abort();
+		// Reasoned, so a job abandoned to a shutdown returns to the queue for
+		// the next start rather than being recorded as one the user stopped.
+		this.controller.abort(POOL_STOPPED);
 	}
 
 	/**

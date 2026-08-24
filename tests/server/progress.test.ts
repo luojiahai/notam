@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { SyncEvent } from "../../src/core/sync/index.ts";
 import { createProgressPublisher } from "../../src/server/context.ts";
-import type { ServerEvent } from "../../src/shared/api.ts";
+import type { ServerEvent, SyncTotals } from "../../src/shared/api.ts";
 
 const INTERVAL = 20;
 
@@ -16,17 +15,16 @@ function collector() {
 	return { events, publisher, syncEvents };
 }
 
-const stored = (number: number, created: boolean): SyncEvent => ({
-	type: "stored",
-	number,
-	created,
-});
+/** A snapshot of the summary a sync keeps as it walks pull requests. */
+function totals(overrides: Partial<SyncTotals> = {}): SyncTotals {
+	return { scanned: 0, created: 0, updated: 0, skipped: 0, ...overrides };
+}
 
 describe("createProgressPublisher", () => {
 	test("coalesces a burst of pull requests into one event", async () => {
 		const { publisher, syncEvents } = collector();
-		for (let number = 0; number < 200; number++) {
-			publisher.record("r_1", stored(number, true));
+		for (let scanned = 1; scanned <= 200; scanned++) {
+			publisher.record("r_1", totals({ scanned, created: scanned }));
 		}
 		expect(syncEvents()).toHaveLength(0);
 
@@ -43,38 +41,26 @@ describe("createProgressPublisher", () => {
 		});
 	});
 
-	test("counts created, updated and skipped separately, and all of them as scanned", async () => {
+	test("reports the summary's own counts rather than tallying its own", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
-		publisher.record("r_1", stored(2, false));
-		publisher.record("r_1", { type: "skipped", number: 3, reason: "globs" });
-		publisher.record("r_1", {
-			type: "missing",
-			number: 4,
-			reason: "not-found",
-		});
+		publisher.record(
+			"r_1",
+			totals({ scanned: 3, created: 1, updated: 1, skipped: 1 }),
+		);
 
 		await Bun.sleep(INTERVAL * 2);
 		expect(syncEvents()[0]).toMatchObject({
-			scanned: 4,
+			scanned: 3,
 			created: 1,
 			updated: 1,
 			skipped: 1,
 		});
 	});
 
-	test("ignores page events, which count a different quantity", async () => {
-		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", { type: "page", scanned: 50 });
-
-		await Bun.sleep(INTERVAL * 2);
-		expect(syncEvents()).toHaveLength(0);
-	});
-
 	test("gives each repository its own budget, so neither starves the other", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
-		publisher.record("r_2", stored(2, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
+		publisher.record("r_2", totals({ scanned: 1 }));
 
 		await Bun.sleep(INTERVAL * 2);
 		const byRepo = syncEvents().map((event) => event.repo_id);
@@ -83,9 +69,9 @@ describe("createProgressPublisher", () => {
 
 	test("keeps a running total across intervals rather than resetting", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
 		await Bun.sleep(INTERVAL * 2);
-		publisher.record("r_1", stored(2, true));
+		publisher.record("r_1", totals({ scanned: 2 }));
 		await Bun.sleep(INTERVAL * 2);
 
 		expect(syncEvents().map((event) => event.scanned)).toEqual([1, 2]);
@@ -93,7 +79,7 @@ describe("createProgressPublisher", () => {
 
 	test("publishes nothing more once the job settles", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
 		publisher.settle("r_1");
 
 		await Bun.sleep(INTERVAL * 2);
@@ -102,10 +88,10 @@ describe("createProgressPublisher", () => {
 
 	test("starts a settled repository's next sync from zero", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
 		await Bun.sleep(INTERVAL * 2);
 		publisher.settle("r_1");
-		publisher.record("r_1", stored(2, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
 		await Bun.sleep(INTERVAL * 2);
 
 		expect(syncEvents().map((event) => event.scanned)).toEqual([1, 1]);
@@ -113,8 +99,8 @@ describe("createProgressPublisher", () => {
 
 	test("stop() drops every pending timer", async () => {
 		const { publisher, syncEvents } = collector();
-		publisher.record("r_1", stored(1, true));
-		publisher.record("r_2", stored(2, true));
+		publisher.record("r_1", totals({ scanned: 1 }));
+		publisher.record("r_2", totals({ scanned: 1 }));
 		publisher.stop();
 
 		await Bun.sleep(INTERVAL * 2);

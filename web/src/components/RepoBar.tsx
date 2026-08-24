@@ -6,9 +6,9 @@ export type RepoBarProps = {
 	repoName: string;
 	/**
 	 * `sync_watermark`: the newest `merged_at` this repository has ingested,
-	 * which is sync's own pagination floor (src/core/sync/index.ts:219) — NOT
-	 * the time of the last sync. A sync that finds no new merges leaves it
-	 * where it was, so it is labelled for what it is.
+	 * which is sync's own pagination floor — NOT the time of the last sync. A
+	 * sync that finds no new merges leaves it where it was, so it is labelled
+	 * for what it is.
 	 */
 	syncedAt: string | null;
 	/** Server-authoritative, so a reload mid-sync still shows the sync. */
@@ -25,9 +25,9 @@ function day(timestamp: string | null): string | null {
 }
 
 /**
- * What the disabled Sync button says about itself. "Already syncing" and
- * "waiting behind another repository" are different facts, and the server now
- * knows which, so the button says which rather than going quiet.
+ * What the disabled Sync button says about itself. Being mid-sync and being
+ * queued behind another repository are different facts, and a button that goes
+ * down without saying which leaves the user guessing.
  */
 function disabledReason(state: RepoSync["state"]): string | undefined {
 	if (state === "running") return "This repository is already syncing";
@@ -35,12 +35,7 @@ function disabledReason(state: RepoSync["state"]): string | undefined {
 	return undefined;
 }
 
-/**
- * A rising tally, never a percentage: GitHub's listing is cursor-paginated
- * with no count, so there is no total to divide by. `scanned` is what keeps
- * moving while sync walks pull requests it already has, which is most of a
- * repeat run — a count of new entries alone reads as stalled.
- */
+/** `scanned` leads because it is the figure that moves through a repeat run. */
 function tally(progress: SyncProgress): string {
 	const fresh = progress.created + progress.updated;
 	return `${progress.scanned} scanned · ${fresh} stored`;
@@ -50,7 +45,7 @@ function tally(progress: SyncProgress): string {
 function lastOutcome(
 	sync: RepoSync,
 ): { outcome: "failed" | "cancelled"; label: string } | null {
-	if (sync.state !== "idle" || !sync.last) return null;
+	if (!sync.last) return null;
 	if (sync.last.outcome === "failed")
 		return { outcome: "failed", label: "last sync failed" };
 	if (sync.last.outcome === "cancelled")

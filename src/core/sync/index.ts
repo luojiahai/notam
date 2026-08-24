@@ -58,9 +58,12 @@ export type SyncDeps = {
 	signal?: AbortSignal;
 	/**
 	 * The repository is passed alongside because a caller fanning several syncs
-	 * out at once has no other way to tell whose progress this is.
+	 * out at once has no other way to tell whose progress this is, and the
+	 * running summary because it is the one place these counts are kept — a
+	 * caller tallying the events itself would drift from the totals the run
+	 * settles on. It is the live object, so copy anything you retain.
 	 */
-	onProgress?: (event: SyncEvent, repo: RepoRow) => void;
+	onProgress?: (event: SyncEvent, repo: RepoRow, summary: SyncSummary) => void;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -123,7 +126,11 @@ export async function syncRepo(
 			pageSize: deps.pageSize,
 			signal: deps.signal,
 		});
-		deps.onProgress?.({ type: "page", scanned: page.nodes.length }, repo);
+		deps.onProgress?.(
+			{ type: "page", scanned: page.nodes.length },
+			repo,
+			summary,
+		);
 
 		for (const node of page.nodes) {
 			// Checked per PR rather than per page: a page is up to fifty
@@ -146,6 +153,7 @@ export async function syncRepo(
 							reason: "malformed-timestamp",
 						},
 						repo,
+						summary,
 					);
 					continue;
 				}
@@ -178,6 +186,7 @@ export async function syncRepo(
 					deps.onProgress?.(
 						{ type: "missing", number: node.number, reason: "not-found" },
 						repo,
+						summary,
 					);
 					continue;
 				}
@@ -190,6 +199,7 @@ export async function syncRepo(
 				deps.onProgress?.(
 					{ type: "skipped", number: entry.number, reason: "globs" },
 					repo,
+					summary,
 				);
 				continue;
 			}
@@ -201,6 +211,7 @@ export async function syncRepo(
 			deps.onProgress?.(
 				{ type: "stored", number: entry.number, created: result.created },
 				repo,
+				summary,
 			);
 		}
 
@@ -230,7 +241,7 @@ export async function syncRepo(
 /** Adapts syncRepo to the worker pool: a `sync` job's target_id is a repo id. */
 export function createSyncHandler(
 	deps: SyncDeps,
-	onSummary?: (summary: SyncSummary) => void,
+	onSummary?: (summary: SyncSummary, repo: RepoRow) => void,
 ): JobHandler {
 	return async (job, signal) => {
 		const repo = getRepo(deps.db, job.target_id);
@@ -243,6 +254,6 @@ export function createSyncHandler(
 		// without a summary callback would silently skip the sync entirely and
 		// still report the job done.
 		const summary = await syncRepo({ ...deps, signal }, repo);
-		onSummary?.(summary);
+		onSummary?.(summary, repo);
 	};
 }

@@ -39,6 +39,7 @@ describe("runPool", () => {
 			failed: 0,
 			retried: 0,
 			cancelled: 0,
+			interrupted: 0,
 		});
 		expect(seen.sort()).toEqual(["e1", "e2", "e3"]);
 		expect(queue.count("done")).toBe(3);
@@ -124,6 +125,7 @@ describe("runPool", () => {
 			failed: 0,
 			retried: 2,
 			cancelled: 0,
+			interrupted: 0,
 		});
 		expect(queue.count("done")).toBe(1);
 	});
@@ -185,6 +187,7 @@ describe("runPool", () => {
 			failed: 0,
 			retried: 0,
 			cancelled: 0,
+			interrupted: 0,
 		});
 		expect(queue.count("queued")).toBe(1);
 		expect(queue.list("queued")[0]?.target_id).toBe("p1");
@@ -203,6 +206,7 @@ describe("runPool", () => {
 			failed: 0,
 			retried: 0,
 			cancelled: 0,
+			interrupted: 0,
 		});
 		const remaining = queue.list("queued");
 		expect(remaining).toHaveLength(1);
@@ -309,6 +313,7 @@ describe("cancellation", () => {
 			failed: 0,
 			retried: 0,
 			cancelled: 1,
+			interrupted: 0,
 		});
 		expect(queue.get(job.id)?.state).toBe("cancelled");
 		expect(queue.count("failed")).toBe(0);

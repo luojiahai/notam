@@ -339,7 +339,12 @@ describe("JobRunner cancellation", () => {
 		db.close();
 	});
 
-	test("stop() aborts a sync already in flight rather than waiting it out", async () => {
+	/**
+	 * A shutdown is not an outcome. The job returns to the queue and the next
+	 * start runs it, so nothing is lost and the user is never told a sync was
+	 * stopped when nobody stopped it.
+	 */
+	test("stop() aborts a sync in flight and returns it to the queue", async () => {
 		const { db, queue } = queueOf();
 		const job = queue.enqueue("sync", "r1");
 		if (!job) throw new Error("expected a job");
@@ -361,22 +366,55 @@ describe("JobRunner cancellation", () => {
 
 		runner.stop();
 		await runner.idle();
-		expect(queue.get(job.id)?.state).toBe("cancelled");
+		const after = queue.get(job.id);
+		expect(after?.state).toBe("queued");
+		expect(after?.attempts).toBe(1);
 		db.close();
 	});
+});
 
-	test("forgets a job's controller once it settles", async () => {
+describe("shutdown versus cancellation", () => {
+	function gate() {
+		let open!: () => void;
+		const promise = new Promise<void>((resolve) => {
+			open = resolve;
+		});
+		return { promise, open };
+	}
+
+	/**
+	 * The two aborts look identical to a handler and must not look identical to
+	 * the queue: one is work the user refused, the other is work not yet done.
+	 */
+	test("a cancelled job settles while a shut-down one stays claimable", async () => {
 		const { db, queue } = queueOf();
-		const job = queue.enqueue("sync", "r1");
-		if (!job) throw new Error("expected a job");
+		const cancelled = queue.enqueue("sync", "cancelled");
+		await Bun.sleep(2);
+		const stopped = queue.enqueue("sync", "stopped");
+		if (!cancelled || !stopped) throw new Error("expected jobs");
+		const bothRunning = gate();
+		let started = 0;
 		const runner = new JobRunner({
 			queue,
-			concurrency: 1,
-			handlers: { sync: async () => {} },
+			concurrency: 2,
+			handlers: {
+				sync: async (_job, signal) => {
+					if (++started === 2) bothRunning.open();
+					await new Promise((_resolve, reject) => {
+						signal.addEventListener("abort", () => reject(signal.reason));
+					});
+				},
+			},
 		});
 		runner.kick();
+		await bothRunning.promise;
+
+		runner.cancel(cancelled.id);
+		runner.stop();
 		await runner.idle();
-		expect(runner.inFlight).toBe(0);
+
+		expect(queue.get(cancelled.id)?.state).toBe("cancelled");
+		expect(queue.get(stopped.id)?.state).toBe("queued");
 		db.close();
 	});
 });

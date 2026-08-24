@@ -47,9 +47,11 @@ function flagValue(argv: string[], flag: string): string | undefined {
 
 /**
  * Runs `work` with a signal wired to Ctrl-C, so an interrupted sync stops the
- * request it is waiting on rather than being killed mid-flight. The second
- * press is fatal: an abort that itself hangs must not be a worse experience
- * than the ungraceful exit it replaced.
+ * request it is waiting on rather than being killed mid-flight.
+ *
+ * The second press exits immediately, and must: an abort can itself hang on a
+ * socket that will not close, and the user needs a way out that does not
+ * depend on the thing they are trying to escape.
  */
 async function withInterrupt<T>(
 	log: (line: string) => void,

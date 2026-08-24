@@ -13,12 +13,11 @@ import { GraphQLGitHubClient } from "../core/github/client.ts";
 import { RestGitHubClient } from "../core/github/rest.ts";
 import type { GitDataClient, GitHubClient } from "../core/github/types.ts";
 import type { PromotionDeps } from "../core/promotion/index.ts";
-import { createSyncHandler, type SyncEvent } from "../core/sync/index.ts";
+import { createSyncHandler } from "../core/sync/index.ts";
 import { JobQueue } from "../jobs/queue.ts";
-import type { ServerEvent } from "../shared/api.ts";
+import type { ServerEvent, SyncTotals } from "../shared/api.ts";
 import type { HostRow } from "../shared/types.ts";
 import { getEntry } from "../store/entries.ts";
-import { listRepos } from "../store/repos.ts";
 import { VERSION } from "../version.ts";
 import { EventBus } from "./events.ts";
 import { JobRunner } from "./runner.ts";
@@ -66,17 +65,6 @@ export type AppContext = {
  */
 const PROGRESS_INTERVAL_MS = 500;
 
-type ProgressTotals = {
-	scanned: number;
-	created: number;
-	updated: number;
-	skipped: number;
-};
-
-function zeroTotals(): ProgressTotals {
-	return { scanned: 0, created: 0, updated: 0, skipped: 0 };
-}
-
 /**
  * Accumulates per-repository sync progress and emits at most one event per
  * repository per interval.
@@ -85,16 +73,19 @@ function zeroTotals(): ProgressTotals {
  * once by design: one shared budget would let a fast repository starve a slow
  * one's updates, and which one lost would be arbitrary.
  *
+ * The totals are copied from the summary the sync is already keeping rather
+ * than tallied here, so the live figures and the ones the run settles on
+ * cannot disagree.
+ *
  * There is no trailing flush. A settled job publishes `finished` immediately
- * afterwards with the authoritative totals from the summary, so a final
- * partial interval would only emit a near-identical event a few milliseconds
- * earlier.
+ * afterwards with the authoritative totals, so a final partial interval would
+ * only emit a near-identical event a few milliseconds earlier.
  */
 export function createProgressPublisher(
 	publish: (event: ServerEvent) => void,
 	intervalMs: number = PROGRESS_INTERVAL_MS,
 ) {
-	const totals = new Map<string, ProgressTotals>();
+	const totals = new Map<string, SyncTotals>();
 	const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
 	const emit = (repoId: string) => {
@@ -111,21 +102,13 @@ export function createProgressPublisher(
 	};
 
 	return {
-		record(repoId: string, event: SyncEvent): void {
-			// A page event reports how many nodes the listing returned, which is
-			// not the same quantity as the summary's `scanned`; counting the
-			// per-pull-request events instead keeps the live tally and the final
-			// totals telling the same story.
-			if (event.type === "page") return;
-			const current = totals.get(repoId) ?? zeroTotals();
-			current.scanned++;
-			if (event.type === "stored") {
-				if (event.created) current.created++;
-				else current.updated++;
-			} else if (event.type === "skipped") {
-				current.skipped++;
-			}
-			totals.set(repoId, current);
+		record(repoId: string, summary: SyncTotals): void {
+			totals.set(repoId, {
+				scanned: summary.scanned,
+				created: summary.created,
+				updated: summary.updated,
+				skipped: summary.skipped,
+			});
 			if (!timers.has(repoId)) {
 				timers.set(
 					repoId,
@@ -151,7 +134,8 @@ export function createProgressPublisher(
 }
 
 /**
- * Wires plans 1 and 2 together and hands the result to the routes.
+ * Wires the store, the GitHub clients and the job runners together and hands
+ * the result to the routes.
  *
  * Every edge that leaves the process — GitHub over GraphQL, GitHub over REST,
  * the `claude` subprocess — arrives here as an injectable function, so the
@@ -275,6 +259,21 @@ export function createContext(options: ContextOptions): AppContext {
 
 	const progress = createProgressPublisher(publish);
 
+	/** Every sync event but `progress`, which the publisher above owns. */
+	const publishSync = (
+		repo_id: string,
+		phase: "started" | "finished" | "failed" | "cancelled",
+		totals: SyncTotals,
+		error: string | null,
+	) => publish({ type: "sync", repo_id, phase, ...totals, error });
+
+	const NO_TOTALS: SyncTotals = {
+		scanned: 0,
+		created: 0,
+		updated: 0,
+		skipped: 0,
+	};
+
 	const syncRunner = new JobRunner({
 		queue,
 		// Repositories are few and each sync is mostly waiting on GitHub, so two
@@ -286,20 +285,10 @@ export function createContext(options: ContextOptions): AppContext {
 					db,
 					clientFor: githubFor,
 					now,
-					onProgress: (event, repo) => progress.record(repo.id, event),
+					onProgress: (_event, repo, summary) =>
+						progress.record(repo.id, summary),
 				},
-				(summary) => {
-					publish({
-						type: "sync",
-						repo_id: repoIdByName(db, summary.repo) ?? "",
-						phase: "finished",
-						scanned: summary.scanned,
-						created: summary.created,
-						updated: summary.updated,
-						skipped: summary.skipped,
-						error: null,
-					});
-				},
+				(summary, repo) => publishSync(repo.id, "finished", summary, null),
 			),
 		},
 		onEvent: (event) => {
@@ -310,39 +299,14 @@ export function createContext(options: ContextOptions): AppContext {
 				progress.settle(repo_id);
 			}
 			if (event.type === "started") {
-				publish({
-					type: "sync",
-					repo_id,
-					phase: "started",
-					scanned: 0,
-					created: 0,
-					updated: 0,
-					skipped: 0,
-					error: null,
-				});
+				publishSync(repo_id, "started", NO_TOTALS, null);
 			} else if (event.type === "failed") {
-				publish({
-					type: "sync",
-					repo_id,
-					phase: "failed",
-					scanned: 0,
-					created: 0,
-					updated: 0,
-					skipped: 0,
-					error: event.error,
-				});
+				publishSync(repo_id, "failed", NO_TOTALS, event.error);
 			} else if (event.type === "cancelled") {
-				publish({
-					type: "sync",
-					repo_id,
-					phase: "cancelled",
-					scanned: 0,
-					created: 0,
-					updated: 0,
-					skipped: 0,
-					error: null,
-				});
+				publishSync(repo_id, "cancelled", NO_TOTALS, null);
 			}
+			// `interrupted` is a shutdown, not an outcome: the job is back in the
+			// queue and the next start will run it, so there is nothing to report.
 		},
 		onError: onDrainError,
 	});
@@ -369,13 +333,4 @@ export function createContext(options: ContextOptions): AppContext {
 			progress.stop();
 		},
 	};
-}
-
-/**
- * `SyncSummary` carries the repository's `owner/repo` name, because that is
- * what a CLI summary line prints. The browser keys everything by id, so the
- * name is resolved back here rather than widening the core summary type.
- */
-function repoIdByName(db: Database, name: string): string | null {
-	return listRepos(db).find((repo) => repo.name === name)?.id ?? null;
 }

@@ -79,10 +79,6 @@ export async function runSync(options: SyncOptions): Promise<number> {
 						log(`Paused ${Math.round(waitMs / 1000)}s — ${reason}`),
 				}));
 
-		// One controller serves both roles: it stops the pool claiming further
-		// repositories and aborts the request the current one is waiting on.
-		const signal = options.signal ?? new AbortController().signal;
-
 		const summaries: SyncSummary[] = [];
 		// Collected from this run's pool events, not read back from the jobs
 		// table: `failed` rows persist indefinitely (nothing purges them, and the
@@ -92,8 +88,10 @@ export async function runSync(options: SyncOptions): Promise<number> {
 		const result = await runPool({
 			queue,
 			concurrency,
-			signal,
-			signalFor: () => signal,
+			// One signal serves both roles: it stops the pool claiming further
+			// repositories, and the pool hands it to the handler so the current
+			// one stops mid-request rather than running to completion.
+			signal: options.signal,
 			handlers: {
 				sync: createSyncHandler({ db, clientFor, now }, (summary) => {
 					summaries.push(summary);
