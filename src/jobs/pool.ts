@@ -83,6 +83,12 @@ export async function runPool(options: PoolOptions): Promise<PoolResult> {
 		while (!signal?.aborted) {
 			const job = queue.claim(kinds);
 			if (!job) return;
+			// Resolved before the job is announced, and before any `await`, so
+			// there is no moment at which an observer can see a claimed job
+			// whose signal does not exist yet. A caller that cancelled in that
+			// window would take the not-yet-claimed path and dequeue a row
+			// whose handler is about to run regardless.
+			const jobSignal = signalFor?.(job) ?? signal ?? never;
 			onEvent?.({ type: "started", job });
 
 			const handler = handlers[job.kind];
@@ -93,7 +99,6 @@ export async function runPool(options: PoolOptions): Promise<PoolResult> {
 				continue;
 			}
 
-			const jobSignal = signalFor?.(job) ?? signal ?? never;
 			try {
 				await handler(job, jobSignal);
 				queue.complete(job.id);

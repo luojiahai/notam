@@ -250,7 +250,7 @@ describe("JobRunner cancellation", () => {
 		runner.kick();
 		await running.promise;
 
-		expect(runner.cancel(job.id)).toBe(true);
+		expect(runner.cancel(job.id)).toBe("aborted");
 		await runner.idle();
 		expect(queue.get(job.id)?.state).toBe("cancelled");
 		db.close();
@@ -280,11 +280,46 @@ describe("JobRunner cancellation", () => {
 		runner.kick();
 		await Bun.sleep(10);
 
-		expect(runner.cancel(second.id)).toBe(true);
+		// Dequeued, not aborted: the job was never claimed, so no handler and
+		// no controller ever existed for it.
+		expect(runner.cancel(second.id)).toBe("dequeued");
 		held.open();
 		await runner.idle();
 		expect(claimed).toEqual(["first"]);
 		expect(queue.get(second.id)?.state).toBe("cancelled");
+		db.close();
+	});
+
+	test("a claimed job is never observable before its controller exists", async () => {
+		const { db, queue } = queueOf();
+		const job = queue.enqueue("sync", "r1");
+		if (!job) throw new Error("expected a job");
+		let outcome: unknown;
+		const observed: boolean[] = [];
+		const runner: JobRunner = new JobRunner({
+			queue,
+			concurrency: 1,
+			// The `started` event is the earliest anything outside the pool can
+			// see a claimed job. Cancelling from here proves the signal is
+			// already registered by then — an `await` inserted between the
+			// claim and the registration would make this dequeue a running job
+			// instead, and the handler would go on to finish it unaborted.
+			onEvent: (event) => {
+				if (event.type === "started") outcome = runner.cancel(event.job.id);
+			},
+			handlers: {
+				sync: async (_job, signal) => {
+					observed.push(signal.aborted);
+					signal.throwIfAborted();
+				},
+			},
+		});
+		runner.kick();
+		await runner.idle();
+
+		expect(outcome).toBe("aborted");
+		expect(observed).toEqual([true]);
+		expect(queue.get(job.id)?.state).toBe("cancelled");
 		db.close();
 	});
 
@@ -299,7 +334,7 @@ describe("JobRunner cancellation", () => {
 		});
 		runner.kick();
 		await runner.idle();
-		expect(runner.cancel(job.id)).toBe(false);
+		expect(runner.cancel(job.id)).toBeNull();
 		expect(queue.get(job.id)?.state).toBe("done");
 		db.close();
 	});

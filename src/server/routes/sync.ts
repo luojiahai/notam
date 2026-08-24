@@ -32,7 +32,7 @@ export function syncRoutes(ctx: AppContext): Hono {
 	app.post("/repos/:repoId/sync/cancel", (c) => {
 		const repo = requireRepo(ctx.db, c.req.param("repoId"));
 		const response: SyncCancelled = {
-			cancelled: ctx.syncRunner.cancelPending("sync", repo.id),
+			cancelled: ctx.syncRunner.cancelPending("sync", repo.id) !== null,
 		};
 		return c.json(response);
 	});

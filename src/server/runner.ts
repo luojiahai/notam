@@ -1,3 +1,4 @@
+import type { CancelOutcome } from "../core/analysis/index.ts";
 import {
 	type JobHandler,
 	POOL_STOPPED,
@@ -66,22 +67,27 @@ export class JobRunner {
 	}
 
 	/**
-	 * Cancels one job, running or merely queued. Returns false when there was
-	 * nothing to cancel, which is the honest answer for a job that already
-	 * settled — never an error.
+	 * Cancels one job, running or merely queued. Null means there was nothing
+	 * to cancel, which is the honest answer for a job that already settled —
+	 * never an error.
+	 *
+	 * Which branch it took is part of the answer, not an implementation
+	 * detail: an aborted job is still unwinding inside its handler and that
+	 * handler owns whatever else has to be undone, whereas a dequeued job will
+	 * never run at all and leaves the caller holding that responsibility.
 	 *
 	 * A running job is aborted through its own signal and the pool decides its
 	 * outcome, so a job's fate is written in exactly one place. A job that has
 	 * not been claimed has no controller yet, so it is cancelled at the queue
 	 * instead and will never be claimed at all.
 	 */
-	cancel(jobId: string): boolean {
+	cancel(jobId: string): CancelOutcome {
 		const controller = this.controllers.get(jobId);
 		if (controller) {
 			controller.abort();
-			return true;
+			return "aborted";
 		}
-		return this.options.queue.cancel(jobId);
+		return this.options.queue.cancel(jobId) ? "dequeued" : null;
 	}
 
 	/**
@@ -105,15 +111,20 @@ export class JobRunner {
 	 * makes that job single-valued, so a caller holding only a repository id
 	 * never has to guess which job it means.
 	 */
-	cancelPending(kind: JobKind, targetId: string): boolean {
+	cancelPending(kind: JobKind, targetId: string): CancelOutcome {
 		const { pending } = this.options.queue.status(kind, targetId);
-		return pending ? this.cancel(pending.id) : false;
+		return pending ? this.cancel(pending.id) : null;
 	}
 
 	/**
 	 * Composed with the runner-wide controller, so `stop()` reaches a handler
 	 * that is already mid-request instead of leaving the process waiting on a
 	 * network call it no longer wants.
+	 *
+	 * `runPool` registers this in the same synchronous stretch as the claim
+	 * that precedes it, and that must stay true: an `await` between the two
+	 * would let a request observe a job as claimed with no controller yet, and
+	 * `cancel` would then dequeue a row whose handler is about to run anyway.
 	 */
 	private signalFor(job: JobRow): AbortSignal {
 		const controller = new AbortController();
