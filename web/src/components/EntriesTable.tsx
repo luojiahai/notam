@@ -5,7 +5,6 @@ import type {
 	EntryCounts,
 	EntrySummary,
 } from "../../../src/shared/api.ts";
-import type { BatchState } from "../App.tsx";
 import { isBusy } from "../lib/analysis.ts";
 import { useSelection } from "../state/selection.ts";
 import { StatusPill } from "./Badge.tsx";
@@ -22,7 +21,6 @@ export type EntriesTableProps = {
 	onQueryChange: (query: string) => void;
 	onOpenEntry: (entryId: string) => void;
 	onAnalyse: (entryIds: string[]) => void;
-	batch: BatchState;
 	loading: boolean;
 	/** The last mutation failure, verbatim from the server. */
 	error?: string | null;
@@ -140,7 +138,7 @@ export function EntriesTable(props: EntriesTableProps) {
 				/>
 				<span className="spacer" />
 				{/*
-					The selection controls and the queue counter live in the toolbar
+					The selection controls and the analysis counter live in the toolbar
 					rather than a footer of their own below the table: they are one
 					row's worth of chrome, and the table wants the height more.
 					Grouped so a narrow window drops the set to a second line together.
@@ -160,8 +158,18 @@ export function EntriesTable(props: EntriesTableProps) {
 					</button>
 					{props.error && <span className="bulk-error">{props.error}</span>}
 					<span className="toolbar-divider" />
-					<span className="bulk-progress">
-						{props.batch.running} running, {props.batch.queued} queued
+					{/*
+						Counted from this repository's own entry states — the source
+						the chips count too, so the two can never disagree about what
+						is running. Dimmed rather than unmounted at zero: starting an
+						analysis must not reflow the toolbar under the button that
+						started it.
+					*/}
+					<span
+						className="bulk-progress"
+						data-active={props.counts.running + props.counts.queued > 0}
+					>
+						{props.counts.running} running, {props.counts.queued} queued
 					</span>
 				</div>
 			</div>

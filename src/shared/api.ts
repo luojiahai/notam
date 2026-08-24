@@ -342,12 +342,6 @@ export const ServerEventSchema = z.discriminatedUnion("type", [
 		state: AnalysisStateSchema,
 		error: z.string().nullable(),
 	}),
-	/** Queue depth, global rather than per-repo: one number the bulk bar shows. */
-	z.object({
-		type: z.literal("batch"),
-		queued: count,
-		running: count,
-	}),
 	/**
 	 * `progress` carries the running totals of a sync still walking pages,
 	 * throttled per repository, so it is a live tally rather than one event per

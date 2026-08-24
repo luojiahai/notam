@@ -42,9 +42,9 @@ describe("sseResponse", () => {
 		});
 		const reader = (response.body as ReadableStream<Uint8Array>).getReader();
 		await readFrame(reader);
-		bus.publish({ type: "batch", queued: 2, running: 1 });
+		bus.publish({ type: "rules", repo_id: "r_1" });
 		expect(await readFrame(reader)).toBe(
-			'data: {"type":"batch","queued":2,"running":1}\n\n',
+			'data: {"type":"rules","repo_id":"r_1"}\n\n',
 		);
 		controller.abort();
 	});

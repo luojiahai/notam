@@ -54,7 +54,6 @@ function build(overrides: Partial<Props> = {}) {
 		onQueryChange: (next) => calls.q.push(next),
 		onOpenEntry: (id) => calls.opened.push(id),
 		onAnalyse: (ids) => calls.analysed.push(ids),
-		batch: { queued: 0, running: 0 },
 		loading: false,
 		...overrides,
 	};
@@ -324,9 +323,16 @@ describe("EntriesTable", () => {
 		expect(screen.getByTitle(/more than 300 files/i)).toBeDefined();
 	});
 
-	test("live batch progress appears while work is in flight", () => {
-		draw({ batch: { queued: 4, running: 2 } });
-		expect(screen.getByText(/2 running, 4 queued/)).toBeDefined();
+	test("the counter reports this repository's own analysis states", () => {
+		draw({ counts: { ...counts, queued: 4, running: 2 } });
+		const counter = screen.getByText(/2 running, 4 queued/);
+		expect(counter.dataset.active).toBe("true");
+	});
+
+	test("an idle counter stays mounted so the toolbar does not reflow", () => {
+		draw();
+		const counter = screen.getByText(/0 running, 0 queued/);
+		expect(counter.dataset.active).toBe("false");
 	});
 
 	/**

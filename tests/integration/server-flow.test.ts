@@ -183,7 +183,6 @@ describe("the whole flow over HTTP", () => {
 		const kinds = new Set(events.map((event) => event.type));
 		expect(kinds.has("sync")).toBe(true);
 		expect(kinds.has("entry")).toBe(true);
-		expect(kinds.has("batch")).toBe(true);
 		expect(kinds.has("rules")).toBe(true);
 		expect(kinds.has("promotion")).toBe(true);
 
