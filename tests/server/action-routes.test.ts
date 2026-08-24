@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+	CancelResultSchema,
 	QueueResultSchema,
+	RepoAnalyseCancelledSchema,
 	type ServerEvent,
 	SyncCancelledSchema,
 	SyncStartedSchema,
@@ -263,6 +265,170 @@ describe("sync cancellation", () => {
 		expect(started.already_running).toBe(false);
 		expect(started.job_id).not.toBeNull();
 		await harness.ctx.syncRunner.idle();
+		harness.close();
+	});
+});
+
+describe("analysis cancellation", () => {
+	/**
+	 * A harness whose analyser hangs until its run is stopped, then reports the
+	 * kill the way the real runner does. `entered` resolves once the analysis is
+	 * genuinely in flight, so a test never cancels something not yet started.
+	 */
+	function heldAnalyser() {
+		let enter!: () => void;
+		const entered = new Promise<void>((resolve) => {
+			enter = resolve;
+		});
+		const harness = testContext({
+			claude: (request) => {
+				enter();
+				return new Promise((resolve) => {
+					request.signal?.addEventListener("abort", () =>
+						resolve({
+							ok: false,
+							kind: "aborted",
+							message: "claude was cancelled",
+						}),
+					);
+				});
+			},
+		});
+		return { harness, entered };
+	}
+
+	test("stops a running analysis and puts the entry back where it was", async () => {
+		const { harness, entered } = heldAnalyser();
+		const events: ServerEvent[] = [];
+		harness.ctx.bus.subscribe((event) => events.push(event));
+
+		await post(harness.app, "/api/entries/analyse", {
+			entry_ids: [harness.entryId],
+		});
+		await entered;
+
+		const response = await post(harness.app, "/api/entries/analyse/cancel", {
+			entry_ids: [harness.entryId],
+		});
+		expect(CancelResultSchema.parse(await response.json())).toEqual({
+			cancelled: [harness.entryId],
+			skipped: [],
+		});
+
+		await harness.ctx.analyseRunner.idle();
+		const entry = getEntry(harness.db, harness.entryId);
+		expect(entry?.analysis_state).toBe("unanalysed");
+		expect(entry?.last_error).toBeNull();
+		expect(
+			harness.ctx.queue.status("analyse", harness.entryId).last?.state,
+		).toBe("cancelled");
+
+		const states = events
+			.filter((event) => event.type === "entry")
+			.map((event) => (event.type === "entry" ? event.state : ""));
+		expect(states).toEqual(["running", "unanalysed"]);
+		harness.close();
+	});
+
+	test("stops an analysis still queued, without ever claiming it", async () => {
+		const harness = testContext();
+		const job = harness.ctx.queue.enqueue("analyse", harness.entryId);
+		if (!job) throw new Error("expected a job");
+
+		const response = await post(harness.app, "/api/entries/analyse/cancel", {
+			entry_ids: [harness.entryId],
+		});
+		expect(CancelResultSchema.parse(await response.json()).cancelled).toEqual([
+			harness.entryId,
+		]);
+		expect(harness.ctx.queue.get(job.id)?.state).toBe("cancelled");
+		expect(harness.runnerCalls).toHaveLength(0);
+		harness.close();
+	});
+
+	test("reports an entry with nothing pending as skipped, not as an error", async () => {
+		const harness = testContext();
+		const response = await post(harness.app, "/api/entries/analyse/cancel", {
+			entry_ids: [harness.entryId],
+		});
+		expect(response.status).toBe(200);
+		expect(CancelResultSchema.parse(await response.json())).toEqual({
+			cancelled: [],
+			skipped: [harness.entryId],
+		});
+		harness.close();
+	});
+
+	test("rejects an unknown entry with 404 and cancels nothing", async () => {
+		const harness = testContext();
+		const job = harness.ctx.queue.enqueue("analyse", harness.entryId);
+		if (!job) throw new Error("expected a job");
+
+		const response = await post(harness.app, "/api/entries/analyse/cancel", {
+			entry_ids: [harness.entryId, "e_nope"],
+		});
+		expect(response.status).toBe(404);
+		expect(harness.ctx.queue.get(job.id)?.state).toBe("queued");
+		harness.close();
+	});
+
+	test("leaves the entry immediately re-analysable", async () => {
+		const harness = testContext();
+		harness.ctx.queue.enqueue("analyse", harness.entryId);
+		await post(harness.app, "/api/entries/analyse/cancel", {
+			entry_ids: [harness.entryId],
+		});
+
+		const response = await post(harness.app, "/api/entries/analyse", {
+			entry_ids: [harness.entryId],
+		});
+		expect(QueueResultSchema.parse(await response.json()).queued).toEqual([
+			harness.entryId,
+		]);
+		await harness.ctx.analyseRunner.idle();
+		expect(getEntry(harness.db, harness.entryId)?.analysis_state).toBe(
+			"analysed",
+		);
+		harness.close();
+	});
+
+	test("the repository route stops everything pending, naming what it stopped", async () => {
+		const harness = testContext();
+		harness.ctx.queue.enqueue("analyse", harness.entryId);
+
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/analyse/cancel`,
+		);
+		expect(RepoAnalyseCancelledSchema.parse(await response.json())).toEqual({
+			cancelled: [harness.entryId],
+		});
+		expect(getEntry(harness.db, harness.entryId)?.analysis_state).toBe(
+			"unanalysed",
+		);
+		harness.close();
+	});
+
+	test("the repository route reports an empty queue without error", async () => {
+		const harness = testContext();
+		const response = await post(
+			harness.app,
+			`/api/repos/${harness.repoId}/analyse/cancel`,
+		);
+		expect(response.status).toBe(200);
+		expect(
+			RepoAnalyseCancelledSchema.parse(await response.json()).cancelled,
+		).toEqual([]);
+		harness.close();
+	});
+
+	test("the repository route 404s for a repository that does not exist", async () => {
+		const harness = testContext();
+		const response = await post(
+			harness.app,
+			"/api/repos/r_nope/analyse/cancel",
+		);
+		expect(response.status).toBe(404);
 		harness.close();
 	});
 });

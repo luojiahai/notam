@@ -1,9 +1,15 @@
 import { Hono } from "hono";
-import { queueEntries } from "../../core/analysis/index.ts";
+import {
+	cancelEntries,
+	cancelRepoEntries,
+	queueEntries,
+} from "../../core/analysis/index.ts";
 import {
 	AnalyseRequestSchema,
 	AnalysisStateSchema,
+	type CancelResult,
 	type EntriesResponse,
+	type RepoAnalyseCancelled,
 } from "../../shared/api.ts";
 import { listEntries, listEntriesByState } from "../../store/entries.ts";
 import { countRulesByEntryIds, listRulesByEntry } from "../../store/rules.ts";
@@ -70,5 +76,40 @@ export function entryRoutes(ctx: AppContext): Hono {
 		return c.json(result);
 	});
 
+	/**
+	 * The same body as /entries/analyse, validated the same way: two endpoints
+	 * that take one selection should refuse the same selections. An entry with
+	 * nothing pending comes back `skipped` rather than as an error — by the
+	 * time a click lands the work may have finished on its own.
+	 */
+	app.post("/entries/analyse/cancel", async (c) => {
+		const body = await readBody(c, AnalyseRequestSchema);
+		for (const id of body.entry_ids) requireEntry(ctx.db, id);
+		const response: CancelResult = cancelEntries(
+			ctx.db,
+			cancellerFor(ctx),
+			body.entry_ids,
+			ctx.analysisProgress,
+		);
+		return c.json(response);
+	});
+
+	app.post("/repos/:repoId/analyse/cancel", (c) => {
+		const repo = requireRepo(ctx.db, c.req.param("repoId"));
+		const response: RepoAnalyseCancelled = cancelRepoEntries(
+			ctx.db,
+			cancellerFor(ctx),
+			repo.id,
+			ctx.analysisProgress,
+		);
+		return c.json(response);
+	});
+
 	return app;
+}
+
+/** An entry id is an analyse job's target, so the pending index resolves it. */
+function cancellerFor(ctx: AppContext) {
+	return (entryId: string) =>
+		ctx.analyseRunner.cancelPending("analyse", entryId);
 }

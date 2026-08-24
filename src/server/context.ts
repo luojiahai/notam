@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import {
 	type AnalysisDeps,
+	type AnalysisEvent,
 	createAnalyseHandler,
 } from "../core/analysis/index.ts";
 import {
@@ -51,6 +52,11 @@ export type AppContext = {
 	syncRunner: JobRunner;
 	analyseRunner: JobRunner;
 	promotionDeps: PromotionDeps;
+	/**
+	 * Announces an analysis event to the browser. Exposed because a cancel that
+	 * never reached a handler has no analyser behind it to report itself.
+	 */
+	analysisProgress: (event: AnalysisEvent) => void;
 	claudeAvailable: boolean;
 	warnings: string[];
 	version: string;
@@ -230,6 +236,17 @@ export function createContext(options: ContextOptions): AppContext {
 					state: "failed",
 					error: event.error,
 				});
+			} else if (event.type === "cancelled") {
+				// The revert is already written, and where it landed depends on
+				// whether this entry had ever been analysed — so the row is the
+				// only thing that knows what to announce.
+				publish({
+					type: "entry",
+					repo_id,
+					entry_id: event.entryId,
+					state: getEntry(db, event.entryId)?.analysis_state ?? "unanalysed",
+					error: null,
+				});
 			}
 			// "attempt" and "repairing" are diagnostics with no slot in the wire
 			// contract; the entry's own state already tells the table what to show.
@@ -316,6 +333,7 @@ export function createContext(options: ContextOptions): AppContext {
 		syncRunner,
 		analyseRunner,
 		promotionDeps,
+		analysisProgress: (event) => analysisDeps.onProgress?.(event),
 		claudeAvailable,
 		warnings,
 		version,

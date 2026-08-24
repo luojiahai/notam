@@ -144,8 +144,11 @@ export type TestHarness = {
 };
 
 export type HarnessOptions = {
-	/** What the fake `claude` returns. Defaults to one valid DO rule. */
-	claude?: (request: RunnerRequest) => RunnerResult;
+	/**
+	 * What the fake `claude` returns. Defaults to one valid DO rule. May return
+	 * a promise, which is how a test holds a run open long enough to stop it.
+	 */
+	claude?: (request: RunnerRequest) => RunnerResult | Promise<RunnerResult>;
 	claudeAvailable?: boolean;
 };
 
