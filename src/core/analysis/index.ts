@@ -154,7 +154,12 @@ export async function analyseEntry(
 						: { ok: false, error: parsed.error, repairable: true };
 				}
 				lastError = run.message;
-				if (run.kind === "missing") {
+				// Neither is a transient fault, so neither earns another spawn:
+				// a claude that is not installed will not appear mid-run, and a
+				// child that was killed was killed on purpose. The abort check
+				// above catches the ordinary cancellation first; this is what
+				// answers a runner reporting a kill the signal does not explain.
+				if (run.kind === "missing" || run.kind === "aborted") {
 					return { ok: false, error: run.message, repairable: false };
 				}
 				// Deliberately not interruptible. The check at the top of the

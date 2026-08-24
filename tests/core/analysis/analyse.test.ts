@@ -480,6 +480,24 @@ describe("cancelling an analysis in flight", () => {
 		expect(slept).toEqual([]);
 	});
 
+	test("treats a killed run as final even when no signal explains it", async () => {
+		const runner = replies({
+			ok: false,
+			kind: "aborted",
+			message: "claude was cancelled",
+		});
+		const result = await analyseEntry(
+			deps(runner, { maxTransportAttempts: 3 }),
+			entry,
+			repo,
+		);
+
+		// A kill is deliberate, so it is not a transport fault to retry past.
+		expect(runner.calls).toHaveLength(1);
+		expect(slept).toEqual([]);
+		expect(result.state).toBe("failed");
+	});
+
 	test("does not spawn at all when the stop lands before the first attempt", async () => {
 		const runner = replies(ok([RULE]));
 		const handler = createAnalyseHandler(deps(runner));
