@@ -1,6 +1,10 @@
 name: Release
 
 on:
+  workflow_call:
+  # The manual escape hatch. Pushing a v* tag by hand releases the commit it
+  # points at, which is how a release is re-cut when the automated path has
+  # already consumed its changesets.
   push:
     tags: ["v*"]
 
@@ -8,6 +12,44 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    name: Resolve the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # package.json is the single source of truth for the version, on both
+      # triggers: a v* tag points at the commit that bumped it, so reading the
+      # file is correct whether this run was called or tagged.
+      - id: read
+        run: |
+          version=$(jq -er .version package.json) || {
+            echo "package.json carries no version" >&2
+            exit 1
+          }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
+      # A hand-pushed tag that disagrees with package.json would otherwise ship
+      # a binary that lies about its own version.
+      #
+      # Keyed on ref_type, never on event_name. A called workflow runs as jobs
+      # inside the caller's run, so it sees the caller's event: reached through
+      # workflow_call from a push to main, event_name is "push" and the ref name
+      # is "main", and comparing that to a version fails every release.
+      - name: Check a hand-pushed tag agrees with package.json
+        if: github.ref_type == 'tag'
+        run: |
+          tagged="${GITHUB_REF_NAME#v}"
+          declared="${{ steps.read.outputs.version }}"
+          test "$tagged" = "$declared" || {
+            echo "Tag $GITHUB_REF_NAME names $tagged, package.json says $declared" >&2
+            exit 1
+          }
+
   web:
     name: Build the SPA
     runs-on: ubuntu-latest
@@ -32,7 +74,7 @@ jobs:
 
   binaries:
     name: Compile notam-${{ matrix.target }}
-    needs: web
+    needs: [version, web]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -54,18 +96,17 @@ jobs:
           name: web-dist
           path: web/dist
 
-      # `${GITHUB_REF_NAME#v}` — the tag v0.1.0 makes `notam version` print 0.1.0.
       - name: Compile
         run: |
           bun run scripts/build-binary.ts \
             --target "${{ matrix.target }}" \
-            --version "${GITHUB_REF_NAME#v}"
+            --version "${{ needs.version.outputs.version }}"
 
-      - name: Check it reports the tagged version
+      - name: Check it reports the released version
         if: matrix.target == 'linux-x64'
         run: |
           printed=$(./dist/notam-linux-x64 version)
-          expected="${GITHUB_REF_NAME#v}"
+          expected="${{ needs.version.outputs.version }}"
           test "$printed" = "$expected" || {
             echo "notam version printed '$printed', expected '$expected'" >&2
             exit 1
@@ -80,7 +121,7 @@ jobs:
 
   release:
     name: Publish the release
-    needs: binaries
+    needs: [version, binaries]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -89,6 +130,8 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.14"
+
+      - run: bun install --frozen-lockfile
 
       - uses: actions/download-artifact@v4
         with:
@@ -108,13 +151,27 @@ jobs:
             exit 1
           fi
 
+      # Through the `release:notes` alias, so the alias a person would run is
+      # the one CI proves. It fails loudly on a missing or empty section rather
+      # than publishing a release with no notes.
+      - name: Take this version's notes from the changelog
+        run: |
+          bun run release:notes --version "${{ needs.version.outputs.version }}" \
+            > release-notes.md
+          cat release-notes.md
+
+      # Creating the release is what creates the tag, so a v* tag never exists
+      # without the five assets install.sh resolves through it. `--target` is
+      # ignored when the tag is already there, which is the hand-pushed case.
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes \
+          tag="v${{ needs.version.outputs.version }}"
+          gh release create "$tag" \
+            --target "${{ github.sha }}" \
+            --title "$tag" \
+            --notes-file release-notes.md \
             dist/notam-darwin-arm64 \
             dist/notam-darwin-x64 \
             dist/notam-linux-x64 \

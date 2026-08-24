@@ -39,8 +39,8 @@ tells you which version it is replacing.
 # install somewhere else
 curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | sh -s -- --dir /usr/local/bin
 
-# install a specific release
-curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | NOTAM_VERSION=v0.1.0 sh
+# install a specific release, named by any tag on the releases page
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | NOTAM_VERSION=vX.Y.Z sh
 ```
 
 Supported platforms: `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`.
@@ -325,18 +325,38 @@ built without one reports `dev`.
 
 ## Releasing
 
-Push a `v*` tag. `.github/workflows/release.yml` builds the SPA once, compiles
-all four targets from it, generates `SHA256SUMS`, and publishes a GitHub release
-carrying those five assets. `notam version` prints the tag with its leading `v`
-stripped.
+Releases are cut by [Changesets](https://github.com/changesets/changesets), and
+`package.json` holds the version everything else derives from.
+
+Every pull request carries a changeset: a file in `.changeset/` naming the bump
+and describing the change in the words a release reader needs.
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+bun run changeset          # write one
+bun run changeset --empty  # for a change no user could observe
+bun run changeset:status   # what CI will say
 ```
+
+CI fails a pull request that has neither. NOTAM is below 1.0 and stays there
+deliberately, so **breaking changes are `minor`, everything else is `patch`**;
+`major` is reserved for the day 1.0 is cut on purpose.
+
+Merging a pull request that carries changesets makes `version.yml` open a
+"Version Packages" pull request, which folds them into `package.json` and
+`CHANGELOG.md`. Merging *that* is what ships: `release.yml` builds the SPA once,
+compiles all four targets from it, checks the binary reports the version
+`package.json` declares, generates `SHA256SUMS`, and publishes a GitHub release
+whose notes are that version's changelog section.
+
+Creating the release is what creates the `v*` tag, so a tag never exists without
+the five assets `install.sh` resolves through it. Pushing a `v*` tag by hand
+still releases the commit it points at — the escape hatch for re-cutting a
+release whose changesets are already spent — and fails loudly if the tag and
+`package.json` disagree.
 
 Every pull request runs the full gate first — typecheck, lint, the test suites,
 Playwright, the compiled-binary smoke test, and a build of all four targets — so
-packaging breakage is caught before a tag depends on it.
+packaging breakage is caught before a release depends on it.
 
 ## Troubleshooting
 

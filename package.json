@@ -24,6 +24,10 @@
 		"build:binary": "bun run scripts/build-binary.ts",
 		"build:binaries": "bun run scripts/build-binary.ts --all",
 		"checksums": "bun run scripts/checksums.ts --dir dist",
+		"release:notes": "bun run scripts/release-notes.ts",
+		"changeset": "bunx changeset",
+		"changeset:status": "bunx changeset status --since=origin/main",
+		"changeset:version": "bunx changeset version",
 		"dev:web": "bunx vite --config web/vite.config.ts",
 		"start": "bun run src/cli/index.ts"
 	},
@@ -37,6 +41,8 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.10",
+		"@changesets/changelog-github": "^1.0.0",
+		"@changesets/cli": "^3.0.1",
 		"@happy-dom/global-registrator": "^19",
 		"@playwright/test": "^1",
 		"@testing-library/dom": "^10",

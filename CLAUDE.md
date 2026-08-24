@@ -17,8 +17,9 @@ Non-obvious ones:
 - `bun run test:e2e` requires `bun run build:web` first — the server serves `web/dist`.
 - Single test: `bun test tests/core/rules/state.test.ts -t "case name"`. Single e2e: `bunx playwright test tests/e2e/promote.spec.ts -g "name"`.
 - `bun run build:binary --version 0.1.0` (`--target darwin-arm64|darwin-x64|linux-x64|linux-arm64`, or `build:binaries` for all four).
+- `bun run changeset` writes the changeset every pull request needs; `bun run changeset --empty` covers one no user could observe. `bun run changeset:status` is the check CI runs, and it only sees changesets git can see — a brand-new file needs at least `git add -N`.
 
-CI order is `typecheck` → `lint` → `test` → `build:web` → `test:e2e` → `test:binary` → `build:binaries` → `checksums`.
+CI order is `typecheck` → `lint` → `test` → `build:web` → `test:e2e` → `test:binary` → `build:binaries` → `checksums`, with the changeset gate as a separate parallel job.
 
 ## Architectural invariants
 
@@ -65,4 +66,5 @@ Don't commit, branch, push, or open PRs unless asked. When asked:
 - Conventional Commits with a scope: `feat(web):`, `fix(analysis):`, `test(binary):`, `docs:`, `chore:`, `ci:`. Lowercase imperative subject.
 - Bodies are long and explanatory — rationale, tradeoffs, what was removed. Match the existing log.
 - Branches are `type/slug` (`feat/repo-level-actions`); integration is a GitHub PR merged with a merge commit, not squash or rebase.
-- Releases: push a `v*` tag; `release.yml` builds the SPA once, compiles four targets, publishes them with `SHA256SUMS`.
+- Every pull request carries a changeset, and CI fails one that doesn't. NOTAM is below 1.0 deliberately: **breaking changes are `minor`, everything else is `patch`**. Never select `major` — that is reserved for cutting 1.0 on purpose.
+- Releases: `package.json` holds the version. Merging a pull request with changesets makes `version.yml` open a "Version Packages" pull request; merging that runs `release.yml`, which compiles four targets, and publishes them with `SHA256SUMS` and that version's changelog section. `gh release create` mints the `v*` tag, so a tag never exists without its assets. A hand-pushed `v*` tag is the escape hatch and must match `package.json`.
