@@ -184,4 +184,47 @@ describe("createClaudeRunner", () => {
 		expect(result.kind).toBe("missing");
 		expect(result.message).toContain(explicit);
 	});
+	test("kills a hung process and reports an abort when its signal fires", async () => {
+		// The same forking wrapper as the timeout test: a grandchild that
+		// outlives a SIGKILL to the shell and keeps the pipes open. Cancelling
+		// has to win a race against the reads for exactly the reason the
+		// timeout does, so it is proven against the same shape of process.
+		await fakeClaude(`/bin/sleep 30 &\nwait`);
+		const controller = new AbortController();
+		// Fired once the child is certainly running, so the abort exercises the
+		// listener rather than the pre-spawn check.
+		setTimeout(() => controller.abort(), 2000);
+
+		const started = Bun.nanoseconds();
+		const result = await runner()({
+			instruction: "I",
+			stdin: "P",
+			// Far beyond the abort, so a pass cannot come from the timeout.
+			timeoutMs: 60_000,
+			signal: controller.signal,
+		});
+		const elapsedMs = (Bun.nanoseconds() - started) / 1e6;
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected a failure");
+		expect(result.kind).toBe("aborted");
+		expect(elapsedMs).toBeLessThan(5000);
+	});
+
+	test("reports an abort without spawning when its signal is already fired", async () => {
+		await fakeClaude("echo unreachable");
+		const result = await runner()({
+			instruction: "I",
+			stdin: "P",
+			timeoutMs: 5000,
+			signal: AbortSignal.abort(),
+		});
+
+		expect(result.ok).toBe(false);
+		if (result.ok) throw new Error("expected a failure");
+		expect(result.kind).toBe("aborted");
+		// The fake writes this on every invocation, so its absence is proof
+		// that nothing was executed.
+		expect(await Bun.file(join(dir, "argv.txt")).exists()).toBe(false);
+	});
 });
