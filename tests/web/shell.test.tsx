@@ -14,6 +14,7 @@ import type {
 	RuleStatus,
 	ServerEvent,
 } from "../../src/shared/api.ts";
+import type { SyncProgress } from "../../web/src/App.tsx";
 import { App, applyServerEvent, invalidationsFor } from "../../web/src/App.tsx";
 import { useEntry, useRule } from "../../web/src/api/hooks.ts";
 import { Sidebar } from "../../web/src/components/Sidebar.tsx";
@@ -27,6 +28,7 @@ const repo: RepoSummary = {
 	path_globs: ["services/payments/**"],
 	window_days: 180,
 	sync_watermark: null,
+	sync: { state: "idle", started_at: null, last: null },
 	entries: {
 		total: 12,
 		unanalysed: 7,
@@ -96,6 +98,58 @@ describe("Sidebar", () => {
 		).toBe("true");
 		await userEvent.click(screen.getByRole("button", { name: /acme\/api/ }));
 		expect(picked).toEqual(["r_2"]);
+	});
+
+	/**
+	 * Two repositories sync at once by design, so one can be working while the
+	 * user is looking at another. Without a mark on the row that sync is
+	 * invisible until its counts move.
+	 */
+	test("marks a repository that is syncing, selected or not", () => {
+		wrap(
+			<Sidebar
+				repos={[
+					{
+						...repo,
+						id: "r_2",
+						name: "acme/api",
+						sync: {
+							state: "running",
+							started_at: "2026-08-23T09:00:00.000Z",
+							last: null,
+						},
+					},
+					repo,
+				]}
+				promotions={[]}
+				selectedRepoId="r_1"
+				onSelectRepo={() => {}}
+				onRefreshPromotions={() => {}}
+				refreshing={false}
+			/>,
+		);
+		expect(
+			screen.getByRole("button", { name: /acme\/api/ }).textContent,
+		).toContain("syncing");
+		expect(
+			screen.getByRole("button", { name: /acme\/mono/ }).textContent,
+		).not.toContain("syncing");
+	});
+
+	test("distinguishes a repository queued behind another from one running", () => {
+		wrap(
+			<Sidebar
+				repos={[
+					{ ...repo, sync: { state: "queued", started_at: null, last: null } },
+				]}
+				promotions={[]}
+				selectedRepoId="r_1"
+				onSelectRepo={() => {}}
+				onRefreshPromotions={() => {}}
+				refreshing={false}
+			/>,
+		);
+		expect(screen.getByText("queued")).toBeDefined();
 	});
 
 	test("shows each promotion with its state badge and a link to the PR", () => {
@@ -274,12 +328,33 @@ describe("invalidationsFor", () => {
 			type: "sync",
 			repo_id: "r_1",
 			phase: "finished",
+			scanned: 3,
 			created: 0,
 			updated: 3,
 			skipped: 0,
 			error: null,
 		};
 		expect(invalidationsFor(syncEvent)).toEqual([
+			["entries"],
+			["entry"],
+			["repos"],
+		]);
+
+		// A sync that has only just started has ingested nothing, so asking for
+		// entries would be a round trip for data that cannot have changed.
+		expect(invalidationsFor({ ...syncEvent, phase: "started" })).toEqual([
+			["repos"],
+		]);
+
+		// A throttled tick refreshes the rows and the counts, but not an open
+		// drawer: the terminal event reconciles that once, rather than twice a
+		// second for the length of the sync.
+		expect(invalidationsFor({ ...syncEvent, phase: "progress" })).toEqual([
+			["entries"],
+			["repos"],
+		]);
+
+		expect(invalidationsFor({ ...syncEvent, phase: "cancelled" })).toEqual([
 			["entries"],
 			["entry"],
 			["repos"],
@@ -317,34 +392,50 @@ describe("applyServerEvent", () => {
 		globalThis.fetch = originalFetch;
 	});
 
-	test("a failed sync hands its error text on, and the next sync clears it", () => {
-		// The only place a sync failure exists in the browser: no route exposes
-		// `jobs.error`, so an event dropped here is a failure the user never
-		// hears about.
+	test("a progress event records the running tally against its repository", () => {
 		const client = new QueryClient();
-		const seen: (string | null)[] = [];
-		const failed: ServerEvent = {
+		const seen: [string, SyncProgress | null][] = [];
+		applyServerEvent(
+			client,
+			{
+				type: "sync",
+				repo_id: "r_1",
+				phase: "progress",
+				scanned: 142,
+				created: 28,
+				updated: 2,
+				skipped: 112,
+				error: null,
+			},
+			() => {},
+			(repoId, progress) => seen.push([repoId, progress]),
+		);
+		expect(seen).toEqual([
+			["r_1", { scanned: 142, created: 28, updated: 2, skipped: 112 }],
+		]);
+	});
+
+	test("every other phase clears the tally, which has no totals worth showing", () => {
+		const client = new QueryClient();
+		const seen: (SyncProgress | null)[] = [];
+		const base = {
 			type: "sync",
 			repo_id: "r_1",
-			phase: "failed",
-			created: 0,
+			scanned: 9,
+			created: 9,
 			updated: 0,
 			skipped: 0,
-			error: "GET /graphql -> 401: Bad credentials",
-		};
-		applyServerEvent(
-			client,
-			failed,
-			() => {},
-			(error) => seen.push(error),
-		);
-		applyServerEvent(
-			client,
-			{ ...failed, phase: "started", error: null },
-			() => {},
-			(error) => seen.push(error),
-		);
-		expect(seen).toEqual(["GET /graphql -> 401: Bad credentials", null]);
+			error: null,
+		} as const;
+		for (const phase of ["started", "finished", "cancelled"] as const) {
+			applyServerEvent(
+				client,
+				{ ...base, phase },
+				() => {},
+				(_repoId, progress) => seen.push(progress),
+			);
+		}
+		expect(seen).toEqual([null, null, null]);
 	});
 
 	test("a rules event refetches both an open rule drawer and an open entry drawer's embedded rule status", async () => {

@@ -1,6 +1,11 @@
-import { type JobHandler, type PoolEvent, runPool } from "../jobs/pool.ts";
+import {
+	type JobHandler,
+	POOL_STOPPED,
+	type PoolEvent,
+	runPool,
+} from "../jobs/pool.ts";
 import type { JobQueue } from "../jobs/queue.ts";
-import type { JobKind } from "../shared/types.ts";
+import type { JobKind, JobRow } from "../shared/types.ts";
 
 export type JobRunnerOptions = {
 	queue: JobQueue;
@@ -30,6 +35,13 @@ export class JobRunner {
 	private again = false;
 	private stopped = false;
 	private readonly controller = new AbortController();
+	/**
+	 * One controller per job in flight, so cancelling one repository's sync
+	 * cannot touch another's. Entries appear when a job is claimed and are
+	 * removed when it settles; a retry keeps its entry, because the same job id
+	 * is about to be claimed again.
+	 */
+	private readonly controllers = new Map<string, AbortController>();
 
 	constructor(private readonly options: JobRunnerOptions) {}
 
@@ -54,6 +66,25 @@ export class JobRunner {
 	}
 
 	/**
+	 * Cancels one job, running or merely queued. Returns false when there was
+	 * nothing to cancel, which is the honest answer for a job that already
+	 * settled — never an error.
+	 *
+	 * A running job is aborted through its own signal and the pool decides its
+	 * outcome, so a job's fate is written in exactly one place. A job that has
+	 * not been claimed has no controller yet, so it is cancelled at the queue
+	 * instead and will never be claimed at all.
+	 */
+	cancel(jobId: string): boolean {
+		const controller = this.controllers.get(jobId);
+		if (controller) {
+			controller.abort();
+			return true;
+		}
+		return this.options.queue.cancel(jobId);
+	}
+
+	/**
 	 * Resolves once no drain is in flight. Tests await this; the server never
 	 * does — a request that waited for the queue to empty would be the blocking
 	 * behaviour this class exists to avoid.
@@ -64,7 +95,38 @@ export class JobRunner {
 
 	stop(): void {
 		this.stopped = true;
-		this.controller.abort();
+		// Reasoned, so a job abandoned to a shutdown returns to the queue for
+		// the next start rather than being recorded as one the user stopped.
+		this.controller.abort(POOL_STOPPED);
+	}
+
+	/**
+	 * Cancels whatever this target has pending, if anything. The pending index
+	 * makes that job single-valued, so a caller holding only a repository id
+	 * never has to guess which job it means.
+	 */
+	cancelPending(kind: JobKind, targetId: string): boolean {
+		const { pending } = this.options.queue.status(kind, targetId);
+		return pending ? this.cancel(pending.id) : false;
+	}
+
+	/**
+	 * Composed with the runner-wide controller, so `stop()` reaches a handler
+	 * that is already mid-request instead of leaving the process waiting on a
+	 * network call it no longer wants.
+	 */
+	private signalFor(job: JobRow): AbortSignal {
+		const controller = new AbortController();
+		this.controllers.set(job.id, controller);
+		return AbortSignal.any([this.controller.signal, controller.signal]);
+	}
+
+	/** `retrying` is not terminal: the same job id is about to be claimed again. */
+	private onEvent(event: PoolEvent): void {
+		if (event.type !== "started" && event.type !== "retrying") {
+			this.controllers.delete(event.job.id);
+		}
+		this.options.onEvent?.(event);
 	}
 
 	private async drain(): Promise<void> {
@@ -76,7 +138,8 @@ export class JobRunner {
 					handlers: this.options.handlers,
 					concurrency: this.options.concurrency,
 					signal: this.controller.signal,
-					onEvent: this.options.onEvent,
+					signalFor: (job) => this.signalFor(job),
+					onEvent: (event) => this.onEvent(event),
 				});
 			} while (this.again && !this.stopped);
 		} catch (error) {

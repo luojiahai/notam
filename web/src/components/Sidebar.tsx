@@ -45,8 +45,22 @@ export function Sidebar({
 						onClick={() => onSelectRepo(repo.id)}
 					>
 						<div className="repo-name">{repo.name}</div>
+						{/*
+							A repository can be syncing while the user is looking at a
+							different one — two run at once by design — so the row says
+							so. Without it a background sync is invisible until its
+							counts move.
+						*/}
 						<div className="repo-meta">
 							{repo.entries.total} entries · {repo.rules.draft} drafts
+							{repo.sync.state !== "idle" && (
+								<>
+									{" · "}
+									<span className="repo-syncing">
+										{repo.sync.state === "running" ? "syncing" : "queued"}
+									</span>
+								</>
+							)}
 						</div>
 					</button>
 				))

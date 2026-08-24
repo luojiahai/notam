@@ -25,9 +25,15 @@ export type SyncOptions = {
 	 * touching the network.
 	 */
 	clientFor?: (host: HostRow) => GitHubClient;
+	/**
+	 * Aborts the run: the repository in flight stops mid-request and is
+	 * recorded as cancelled, and everything still queued is left queued for the
+	 * next run to pick up.
+	 */
+	signal?: AbortSignal;
 };
 
-/** Returns the number of failed jobs, which the CLI turns into an exit code. */
+/** Returns the number of jobs that did not succeed, which the CLI turns into an exit code. */
 export async function runSync(options: SyncOptions): Promise<number> {
 	const { home, repoFilter, concurrency, log } = options;
 	const config = await loadConfig(defaultConfigPath(home));
@@ -82,6 +88,10 @@ export async function runSync(options: SyncOptions): Promise<number> {
 		const result = await runPool({
 			queue,
 			concurrency,
+			// One signal serves both roles: it stops the pool claiming further
+			// repositories, and the pool hands it to the handler so the current
+			// one stops mid-request rather than running to completion.
+			signal: options.signal,
 			handlers: {
 				sync: createSyncHandler({ db, clientFor, now }, (summary) => {
 					summaries.push(summary);
@@ -108,7 +118,19 @@ export async function runSync(options: SyncOptions): Promise<number> {
 		log(
 			`Synced ${summaries.length}/${selected.length} repositories — ${created} new entries, ${updated} updated.`,
 		);
-		return result.failed;
+
+		// Whatever was never claimed stays `queued`, which is a faithful record
+		// of work still to do: the next run picks it up without being told.
+		if (result.cancelled > 0) {
+			const pendingCount = queue.count("queued");
+			log(
+				`Stopped: ${result.cancelled} cancelled mid-sync` +
+					(pendingCount > 0
+						? `, ${pendingCount} still queued for the next run.`
+						: "."),
+			);
+		}
+		return result.failed + result.cancelled;
 	} finally {
 		db.close();
 	}

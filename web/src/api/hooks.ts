@@ -30,6 +30,8 @@ import {
 	RuleSummarySchema,
 	type RulesResponse,
 	RulesResponseSchema,
+	type SyncCancelled,
+	SyncCancelledSchema,
 	type SyncStarted,
 	SyncStartedSchema,
 } from "../../../src/shared/api.ts";
@@ -150,6 +152,22 @@ export function useSync() {
 	return useMutation<SyncStarted, Error, string>({
 		mutationFn: (repoId) =>
 			post(SyncStartedSchema, `/api/repos/${repoId}/sync`, {}),
+		onSuccess: () => {
+			void client.invalidateQueries({ queryKey: queryKeys.repos });
+		},
+	});
+}
+
+/**
+ * Stopping a sync that has already finished is not an error, so this has no
+ * failure path of its own: the server answers `cancelled: false` and the
+ * repository refetch shows whatever actually happened.
+ */
+export function useCancelSync() {
+	const client = useQueryClient();
+	return useMutation<SyncCancelled, Error, string>({
+		mutationFn: (repoId) =>
+			post(SyncCancelledSchema, `/api/repos/${repoId}/sync/cancel`, {}),
 		onSuccess: () => {
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},

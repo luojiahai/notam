@@ -15,10 +15,9 @@ import type { GitDataClient, GitHubClient } from "../core/github/types.ts";
 import type { PromotionDeps } from "../core/promotion/index.ts";
 import { createSyncHandler } from "../core/sync/index.ts";
 import { JobQueue } from "../jobs/queue.ts";
-import type { ServerEvent } from "../shared/api.ts";
+import type { ServerEvent, SyncTotals } from "../shared/api.ts";
 import type { HostRow } from "../shared/types.ts";
 import { getEntry } from "../store/entries.ts";
-import { listRepos } from "../store/repos.ts";
 import { VERSION } from "../version.ts";
 import { EventBus } from "./events.ts";
 import { JobRunner } from "./runner.ts";
@@ -59,7 +58,84 @@ export type AppContext = {
 };
 
 /**
- * Wires plans 1 and 2 together and hands the result to the routes.
+ * How often a repository mid-sync may push its running totals to the browser.
+ * Core reports every pull request faithfully; a list refetch that often would
+ * be a self-inflicted load test, so the coalescing lives here — transport
+ * policy, not business logic.
+ */
+const PROGRESS_INTERVAL_MS = 500;
+
+/**
+ * Accumulates per-repository sync progress and emits at most one event per
+ * repository per interval.
+ *
+ * Keyed per repository rather than globally because two repositories sync at
+ * once by design: one shared budget would let a fast repository starve a slow
+ * one's updates, and which one lost would be arbitrary.
+ *
+ * The totals are copied from the summary the sync is already keeping rather
+ * than tallied here, so the live figures and the ones the run settles on
+ * cannot disagree.
+ *
+ * There is no trailing flush. A settled job publishes `finished` immediately
+ * afterwards with the authoritative totals, so a final partial interval would
+ * only emit a near-identical event a few milliseconds earlier.
+ */
+export function createProgressPublisher(
+	publish: (event: ServerEvent) => void,
+	intervalMs: number = PROGRESS_INTERVAL_MS,
+) {
+	const totals = new Map<string, SyncTotals>();
+	const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+	const emit = (repoId: string) => {
+		timers.delete(repoId);
+		const current = totals.get(repoId);
+		if (!current) return;
+		publish({
+			type: "sync",
+			repo_id: repoId,
+			phase: "progress",
+			...current,
+			error: null,
+		});
+	};
+
+	return {
+		record(repoId: string, summary: SyncTotals): void {
+			totals.set(repoId, {
+				scanned: summary.scanned,
+				created: summary.created,
+				updated: summary.updated,
+				skipped: summary.skipped,
+			});
+			if (!timers.has(repoId)) {
+				timers.set(
+					repoId,
+					setTimeout(() => emit(repoId), intervalMs),
+				);
+			}
+		},
+
+		/** Drops a repository's pending tally once its job settles. */
+		settle(repoId: string): void {
+			const timer = timers.get(repoId);
+			if (timer) clearTimeout(timer);
+			timers.delete(repoId);
+			totals.delete(repoId);
+		},
+
+		stop(): void {
+			for (const timer of timers.values()) clearTimeout(timer);
+			timers.clear();
+			totals.clear();
+		},
+	};
+}
+
+/**
+ * Wires the store, the GitHub clients and the job runners together and hands
+ * the result to the routes.
  *
  * Every edge that leaves the process — GitHub over GraphQL, GitHub over REST,
  * the `claude` subprocess — arrives here as an injectable function, so the
@@ -181,48 +257,56 @@ export function createContext(options: ContextOptions): AppContext {
 		onError: onDrainError,
 	});
 
+	const progress = createProgressPublisher(publish);
+
+	/** Every sync event but `progress`, which the publisher above owns. */
+	const publishSync = (
+		repo_id: string,
+		phase: "started" | "finished" | "failed" | "cancelled",
+		totals: SyncTotals,
+		error: string | null,
+	) => publish({ type: "sync", repo_id, phase, ...totals, error });
+
+	const NO_TOTALS: SyncTotals = {
+		scanned: 0,
+		created: 0,
+		updated: 0,
+		skipped: 0,
+	};
+
 	const syncRunner = new JobRunner({
 		queue,
 		// Repositories are few and each sync is mostly waiting on GitHub, so two
 		// at a time is plenty and keeps the rate-limit backoff comprehensible.
 		concurrency: 2,
 		handlers: {
-			sync: createSyncHandler({ db, clientFor: githubFor, now }, (summary) => {
-				publish({
-					type: "sync",
-					repo_id: repoIdByName(db, summary.repo) ?? "",
-					phase: "finished",
-					created: summary.created,
-					updated: summary.updated,
-					skipped: summary.skipped,
-					error: null,
-				});
-			}),
+			sync: createSyncHandler(
+				{
+					db,
+					clientFor: githubFor,
+					now,
+					onProgress: (_event, repo, summary) =>
+						progress.record(repo.id, summary),
+				},
+				(summary, repo) => publishSync(repo.id, "finished", summary, null),
+			),
 		},
 		onEvent: (event) => {
 			publishBatch();
 			if (event.job.kind !== "sync") return;
-			if (event.type === "started") {
-				publish({
-					type: "sync",
-					repo_id: event.job.target_id,
-					phase: "started",
-					created: 0,
-					updated: 0,
-					skipped: 0,
-					error: null,
-				});
-			} else if (event.type === "failed") {
-				publish({
-					type: "sync",
-					repo_id: event.job.target_id,
-					phase: "failed",
-					created: 0,
-					updated: 0,
-					skipped: 0,
-					error: event.error,
-				});
+			const repo_id = event.job.target_id;
+			if (event.type !== "started" && event.type !== "retrying") {
+				progress.settle(repo_id);
 			}
+			if (event.type === "started") {
+				publishSync(repo_id, "started", NO_TOTALS, null);
+			} else if (event.type === "failed") {
+				publishSync(repo_id, "failed", NO_TOTALS, event.error);
+			} else if (event.type === "cancelled") {
+				publishSync(repo_id, "cancelled", NO_TOTALS, null);
+			}
+			// `interrupted` is a shutdown, not an outcome: the job is back in the
+			// queue and the next start will run it, so there is nothing to report.
 		},
 		onError: onDrainError,
 	});
@@ -246,15 +330,7 @@ export function createContext(options: ContextOptions): AppContext {
 		shutdown: () => {
 			syncRunner.stop();
 			analyseRunner.stop();
+			progress.stop();
 		},
 	};
-}
-
-/**
- * `SyncSummary` carries the repository's `owner/repo` name, because that is
- * what a CLI summary line prints. The browser keys everything by id, so the
- * name is resolved back here rather than widening the core summary type.
- */
-function repoIdByName(db: Database, name: string): string | null {
-	return listRepos(db).find((repo) => repo.name === name)?.id ?? null;
 }

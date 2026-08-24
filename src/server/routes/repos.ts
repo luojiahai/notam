@@ -10,7 +10,12 @@ export function repoRoutes(ctx: AppContext): Hono {
 	app.get("/repos", (c) =>
 		c.json(
 			listRepos(ctx.db).map((repo) =>
-				toRepoSummary(ctx.db, repo, requireHost(ctx.db, repo.host_id)),
+				toRepoSummary(
+					ctx.db,
+					repo,
+					requireHost(ctx.db, repo.host_id),
+					ctx.queue.status("sync", repo.id),
+				),
 			),
 		),
 	);

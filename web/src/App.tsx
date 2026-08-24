@@ -6,6 +6,7 @@ import { useServerEvents } from "./api/events.ts";
 import {
 	queryKeys,
 	useAnalyse,
+	useCancelSync,
 	useMeta,
 	usePromotions,
 	useRefreshPromotions,
@@ -22,6 +23,14 @@ import { Sidebar } from "./components/Sidebar.tsx";
 
 export type DrawerTarget = { kind: "entry" | "rule"; id: string } | null;
 export type BatchState = { queued: number; running: number };
+
+/** The running totals of a sync still walking pages, as the wire reports them. */
+export type SyncProgress = {
+	scanned: number;
+	created: number;
+	updated: number;
+	skipped: number;
+};
 
 /**
  * The query-key families a given server event strands if left uninvalidated.
@@ -51,6 +60,14 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 		case "rules":
 			return [["rules"], ["rule"], ["entries"], ["entry"], queryKeys.repos];
 		case "sync":
+			// `started` refetches the repository list alone: it carries the new
+			// sync state, and no pull request has been ingested yet, so asking
+			// for entries would be a round trip for data that cannot have
+			// changed. `progress` refreshes the rows and the counts but leaves
+			// the drawers alone — a throttled tick must not refetch an open
+			// entry twice a second, and the terminal event reconciles them.
+			if (event.phase === "started") return [queryKeys.repos];
+			if (event.phase === "progress") return [["entries"], queryKeys.repos];
 			return [["entries"], ["entry"], queryKeys.repos];
 		case "promotion":
 			return [["promotions"], ["rules"], queryKeys.repos];
@@ -60,28 +77,41 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 }
 
 /**
- * Applies one server event to the cache: batch progress updates local state
- * directly, everything else invalidates the query keys `invalidationsFor`
- * names for it.
+ * Applies one server event to the cache: queue depth and sync progress update
+ * local state directly, everything else invalidates the query keys
+ * `invalidationsFor` names for it.
  *
- * A failed sync is the one event whose payload is not just a cache hint. Spec
- * section 14 requires failures to be surfaced rather than swallowed, and a
- * sync job's error text reaches the browser only here — no route exposes it —
- * so it is held in App state and rendered in the header. It is passed on
- * verbatim; the next sync of any repository clears it.
+ * Sync progress is the one payload that is not a cache hint. It is a live
+ * tally with no query behind it, so it is held in App state; every phase but
+ * `progress` clears it, because a sync that started, ended, or was stopped has
+ * no totals worth showing.
+ *
+ * How a sync *ended* is deliberately not held here: it lives on the repository
+ * summary, so it survives a reload and is cleared only by that repository's
+ * own next sync rather than by any other repository finishing.
  */
 export function applyServerEvent(
 	client: QueryClient,
 	event: ServerEvent,
 	setBatch: (batch: BatchState) => void,
-	setSyncError: (error: string | null) => void,
+	setProgress: (repoId: string, progress: SyncProgress | null) => void,
 ): void {
 	if (event.type === "batch") {
 		setBatch({ queued: event.queued, running: event.running });
 		return;
 	}
 	if (event.type === "sync") {
-		setSyncError(event.phase === "failed" ? event.error : null);
+		setProgress(
+			event.repo_id,
+			event.phase === "progress"
+				? {
+						scanned: event.scanned,
+						created: event.created,
+						updated: event.updated,
+						skipped: event.skipped,
+					}
+				: null,
+		);
 	}
 	for (const queryKey of invalidationsFor(event)) {
 		void client.invalidateQueries({ queryKey });
@@ -96,7 +126,7 @@ export function App() {
 	const [tab, setTab] = useState<"entries" | "rules">("entries");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
 	const [batch, setBatch] = useState<BatchState>({ queued: 0, running: 0 });
-	const [syncError, setSyncError] = useState<string | null>(null);
+	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
 
 	// Select the first repository as soon as one is known, and never fight the
 	// user's own choice afterwards.
@@ -108,13 +138,28 @@ export function App() {
 
 	const promotions = usePromotions(repoId);
 	const sync = useSync();
+	const cancelSync = useCancelSync();
 	const refresh = useRefreshPromotions();
 	const analyse = useAnalyse();
 
+	const recordProgress = useCallback(
+		(id: string, totals: SyncProgress | null) => {
+			setProgress((current) => {
+				if (totals === null) {
+					if (!(id in current)) return current;
+					const { [id]: _cleared, ...rest } = current;
+					return rest;
+				}
+				return { ...current, [id]: totals };
+			});
+		},
+		[],
+	);
+
 	useServerEvents(
 		useCallback(
-			(event) => applyServerEvent(client, event, setBatch, setSyncError),
-			[client],
+			(event) => applyServerEvent(client, event, setBatch, recordProgress),
+			[client, recordProgress],
 		),
 	);
 
@@ -128,12 +173,19 @@ export function App() {
 
 	const repo = repos.data?.find((candidate) => candidate.id === repoId) ?? null;
 
-	// Server text, unrewritten: the boot warnings, then whatever the last sync
-	// failure said, then a sync request that never even started.
+	// Server text, unrewritten: the boot warnings, then how this repository's
+	// last sync failed, then a sync or stop request that never even landed.
+	// The failure comes from the repository summary rather than from a
+	// transient event, so it survives a reload and is cleared by this
+	// repository's own next sync rather than by any other repository's.
+	const lastSync = repo?.sync.last ?? null;
 	const warnings = [
 		...(meta.data?.warnings ?? []),
-		...(syncError === null ? [] : [syncError]),
+		...(lastSync?.outcome === "failed" && lastSync.error
+			? [lastSync.error]
+			: []),
 		...(sync.error ? [sync.error.message] : []),
+		...(cancelSync.error ? [cancelSync.error.message] : []),
 	];
 
 	return (
@@ -159,8 +211,10 @@ export function App() {
 				<RepoBar
 					repoName={repo.name}
 					syncedAt={repo.sync_watermark}
+					sync={repo.sync}
+					progress={progress[repo.id] ?? null}
 					onSync={() => sync.mutate(repo.id)}
-					syncing={sync.isPending}
+					onCancelSync={() => cancelSync.mutate(repo.id)}
 				/>
 			)}
 			<div className="tabs" role="tablist">

@@ -5,7 +5,7 @@ export type AnalysisState =
 	| "analysed"
 	| "failed";
 export type JobKind = "sync" | "analyse" | "promote";
-export type JobState = "queued" | "running" | "done" | "failed";
+export type JobState = "queued" | "running" | "done" | "failed" | "cancelled";
 
 export type HostRow = {
 	id: string;

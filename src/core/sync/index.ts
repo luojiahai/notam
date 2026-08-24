@@ -50,7 +50,20 @@ export type SyncDeps = {
 	clientFor: (host: HostRow) => GitHubClient;
 	now: () => Date;
 	pageSize?: number;
-	onProgress?: (event: SyncEvent) => void;
+	/**
+	 * Aborts the run. Entries already upserted stay — the sync is interrupted,
+	 * not undone — and the watermark is left where it was, so the next run
+	 * re-covers the ground this one abandoned.
+	 */
+	signal?: AbortSignal;
+	/**
+	 * The repository is passed alongside because a caller fanning several syncs
+	 * out at once has no other way to tell whose progress this is, and the
+	 * running summary because it is the one place these counts are kept — a
+	 * caller tallying the events itself would drift from the totals the run
+	 * settles on. It is the live object, so copy anything you retain.
+	 */
+	onProgress?: (event: SyncEvent, repo: RepoRow, summary: SyncSummary) => void;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -107,13 +120,23 @@ export async function syncRepo(
 	let reachedFloor = false;
 
 	while (!reachedFloor) {
+		deps.signal?.throwIfAborted();
 		const page = await client.listMergedPRs(ref, {
 			cursor,
 			pageSize: deps.pageSize,
+			signal: deps.signal,
 		});
-		deps.onProgress?.({ type: "page", scanned: page.nodes.length });
+		deps.onProgress?.(
+			{ type: "page", scanned: page.nodes.length },
+			repo,
+			summary,
+		);
 
 		for (const node of page.nodes) {
+			// Checked per PR rather than per page: a page is up to fifty
+			// hydration round trips, and a stop press should not have to wait
+			// out the rest of them.
+			deps.signal?.throwIfAborted();
 			let updatedAt: string;
 			try {
 				updatedAt = iso(node.updatedAt);
@@ -123,11 +146,15 @@ export async function syncRepo(
 				// the rest of the page.
 				if (error instanceof RangeError) {
 					summary.missing++;
-					deps.onProgress?.({
-						type: "missing",
-						number: node.number,
-						reason: "malformed-timestamp",
-					});
+					deps.onProgress?.(
+						{
+							type: "missing",
+							number: node.number,
+							reason: "malformed-timestamp",
+						},
+						repo,
+						summary,
+					);
 					continue;
 				}
 				throw error;
@@ -141,7 +168,9 @@ export async function syncRepo(
 
 			let detail: PRDetail;
 			try {
-				detail = await client.fetchPRDetail(ref, node.number);
+				detail = await client.fetchPRDetail(ref, node.number, {
+					signal: deps.signal,
+				});
 			} catch (error) {
 				// A PR deleted or made inaccessible between the list call and the
 				// detail call is a counted skip, not a fatal error —
@@ -154,11 +183,11 @@ export async function syncRepo(
 					(error.status === 404 || error.status === 410)
 				) {
 					summary.missing++;
-					deps.onProgress?.({
-						type: "missing",
-						number: node.number,
-						reason: "not-found",
-					});
+					deps.onProgress?.(
+						{ type: "missing", number: node.number, reason: "not-found" },
+						repo,
+						summary,
+					);
 					continue;
 				}
 				throw error;
@@ -167,11 +196,11 @@ export async function syncRepo(
 
 			if (!matchesGlobs(entry.changed_paths, repo.path_globs)) {
 				summary.skipped++;
-				deps.onProgress?.({
-					type: "skipped",
-					number: entry.number,
-					reason: "globs",
-				});
+				deps.onProgress?.(
+					{ type: "skipped", number: entry.number, reason: "globs" },
+					repo,
+					summary,
+				);
 				continue;
 			}
 
@@ -179,11 +208,11 @@ export async function syncRepo(
 			if (result.created) summary.created++;
 			else summary.updated++;
 			if (entry.paths_truncated) summary.truncated++;
-			deps.onProgress?.({
-				type: "stored",
-				number: entry.number,
-				created: result.created,
-			});
+			deps.onProgress?.(
+				{ type: "stored", number: entry.number, created: result.created },
+				repo,
+				summary,
+			);
 		}
 
 		if (reachedFloor) break;
@@ -212,14 +241,19 @@ export async function syncRepo(
 /** Adapts syncRepo to the worker pool: a `sync` job's target_id is a repo id. */
 export function createSyncHandler(
 	deps: SyncDeps,
-	onSummary?: (summary: SyncSummary) => void,
+	onSummary?: (summary: SyncSummary, repo: RepoRow) => void,
 ): JobHandler {
-	return async (job) => {
+	return async (job, signal) => {
 		const repo = getRepo(deps.db, job.target_id);
 		if (!repo)
 			throw new Error(
 				`sync job ${job.id} targets unknown repo ${job.target_id}`,
 			);
-		onSummary?.(await syncRepo(deps, repo));
+		// Awaited into a binding rather than passed straight into `onSummary?.()`:
+		// an optional call does not evaluate its arguments, so a handler built
+		// without a summary callback would silently skip the sync entirely and
+		// still report the job done.
+		const summary = await syncRepo({ ...deps, signal }, repo);
+		onSummary?.(summary, repo);
 	};
 }
