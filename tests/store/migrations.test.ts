@@ -175,8 +175,8 @@ describe("migration 002", () => {
 	});
 
 	test("is version 2 and leaves 001 untouched", () => {
-		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2]);
 		expect(MIGRATIONS[0]?.name).toBe("hosts_repos_entries_jobs");
+		expect(MIGRATIONS[1]?.version).toBe(2);
 		expect(MIGRATIONS[1]?.name).toBe("rules_promotions");
 	});
 
@@ -188,11 +188,11 @@ describe("migration 002", () => {
 		db.exec(first.sql);
 		db.exec("PRAGMA user_version = 1");
 
-		expect(applyMigrations(db)).toBe(1);
+		expect(applyMigrations(db)).toBe(MIGRATIONS.length - 1);
 		expect(
 			db.query<{ user_version: number }, []>("PRAGMA user_version").get()
 				?.user_version,
-		).toBe(2);
+		).toBe(MIGRATIONS.length);
 		db.close();
 	});
 
@@ -200,7 +200,8 @@ describe("migration 002", () => {
 		const db = openDatabase(":memory:");
 		applyMigrations(db);
 		db.exec(`
-			INSERT INTO hosts VALUES ('github', 'GitHub', 'https://api.github.com', 'https://api.github.com/graphql', 'T');
+			INSERT INTO hosts (id, label, api_base, graphql, token_env)
+				VALUES ('github', 'GitHub', 'https://api.github.com', 'https://api.github.com/graphql', 'T');
 			INSERT INTO repos (id, host_id, name, created_at) VALUES ('r_1', 'github', 'acme/mono', '2026-08-23T00:00:00.000Z');
 			INSERT INTO entries (id, repo_id, number, title, author, url, updated_at, payload_json, created_at)
 				VALUES ('e_1', 'r_1', 1, 't', 'a', 'u', '2026-08-23T00:00:00.000Z', '{}', '2026-08-23T00:00:00.000Z');
@@ -222,6 +223,47 @@ describe("migration 002", () => {
 		expect(
 			db.query<{ c: number }, []>("SELECT COUNT(*) AS c FROM rules").get()?.c,
 		).toBe(0);
+		db.close();
+	});
+});
+
+describe("migration 003", () => {
+	function hostColumns(db: Database): string[] {
+		return db
+			.query<{ name: string }, []>("PRAGMA table_info(hosts)")
+			.all()
+			.map((row) => row.name);
+	}
+
+	test("adds web_base to hosts", () => {
+		const db = openDatabase(":memory:");
+		applyMigrations(db);
+		expect(hostColumns(db)).toEqual([
+			"id",
+			"label",
+			"api_base",
+			"graphql",
+			"token_env",
+			"web_base",
+		]);
+		db.close();
+	});
+
+	test("leaves an existing host with an empty web_base for applyConfig to fill", () => {
+		const db = openDatabase(":memory:");
+		const first = MIGRATIONS[0];
+		if (!first) throw new Error("migration 001 is missing");
+		db.exec(first.sql);
+		db.exec("PRAGMA user_version = 1");
+		db.exec(
+			"INSERT INTO hosts (id,label,api_base,graphql,token_env) VALUES ('github','GitHub','a','b','T')",
+		);
+
+		applyMigrations(db);
+		expect(
+			db.query<{ web_base: string }, []>("SELECT web_base FROM hosts").get()
+				?.web_base,
+		).toBe("");
 		db.close();
 	});
 });

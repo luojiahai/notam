@@ -9,12 +9,14 @@ hosts:
     # label: GitHub.com          # optional, defaults to the id
     api_base: https://api.github.com
     graphql: https://api.github.com/graphql
+    # web_base: https://github.com   # optional, derived from api_base
     token_env: NOTAM_GITHUB_TOKEN
 
   # A GitHub Enterprise Server instance, if you have one:
   # - id: ghe
   #   api_base: https://ghe.example.net/api/v3
   #   graphql: https://ghe.example.net/api/graphql
+  #   web_base: https://ghe.example.net
   #   token_env: NOTAM_GHE_TOKEN
 
 repos:

@@ -25,6 +25,7 @@ const repo: RepoSummary = {
 	name: "acme/mono",
 	host_id: "github",
 	host_label: "GitHub",
+	url: "https://github.com/acme/mono",
 	default_branch: "main",
 	path_globs: ["services/payments/**"],
 	window_days: 180,

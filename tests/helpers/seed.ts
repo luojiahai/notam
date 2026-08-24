@@ -93,6 +93,7 @@ export function seedDatabase(now: Date = SEED_NOW): Seeded {
 		label: "GitHub",
 		api_base: "https://api.github.com",
 		graphql: "https://api.github.com/graphql",
+		web_base: "https://github.com",
 		token_env: "NOTAM_TEST_TOKEN",
 	});
 	const repo = upsertRepo(

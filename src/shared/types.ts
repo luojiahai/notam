@@ -12,6 +12,7 @@ export type HostRow = {
 	label: string;
 	api_base: string;
 	graphql: string;
+	web_base: string;
 	token_env: string;
 };
 

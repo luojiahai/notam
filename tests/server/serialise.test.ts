@@ -52,6 +52,7 @@ describe("serialise", () => {
 			toRepoSummary(db, repo, host, { pending: null, last: null }),
 		);
 		expect(summary.host_label).toBe("GitHub");
+		expect(summary.url).toBe("https://github.com/acme/mono");
 		expect(summary.entries).toEqual({
 			total: 1,
 			unanalysed: 1,

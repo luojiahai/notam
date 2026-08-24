@@ -5,18 +5,20 @@ import type { HostRow } from "../shared/types.ts";
 /** A host's id comes from config, not from newId — it is the user's own label. */
 export function upsertHost(db: Database, host: HostConfig): HostRow {
 	db.query(
-		`INSERT INTO hosts (id, label, api_base, graphql, token_env)
-		 VALUES ($id, $label, $api_base, $graphql, $token_env)
+		`INSERT INTO hosts (id, label, api_base, graphql, web_base, token_env)
+		 VALUES ($id, $label, $api_base, $graphql, $web_base, $token_env)
 		 ON CONFLICT(id) DO UPDATE SET
 		   label = excluded.label,
 		   api_base = excluded.api_base,
 		   graphql = excluded.graphql,
+		   web_base = excluded.web_base,
 		   token_env = excluded.token_env`,
 	).run({
 		$id: host.id,
 		$label: host.label,
 		$api_base: host.api_base,
 		$graphql: host.graphql,
+		$web_base: host.web_base,
 		$token_env: host.token_env,
 	});
 	const row = getHost(db, host.id);

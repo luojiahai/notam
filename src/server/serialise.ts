@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import { repoWebUrl } from "../core/github/urls.ts";
 import type { PromotionPlan } from "../core/promotion/index.ts";
 import { renderRuleFile, rulePath } from "../core/promotion/markdown.ts";
 import type { RefreshSummary } from "../core/promotion/refresh.ts";
@@ -113,6 +114,7 @@ export function toRepoSummary(
 		name: repo.name,
 		host_id: repo.host_id,
 		host_label: host.label,
+		url: repoWebUrl(host.web_base, repo.name),
 		default_branch: repo.default_branch,
 		path_globs: repo.path_globs,
 		window_days: repo.window_days,

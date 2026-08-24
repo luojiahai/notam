@@ -53,6 +53,37 @@ describe("ConfigSchema", () => {
 		expect(result.data.hosts[0]?.label).toBe("GitHub.com");
 	});
 
+	test("derives a host web_base from its api_base", () => {
+		const result = parse(MINIMAL);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		expect(result.data.hosts[0]?.web_base).toBe("https://github.com");
+	});
+
+	test("keeps an explicit host web_base", () => {
+		const result = parse(
+			MINIMAL.replace(
+				"token_env: NOTAM_GITHUB_TOKEN",
+				"token_env: NOTAM_GITHUB_TOKEN\n    web_base: https://github.example.net",
+			),
+		);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		expect(result.data.hosts[0]?.web_base).toBe("https://github.example.net");
+	});
+
+	test("strips a trailing slash from an explicit web_base", () => {
+		const result = parse(
+			MINIMAL.replace(
+				"token_env: NOTAM_GITHUB_TOKEN",
+				"token_env: NOTAM_GITHUB_TOKEN\n    web_base: https://github.com/",
+			),
+		);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		expect(result.data.hosts[0]?.web_base).toBe("https://github.com");
+	});
+
 	test("rejects a repo referencing an undeclared host", () => {
 		const result = parse(MINIMAL.replace("host: github", "host: ghe"));
 		expect(result.success).toBe(false);

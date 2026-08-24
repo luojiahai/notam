@@ -138,6 +138,7 @@ hosts:
     label: Acme GHE
     api_base: https://ghe.acme.net/api/v3
     graphql: https://ghe.acme.net/api/graphql
+    web_base: https://ghe.acme.net
     token_env: NOTAM_GHE_TOKEN
 
 repos:
@@ -164,6 +165,7 @@ server:
 | `hosts[].label` | the `id` | Display name in the UI |
 | `hosts[].api_base` | required | REST base URL |
 | `hosts[].graphql` | required | GraphQL endpoint |
+| `hosts[].web_base` | derived from `api_base` | Where repositories are browsed, for the links in the UI |
 | `hosts[].token_env` | required | Name of the environment variable holding the token |
 | `repos[].host` | required | Must match a `hosts[].id` |
 | `repos[].name` | required | `owner/repo` |

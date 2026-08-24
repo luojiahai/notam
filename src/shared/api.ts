@@ -117,6 +117,8 @@ export const RepoSummarySchema = z.object({
 	name: z.string(),
 	host_id: z.string(),
 	host_label: z.string(),
+	/** Where this repository is browsed, on whichever host serves it. */
+	url: z.string(),
 	default_branch: z.string(),
 	path_globs: z.array(z.string()),
 	window_days: z.number().int(),
