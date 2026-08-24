@@ -114,7 +114,7 @@ export function toRepoSummary(
 		name: repo.name,
 		host_id: repo.host_id,
 		host_label: host.label,
-		url: repoWebUrl(host.web_base, repo.name),
+		url: repoWebUrl(host, repo.name),
 		default_branch: repo.default_branch,
 		path_globs: repo.path_globs,
 		window_days: repo.window_days,

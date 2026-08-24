@@ -114,8 +114,9 @@ CREATE INDEX rules_repo_directive ON rules(repo_id, directive COLLATE NOCASE);
 		version: 3,
 		name: "host_web_base",
 		sql: `
--- Empty only until the next startup: applyConfig reconciles every host from
--- config.yaml, where the column always resolves to a value.
+-- Filled for every host still in config.yaml by the applyConfig that follows
+-- this migration. A host already dropped from config keeps its rows and stays
+-- empty, which is why reading the column falls back to api_base.
 ALTER TABLE hosts ADD COLUMN web_base TEXT NOT NULL DEFAULT '';
 `,
 	},

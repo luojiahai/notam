@@ -175,8 +175,8 @@ describe("migration 002", () => {
 	});
 
 	test("is version 2 and leaves 001 untouched", () => {
+		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3]);
 		expect(MIGRATIONS[0]?.name).toBe("hosts_repos_entries_jobs");
-		expect(MIGRATIONS[1]?.version).toBe(2);
 		expect(MIGRATIONS[1]?.name).toBe("rules_promotions");
 	});
 
@@ -188,11 +188,11 @@ describe("migration 002", () => {
 		db.exec(first.sql);
 		db.exec("PRAGMA user_version = 1");
 
-		expect(applyMigrations(db)).toBe(MIGRATIONS.length - 1);
+		expect(applyMigrations(db)).toBe(2);
 		expect(
 			db.query<{ user_version: number }, []>("PRAGMA user_version").get()
 				?.user_version,
-		).toBe(MIGRATIONS.length);
+		).toBe(3);
 		db.close();
 	});
 
@@ -234,6 +234,11 @@ describe("migration 003", () => {
 			.all()
 			.map((row) => row.name);
 	}
+
+	test("is version 3 and leaves the migrations before it untouched", () => {
+		expect(MIGRATIONS[2]?.version).toBe(3);
+		expect(MIGRATIONS[2]?.name).toBe("host_web_base");
+	});
 
 	test("adds web_base to hosts", () => {
 		const db = openDatabase(":memory:");

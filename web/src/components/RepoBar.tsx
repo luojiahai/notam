@@ -81,9 +81,9 @@ export function RepoBar({
 	return (
 		<div className="repo-bar">
 			{/*
-				The name and the link to it are one thing, so they sit closer
-				than the bar's own gap: everything about the state of a sync is
-				at the other end, beside the buttons that cause it.
+				The left is identity and the right is sync: the watermark reads
+				as the result of one, so it sits with the outcome and the
+				buttons rather than beside the name.
 			*/}
 			<div className="repo-bar-title">
 				<strong className="repo-bar-name">{repoName}</strong>

@@ -26,9 +26,21 @@ describe("webBaseFromApi", () => {
 });
 
 describe("repoWebUrl", () => {
-	test("joins a base and an owner/repo name", () => {
-		expect(repoWebUrl("https://github.com", "acme/mono")).toBe(
-			"https://github.com/acme/mono",
-		);
+	test("joins a host's web base and an owner/repo name", () => {
+		expect(
+			repoWebUrl(
+				{ web_base: "https://github.com", api_base: "https://api.github.com" },
+				"acme/mono",
+			),
+		).toBe("https://github.com/acme/mono");
+	});
+
+	test("falls back to the API origin for a host config no longer reconciles", () => {
+		expect(
+			repoWebUrl(
+				{ web_base: "", api_base: "https://ghe.example.net/api/v3" },
+				"acme/mono",
+			),
+		).toBe("https://ghe.example.net/acme/mono");
 	});
 });

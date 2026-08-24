@@ -406,7 +406,7 @@ a.btn-icon {
  * than a 2px outline at the same box, so it is set smaller to weigh the same
  * as the icons beside it.
  */
-.btn-icon .github-mark {
+.btn-icon .icon.github-mark {
 	width: 0.75rem;
 	height: 0.75rem;
 }

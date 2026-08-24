@@ -13,7 +13,18 @@ export function webBaseFromApi(apiBase: string): string {
 	return url.origin;
 }
 
-/** `name` is the configured `owner/repo`, which is also GitHub's own path. */
-export function repoWebUrl(webBase: string, name: string): string {
-	return `${webBase}/${name}`;
+/**
+ * `name` is the configured `owner/repo`, which is also GitHub's own path.
+ *
+ * The host is taken whole rather than just its `web_base`, because a host row
+ * outlives config: `applyConfig` is additive, so a host dropped from
+ * config.yaml keeps its rows and never has the column filled. Deriving from
+ * `api_base` there beats emitting a path with no origin, which the browser
+ * would resolve against NOTAM itself.
+ */
+export function repoWebUrl(
+	host: { web_base: string; api_base: string },
+	name: string,
+): string {
+	return `${host.web_base || webBaseFromApi(host.api_base)}/${name}`;
 }
