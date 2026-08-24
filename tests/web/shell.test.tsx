@@ -79,6 +79,19 @@ describe("Shell", () => {
 		// there is, and nothing else would notice.
 		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("NOTAM");
 	});
+
+	test("links to NOTAM's own repository", () => {
+		wrap(
+			<Shell version="1.0.0" warnings={[]} sidebar={null}>
+				{null}
+			</Shell>,
+		);
+		const link = screen.getByRole("link", { name: "NOTAM on GitHub" });
+		expect(link.getAttribute("href")).toBe(
+			"https://github.com/luojiahai/notam",
+		);
+		expect(link.getAttribute("target")).toBe("_blank");
+	});
 });
 
 describe("Sidebar", () => {

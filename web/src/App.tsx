@@ -210,6 +210,7 @@ export function App() {
 			{repo && (
 				<RepoBar
 					repoName={repo.name}
+					repoUrl={repo.url}
 					syncedAt={repo.sync_watermark}
 					sync={repo.sync}
 					progress={progress[repo.id] ?? null}

@@ -1,9 +1,12 @@
 import { ArrowDownToLine, Square } from "lucide-react";
 import type { RepoSync } from "../../../src/shared/api.ts";
 import type { SyncProgress } from "../App.tsx";
+import { GithubMark } from "./GithubMark.tsx";
 
 export type RepoBarProps = {
 	repoName: string;
+	/** Composed by the server, so an Enterprise host links to its own site. */
+	repoUrl: string;
 	/**
 	 * `sync_watermark`: the newest `merged_at` this repository has ingested,
 	 * which is sync's own pagination floor — NOT the time of the last sync. A
@@ -65,6 +68,7 @@ function lastOutcome(
  */
 export function RepoBar({
 	repoName,
+	repoUrl,
 	syncedAt,
 	sync,
 	progress,
@@ -76,7 +80,25 @@ export function RepoBar({
 	const outcome = lastOutcome(sync);
 	return (
 		<div className="repo-bar">
-			<strong className="repo-bar-name">{repoName}</strong>
+			{/*
+				The name and the link to it are one thing, so they sit closer
+				than the bar's own gap: everything about the state of a sync is
+				at the other end, beside the buttons that cause it.
+			*/}
+			<div className="repo-bar-title">
+				<strong className="repo-bar-name">{repoName}</strong>
+				<a
+					className="btn-icon"
+					href={repoUrl}
+					target="_blank"
+					rel="noreferrer"
+					aria-label={`${repoName} on GitHub`}
+					title={`${repoName} on GitHub`}
+				>
+					<GithubMark className="icon" />
+				</a>
+			</div>
+			<span className="spacer" />
 			<span className="repo-bar-meta">
 				{synced === null ? "nothing synced yet" : `merged through ${synced}`}
 			</span>
@@ -99,7 +121,6 @@ export function RepoBar({
 					{outcome.label}
 				</span>
 			)}
-			<span className="spacer" />
 			{pending && (
 				<button type="button" onClick={onCancelSync}>
 					<Square className="icon" aria-hidden="true" />
