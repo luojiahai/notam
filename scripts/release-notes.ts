@@ -10,24 +10,27 @@
  */
 import { readFile } from "node:fs/promises";
 
+const CHANGELOG = "CHANGELOG.md";
+
 /** Matches a release heading — `## 0.1.1` — and never `### Patch Changes`. */
 const RELEASE_HEADING = /^##[^#]/;
 
-function headingFor(markdown: string, version: string): number {
-	const lines = markdown.split("\n");
-	// A summary may contain a fenced block, and a fenced block may contain a
-	// line that looks exactly like a release heading. Tracking the fences is
-	// what keeps a changelog entry about Markdown from splitting the section
-	// it is written in.
+/**
+ * The line index of every release heading, in order.
+ *
+ * A summary may contain a fenced block, and a fenced block may contain a line
+ * that looks exactly like a release heading. Tracking the fences is what keeps
+ * a changelog entry about Markdown from splitting the section it is written in.
+ */
+function releaseHeadings(lines: string[]): number[] {
+	const headings: number[] = [];
 	let fenced = false;
 	for (let index = 0; index < lines.length; index++) {
 		const line = lines[index] ?? "";
 		if (line.trimStart().startsWith("```")) fenced = !fenced;
-		else if (!fenced && RELEASE_HEADING.test(line)) {
-			if (line.slice(2).trim() === version) return index;
-		}
+		else if (!fenced && RELEASE_HEADING.test(line)) headings.push(index);
 	}
-	return -1;
+	return headings;
 }
 
 export function extractReleaseNotes(markdown: string, version: string): string {
@@ -35,21 +38,17 @@ export function extractReleaseNotes(markdown: string, version: string): string {
 	// bare version and the git tags carry the `v`.
 	const wanted = version.startsWith("v") ? version.slice(1) : version;
 	const lines = markdown.split("\n");
-	const start = headingFor(markdown, wanted);
-	if (start === -1) {
+	const headings = releaseHeadings(lines);
+	const at = headings.findIndex(
+		(index) => (lines[index] ?? "").slice(2).trim() === wanted,
+	);
+	if (at === -1) {
 		throw new Error(`No "## ${wanted}" section in the changelog`);
 	}
 
-	let fenced = false;
-	let end = lines.length;
-	for (let index = start + 1; index < lines.length; index++) {
-		const line = lines[index] ?? "";
-		if (line.trimStart().startsWith("```")) fenced = !fenced;
-		else if (!fenced && RELEASE_HEADING.test(line)) {
-			end = index;
-			break;
-		}
-	}
+	// The section runs to the next release, or to the end for the oldest one.
+	const start = headings[at] ?? 0;
+	const end = headings[at + 1] ?? lines.length;
 
 	const body = lines
 		.slice(start + 1, end)
@@ -61,9 +60,8 @@ export function extractReleaseNotes(markdown: string, version: string): string {
 	return `${body}\n`;
 }
 
-export function parseArgs(argv: string[]): { version: string; file: string } {
+export function parseArgs(argv: string[]): { version: string } {
 	let version: string | undefined;
-	let file = "CHANGELOG.md";
 
 	for (let index = 0; index < argv.length; index++) {
 		const flag = argv[index];
@@ -79,23 +77,20 @@ export function parseArgs(argv: string[]): { version: string; file: string } {
 			case "--version":
 				version = value();
 				break;
-			case "--file":
-				file = value();
-				break;
 			default:
 				throw new Error(`Unknown flag "${flag}"`);
 		}
 	}
 
 	if (version === undefined) throw new Error("--version is required");
-	return { version, file };
+	return { version };
 }
 
 if (import.meta.main) {
 	try {
-		const { version, file } = parseArgs(Bun.argv.slice(2));
+		const { version } = parseArgs(Bun.argv.slice(2));
 		process.stdout.write(
-			extractReleaseNotes(await readFile(file, "utf8"), version),
+			extractReleaseNotes(await readFile(CHANGELOG, "utf8"), version),
 		);
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : String(error));

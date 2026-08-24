@@ -99,17 +99,8 @@ describe("extractReleaseNotes", () => {
 });
 
 describe("parseArgs", () => {
-	test("defaults to CHANGELOG.md", () => {
-		expect(parseArgs(["--version", "0.1.1"])).toEqual({
-			version: "0.1.1",
-			file: "CHANGELOG.md",
-		});
-	});
-
-	test("takes another file", () => {
-		expect(
-			parseArgs(["--version", "0.1.1", "--file", "docs/CHANGELOG.md"]),
-		).toEqual({ version: "0.1.1", file: "docs/CHANGELOG.md" });
+	test("takes the version to print", () => {
+		expect(parseArgs(["--version", "0.1.1"])).toEqual({ version: "0.1.1" });
 	});
 
 	test("requires a version", () => {
@@ -117,7 +108,7 @@ describe("parseArgs", () => {
 	});
 
 	test("refuses a flag used as a value", () => {
-		expect(() => parseArgs(["--version", "--file"])).toThrow(
+		expect(() => parseArgs(["--version", "--nope"])).toThrow(
 			"--version needs a value",
 		);
 	});

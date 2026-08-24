@@ -35,8 +35,13 @@ jobs:
 
       # A hand-pushed tag that disagrees with package.json would otherwise ship
       # a binary that lies about its own version.
+      #
+      # Keyed on ref_type, never on event_name. A called workflow runs as jobs
+      # inside the caller's run, so it sees the caller's event: reached through
+      # workflow_call from a push to main, event_name is "push" and the ref name
+      # is "main", and comparing that to a version fails every release.
       - name: Check a hand-pushed tag agrees with package.json
-        if: github.event_name == 'push'
+        if: github.ref_type == 'tag'
         run: |
           tagged="${GITHUB_REF_NAME#v}"
           declared="${{ steps.read.outputs.version }}"
@@ -146,8 +151,8 @@ jobs:
             exit 1
           fi
 
-      # Runs through the documented `release:notes` alias so that alias is
-      # exercised too. It fails loudly on a missing or empty section rather
+      # Through the `release:notes` alias, so the alias a person would run is
+      # the one CI proves. It fails loudly on a missing or empty section rather
       # than publishing a release with no notes.
       - name: Take this version's notes from the changelog
         run: |
