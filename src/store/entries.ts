@@ -173,6 +173,24 @@ export function setAnalysisState(
 	);
 }
 
+/**
+ * Reclaiming a job left `running` by a dead process returns it to the queue,
+ * but the entries table is where the UI reads what analysis is doing, so it
+ * has to say the same thing. Restricted to entries a queued analyse job
+ * actually backs: an entry stranded `running` with nothing behind it is left
+ * alone rather than relabelled to a state the jobs table cannot vouch for.
+ * Returns how many rows moved.
+ */
+export function requeueRunningEntries(db: Database): number {
+	return db
+		.query(
+			`UPDATE entries SET analysis_state = 'queued'
+			 WHERE analysis_state = 'running'
+			   AND id IN (SELECT target_id FROM jobs WHERE kind = 'analyse' AND state = 'queued')`,
+		)
+		.run().changes;
+}
+
 export function listEntriesByState(
 	db: Database,
 	repoId: string,

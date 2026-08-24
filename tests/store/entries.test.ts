@@ -9,10 +9,12 @@ import {
 	listEntries,
 	listEntriesByIds,
 	listEntriesByState,
+	requeueRunningEntries,
 	setAnalysisState,
 	upsertEntry,
 } from "../../src/store/entries.ts";
 import { upsertHost } from "../../src/store/hosts.ts";
+import { insertJob } from "../../src/store/jobs.ts";
 import { applyMigrations } from "../../src/store/migrations.ts";
 import { setWatermark, upsertRepo } from "../../src/store/repos.ts";
 import { normalisedEntry, SEED_NOW, seedDatabase } from "../helpers/seed.ts";
@@ -277,5 +279,29 @@ describe("listEntriesByIds", () => {
 		expect(found.map((row) => row.id)).toEqual([entry.id]);
 		expect(found[0]?.payload.number).toBe(4821);
 		db.close();
+	});
+});
+
+describe("requeueRunningEntries", () => {
+	test("returns a running entry to queued when its analyse job is back in the queue", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "running", { error: null });
+		insertJob(db, {
+			id: "j_1",
+			kind: "analyse",
+			target_id: id,
+			created_at: NOW.toISOString(),
+		});
+
+		expect(requeueRunningEntries(db)).toBe(1);
+		expect(getEntryByNumber(db, repoId, 4821)?.analysis_state).toBe("queued");
+	});
+
+	test("leaves a running entry with nothing queued behind it alone", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "running", { error: null });
+
+		expect(requeueRunningEntries(db)).toBe(0);
+		expect(getEntryByNumber(db, repoId, 4821)?.analysis_state).toBe("running");
 	});
 });

@@ -372,9 +372,6 @@ describe("invalidationsFor", () => {
 			["repos"],
 		]);
 
-		expect(invalidationsFor({ type: "batch", queued: 1, running: 2 })).toEqual(
-			[],
-		);
 		expect(invalidationsFor({ type: "hello", version: "1.0.0" })).toEqual([]);
 		expect(invalidationsFor({ type: "heartbeat" })).toEqual([]);
 	});
@@ -407,7 +404,6 @@ describe("applyServerEvent", () => {
 				skipped: 112,
 				error: null,
 			},
-			() => {},
 			(repoId, progress) => seen.push([repoId, progress]),
 		);
 		expect(seen).toEqual([
@@ -428,11 +424,8 @@ describe("applyServerEvent", () => {
 			error: null,
 		} as const;
 		for (const phase of ["started", "finished", "cancelled"] as const) {
-			applyServerEvent(
-				client,
-				{ ...base, phase },
-				() => {},
-				(_repoId, progress) => seen.push(progress),
+			applyServerEvent(client, { ...base, phase }, (_repoId, progress) =>
+				seen.push(progress),
 			);
 		}
 		expect(seen).toEqual([null, null, null]);
@@ -484,12 +477,7 @@ describe("applyServerEvent", () => {
 		});
 
 		status = "verified";
-		applyServerEvent(
-			client,
-			{ type: "rules", repo_id: "r_1" },
-			() => {},
-			() => {},
-		);
+		applyServerEvent(client, { type: "rules", repo_id: "r_1" }, () => {});
 
 		await waitFor(() => {
 			expect(screen.getByTestId("rule-status").textContent).toBe("verified");

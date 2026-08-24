@@ -12,6 +12,7 @@ import { runPool } from "../jobs/pool.ts";
 import { JobQueue } from "../jobs/queue.ts";
 import type { HostRow } from "../shared/types.ts";
 import { applyConfig } from "../store/bootstrap.ts";
+import { requeueRunningEntries } from "../store/entries.ts";
 import { migrateDatabase } from "../store/migrations.ts";
 
 export type SyncOptions = {
@@ -65,6 +66,11 @@ export async function runSync(options: SyncOptions): Promise<number> {
 
 		const queue = new JobQueue(db, now);
 		const reclaimed = queue.resetStale();
+		// This pool handles sync alone, so a queued analyse job waits here until a
+		// server next starts, and its entry has to read `queued` for that whole
+		// span rather than a `running` nothing is working on. Unconditional,
+		// because such an entry can predate this run entirely.
+		requeueRunningEntries(db);
 		if (reclaimed > 0)
 			log(`Reclaimed ${reclaimed} job(s) left running by a previous process.`);
 		for (const repo of selected) queue.enqueue("sync", repo.id);

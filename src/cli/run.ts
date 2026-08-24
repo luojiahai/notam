@@ -11,6 +11,7 @@ import { resolveAssets } from "../server/assets.ts";
 import { type AppContext, createContext } from "../server/context.ts";
 import { type Listener, listen } from "../server/listen.ts";
 import { applyConfig } from "../store/bootstrap.ts";
+import { requeueRunningEntries } from "../store/entries.ts";
 import { migrateDatabase } from "../store/migrations.ts";
 
 export type RunOptions = {
@@ -129,6 +130,11 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 		// resumes them, so a Ctrl-C mid-analysis does not leave work stranded
 		// until the user happens to press an unrelated button.
 		const reclaimed = ctx.queue.resetStale();
+		// Not conditional on this start reclaiming anything: an entry can already
+		// be stranded `running` with its job back in the queue, left there by a
+		// process that exited between the two writes, and nothing else ever puts
+		// the pair back in step.
+		requeueRunningEntries(db);
 		if (reclaimed > 0) {
 			options.log(
 				`Reclaimed ${reclaimed} job(s) left running by a previous process.`,

@@ -192,12 +192,6 @@ export function createContext(options: ContextOptions): AppContext {
 			}));
 
 	const publish = (event: ServerEvent) => bus.publish(event);
-	const publishBatch = () =>
-		publish({
-			type: "batch",
-			queued: queue.count("queued"),
-			running: queue.count("running"),
-		});
 
 	/** The analyser reports entry ids; the browser filters by repository. */
 	const repoOf = (entryId: string): string =>
@@ -253,7 +247,6 @@ export function createContext(options: ContextOptions): AppContext {
 		queue,
 		concurrency: config.analysis.concurrency,
 		handlers: { analyse: createAnalyseHandler(analysisDeps) },
-		onEvent: publishBatch,
 		onError: onDrainError,
 	});
 
@@ -292,7 +285,6 @@ export function createContext(options: ContextOptions): AppContext {
 			),
 		},
 		onEvent: (event) => {
-			publishBatch();
 			if (event.job.kind !== "sync") return;
 			const repo_id = event.job.target_id;
 			if (event.type !== "started" && event.type !== "retrying") {

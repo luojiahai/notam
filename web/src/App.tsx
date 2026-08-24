@@ -22,7 +22,6 @@ import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
 export type DrawerTarget = { kind: "entry" | "rule"; id: string } | null;
-export type BatchState = { queued: number; running: number };
 
 /** The running totals of a sync still walking pages, as the wire reports them. */
 export type SyncProgress = {
@@ -53,8 +52,6 @@ export type SyncProgress = {
  */
 export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 	switch (event.type) {
-		case "batch":
-			return [];
 		case "entry":
 			return [["entries"], queryKeys.entry(event.entry_id), queryKeys.repos];
 		case "rules":
@@ -77,9 +74,9 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 }
 
 /**
- * Applies one server event to the cache: queue depth and sync progress update
- * local state directly, everything else invalidates the query keys
- * `invalidationsFor` names for it.
+ * Applies one server event to the cache: sync progress updates local state
+ * directly, everything else invalidates the query keys `invalidationsFor`
+ * names for it.
  *
  * Sync progress is the one payload that is not a cache hint. It is a live
  * tally with no query behind it, so it is held in App state; every phase but
@@ -93,13 +90,8 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 export function applyServerEvent(
 	client: QueryClient,
 	event: ServerEvent,
-	setBatch: (batch: BatchState) => void,
 	setProgress: (repoId: string, progress: SyncProgress | null) => void,
 ): void {
-	if (event.type === "batch") {
-		setBatch({ queued: event.queued, running: event.running });
-		return;
-	}
 	if (event.type === "sync") {
 		setProgress(
 			event.repo_id,
@@ -125,7 +117,6 @@ export function App() {
 	const [repoId, setRepoId] = useState<string | null>(null);
 	const [tab, setTab] = useState<"entries" | "rules">("entries");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
-	const [batch, setBatch] = useState<BatchState>({ queued: 0, running: 0 });
 	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
 
 	// Select the first repository as soon as one is known, and never fight the
@@ -158,7 +149,7 @@ export function App() {
 
 	useServerEvents(
 		useCallback(
-			(event) => applyServerEvent(client, event, setBatch, recordProgress),
+			(event) => applyServerEvent(client, event, recordProgress),
 			[client, recordProgress],
 		),
 	);
@@ -251,7 +242,6 @@ export function App() {
 				<EntriesTab
 					key={repoId}
 					repoId={repoId}
-					batch={batch}
 					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
 				/>
 			) : (

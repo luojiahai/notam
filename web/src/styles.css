@@ -1113,6 +1113,9 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	color: var(--text-muted);
 	white-space: nowrap;
 }
+.bulk-progress[data-active="true"] {
+	color: var(--text);
+}
 
 /*
  * The trailing controls of a toolbar, kept together. Without this the toolbar's

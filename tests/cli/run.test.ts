@@ -11,7 +11,16 @@ import {
 } from "../../src/core/config/load.ts";
 import { JobQueue } from "../../src/jobs/queue.ts";
 import { MetaSchema, RepoSummarySchema } from "../../src/shared/api.ts";
+import {
+	getEntry,
+	setAnalysisState,
+	upsertEntry,
+} from "../../src/store/entries.ts";
+import { upsertHost } from "../../src/store/hosts.ts";
+import { insertJob } from "../../src/store/jobs.ts";
 import { migrateDatabase } from "../../src/store/migrations.ts";
+import { upsertRepo } from "../../src/store/repos.ts";
+import { normalisedEntry, SEED_NOW } from "../helpers/seed.ts";
 
 const homes: string[] = [];
 
@@ -201,6 +210,65 @@ describe("startServer", () => {
 			expect(server.ctx.queue.get(claimed.id)?.state).toBe("failed");
 			expect(server.ctx.queue.count("queued")).toBe(0);
 			expect(lines.join("\n")).toContain("Reclaimed 1 job(s)");
+		} finally {
+			await server.stop();
+		}
+	});
+
+	test("puts an entry back in step with an analyse job that is already queued", async () => {
+		const home = await tempHome();
+
+		// Nothing is `running`, so there is nothing to reclaim: the job was
+		// returned to the queue by an earlier process that then exited before the
+		// entry caught up. Only a reconciliation that does not depend on this
+		// start reclaiming something will clear it.
+		const seeded = await migrateDatabase(defaultDbPath(home));
+		upsertHost(seeded.db, {
+			id: "github",
+			label: "GitHub",
+			api_base: "https://api.github.com",
+			graphql: "https://api.github.com/graphql",
+			token_env: "NOTAM_RUN_TEST_TOKEN",
+		});
+		const repo = upsertRepo(
+			seeded.db,
+			"github",
+			{
+				host: "github",
+				name: "acme/mono",
+				path_globs: ["services/payments/**"],
+				default_branch: "main",
+				window_days: 180,
+			},
+			SEED_NOW,
+		);
+		const entryId = upsertEntry(
+			seeded.db,
+			repo.id,
+			normalisedEntry(),
+			SEED_NOW,
+		).id;
+		setAnalysisState(seeded.db, entryId, "running", { error: null });
+		insertJob(seeded.db, {
+			id: "j_seed",
+			kind: "analyse",
+			target_id: entryId,
+			created_at: SEED_NOW.toISOString(),
+		});
+		seeded.db.close();
+
+		const lines: string[] = [];
+		const server = await startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: (line) => lines.push(line),
+			openBrowser: () => {},
+		});
+		try {
+			expect(getEntry(server.ctx.db, entryId)?.analysis_state).toBe("queued");
+			expect(lines.join("\n")).not.toContain("Reclaimed");
 		} finally {
 			await server.stop();
 		}
