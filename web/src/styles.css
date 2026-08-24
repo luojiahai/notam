@@ -509,6 +509,19 @@ input[type="search"]::-webkit-search-cancel-button {
 	color: var(--text);
 }
 
+/*
+ * The wordmark spelled out. It sits below the brand and above the version in
+ * the header's three-level hierarchy, so it takes `--text-muted` rather than
+ * the `--text-faint` the version string owns. No letter-spacing: 0.14em over
+ * thirty-four characters costs width the row does not have.
+ */
+.brand-expansion {
+	font-family: var(--font-mono);
+	font-size: 0.6875rem;
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
 .spacer {
 	flex: 1;
 	min-width: 0;
@@ -613,6 +626,10 @@ input[type="search"]::-webkit-search-cancel-button {
 	}
 	.header {
 		gap: 0.5rem;
+	}
+	/* A truncated expansion reads worse than none at all. */
+	.brand-expansion {
+		display: none;
 	}
 }
 

@@ -19,6 +19,9 @@ export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 		<div className="shell">
 			<header className="header">
 				<h1 className="brand">NOTAM</h1>
+				<span className="brand-expansion">
+					Notes On Team Agreements &amp; Methods
+				</span>
 				<span className="spacer" />
 				<ThemeToggle />
 				<span className="version">{version}</span>
