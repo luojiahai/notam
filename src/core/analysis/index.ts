@@ -1,9 +1,14 @@
 import type { Database } from "bun:sqlite";
-import type { JobHandler } from "../../jobs/pool.ts";
+import { type JobHandler, POOL_STOPPED } from "../../jobs/pool.ts";
 import type { JobQueue } from "../../jobs/queue.ts";
 import type { AnalysedRule } from "../../shared/analysis.ts";
 import type { EntryRow, NewRule, RepoRow } from "../../shared/types.ts";
-import { getEntry, setAnalysisState } from "../../store/entries.ts";
+import {
+	getEntry,
+	revertAnalysisState,
+	setAnalysisState,
+} from "../../store/entries.ts";
+import { selectPendingAnalyseJobsForRepo } from "../../store/jobs.ts";
 import { getRepo } from "../../store/repos.ts";
 import { deleteDraftRulesForEntry, insertRules } from "../../store/rules.ts";
 import { slugify } from "../rules/slug.ts";
@@ -26,7 +31,8 @@ export type AnalysisEvent =
 	| { type: "attempt"; entryId: string; attempt: number }
 	| { type: "repairing"; entryId: string; error: string }
 	| { type: "analysed"; entryId: string; rules: number }
-	| { type: "failed"; entryId: string; error: string };
+	| { type: "failed"; entryId: string; error: string }
+	| { type: "cancelled"; entryId: string };
 
 export type AnalysisResult = {
 	entryId: string;
@@ -47,6 +53,8 @@ export type AnalysisDeps = {
 	/** Resolves a repository's prompt_template. Injected so tests need no files. */
 	loadTemplate?: (path: string | null) => Promise<string>;
 	onProgress?: (event: AnalysisEvent) => void;
+	/** Fires to stop this analysis: the child is killed and the abort re-thrown. */
+	signal?: AbortSignal;
 };
 
 /** Thrown by the job handler so the job row carries the same text as the entry. */
@@ -96,6 +104,7 @@ export async function analyseEntry(
 		backoffMs = (attempt: number) => 500 * 2 ** (attempt - 1),
 		sleep = (ms: number) => Bun.sleep(ms),
 		loadTemplate = (path: string | null) => loadPromptTemplate(path),
+		signal,
 	} = deps;
 
 	onProgress?.({ type: "started", entryId: entry.id });
@@ -124,8 +133,20 @@ export async function analyseEntry(
 		const attempt = async (instruction: string): Promise<Attempt> => {
 			let lastError = "the analyser produced no output";
 			for (let n = 1; n <= maxTransportAttempts; n++) {
+				signal?.throwIfAborted();
 				onProgress?.({ type: "attempt", entryId: entry.id, attempt: n });
-				const run = await runner({ instruction, stdin, model, timeoutMs });
+				const run = await runner({
+					instruction,
+					stdin,
+					model,
+					timeoutMs,
+					signal,
+				});
+				// Before `run.ok` is even consulted: a killed child exits
+				// non-zero, which the branches below would otherwise read as a
+				// transport fault and retry — spawning claude again on behalf
+				// of a user who just asked for it to stop.
+				signal?.throwIfAborted();
 				if (run.ok) {
 					const parsed = parseAnalyserOutput(run.stdout);
 					return parsed.ok
@@ -136,12 +157,16 @@ export async function analyseEntry(
 				if (run.kind === "missing") {
 					return { ok: false, error: run.message, repairable: false };
 				}
+				// Deliberately not interruptible. The check at the top of the
+				// next iteration catches an abort that lands during it, and the
+				// wait it can add to a stop press is bounded by one backoff.
 				if (n < maxTransportAttempts) await sleep(backoffMs(n));
 			}
 			return { ok: false, error: lastError, repairable: false };
 		};
 
 		let outcome = await attempt(INSTRUCTION);
+		signal?.throwIfAborted();
 		if (!outcome.ok && outcome.repairable) {
 			onProgress?.({
 				type: "repairing",
@@ -171,6 +196,11 @@ export async function analyseEntry(
 			error: null,
 		};
 	} catch (error) {
+		// A stop the user pressed is not a fault, so it must not travel the
+		// `fail` path and land in the entry's `last_error`. It goes back to the
+		// handler, which owns the difference between a cancellation and a
+		// shutdown, and the pool records the job's outcome from there.
+		if (signal?.aborted) throw error;
 		return fail(describe(error));
 	}
 }
@@ -185,7 +215,7 @@ export function createAnalyseHandler(
 	deps: AnalysisDeps,
 	onResult?: (result: AnalysisResult) => void,
 ): JobHandler {
-	return async (job) => {
+	return async (job, signal) => {
 		const entry = getEntry(deps.db, job.target_id);
 		if (!entry) {
 			throw new AnalysisError(
@@ -198,10 +228,26 @@ export function createAnalyseHandler(
 				`entry ${entry.id} references unknown repo ${entry.repo_id}`,
 			);
 		}
-		const result = await analyseEntry(deps, entry, repo);
-		onResult?.(result);
-		if (result.state === "failed") {
-			throw new AnalysisError(result.error ?? "analysis failed");
+		try {
+			const result = await analyseEntry({ ...deps, signal }, entry, repo);
+			onResult?.(result);
+			if (result.state === "failed") {
+				throw new AnalysisError(result.error ?? "analysis failed");
+			}
+		} catch (error) {
+			// This is the seam that knows the difference, because it is the one
+			// that speaks both languages: `analyseEntry` re-throws every abort
+			// alike, and only here is the pool's reason available.
+			//
+			// A shutdown returns the job to the queue, so the entry has to stay
+			// `running` for `requeueRunningEntries` to reconcile at the next
+			// start. Reverting it would leave an `unanalysed` entry with a
+			// queued job behind it, which nothing repairs.
+			if (signal.aborted && signal.reason !== POOL_STOPPED) {
+				revertAnalysisState(deps.db, entry.id);
+				deps.onProgress?.({ type: "cancelled", entryId: entry.id });
+			}
+			throw error;
 		}
 	};
 }
@@ -227,4 +273,73 @@ export function queueEntries(
 		}
 	}
 	return { queued, skipped };
+}
+
+/**
+ * Stops one entry's analysis. `"aborted"` reached a run in flight, `"dequeued"`
+ * took a job that had never been claimed, and null means there was nothing
+ * pending — which is an outcome, not an error.
+ */
+export type CancelOutcome = "aborted" | "dequeued" | null;
+
+/**
+ * Injected rather than imported: cancelling a claimed job means aborting a
+ * signal the server's `JobRunner` holds, and `core/` cannot reach into
+ * `server/`.
+ */
+export type EntryCanceller = (entryId: string) => CancelOutcome;
+
+export type CancelResult = { cancelled: string[]; skipped: string[] };
+
+/**
+ * The inverse of `queueEntries`: stops a selection, whether each entry's job
+ * was already running or merely waiting.
+ *
+ * Only the dequeued entries are written back here. A job that was aborted is
+ * still unwinding inside its handler, and that handler is what reverts it — so
+ * the entry is written in exactly one place per path, and nothing races a live
+ * run to its own row.
+ */
+export function cancelEntries(
+	db: Database,
+	cancel: EntryCanceller,
+	entryIds: string[],
+	onProgress?: (event: AnalysisEvent) => void,
+): CancelResult {
+	const cancelled: string[] = [];
+	const skipped: string[] = [];
+	for (const entryId of entryIds) {
+		const outcome = cancel(entryId);
+		if (outcome === null) {
+			skipped.push(entryId);
+			continue;
+		}
+		if (outcome === "dequeued") {
+			revertAnalysisState(db, entryId);
+			onProgress?.({ type: "cancelled", entryId });
+		}
+		cancelled.push(entryId);
+	}
+	return { cancelled, skipped };
+}
+
+/**
+ * Stops everything pending for one repository.
+ *
+ * The work is found in the jobs table rather than in `entries.analysis_state`,
+ * so this acts only on entries the queue can vouch for. There is no `skipped`
+ * to report: nothing was asked for by id, so nothing can be absent.
+ */
+export function cancelRepoEntries(
+	db: Database,
+	cancel: EntryCanceller,
+	repoId: string,
+	onProgress?: (event: AnalysisEvent) => void,
+): { cancelled: string[] } {
+	const entryIds = selectPendingAnalyseJobsForRepo(db, repoId).map(
+		(job) => job.target_id,
+	);
+	return {
+		cancelled: cancelEntries(db, cancel, entryIds, onProgress).cancelled,
+	};
 }

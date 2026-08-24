@@ -10,6 +10,7 @@ import {
 	listEntriesByIds,
 	listEntriesByState,
 	requeueRunningEntries,
+	revertAnalysisState,
 	setAnalysisState,
 	upsertEntry,
 } from "../../src/store/entries.ts";
@@ -303,5 +304,44 @@ describe("requeueRunningEntries", () => {
 
 		expect(requeueRunningEntries(db)).toBe(0);
 		expect(getEntryByNumber(db, repoId, 4821)?.analysis_state).toBe("running");
+	});
+});
+
+describe("revertAnalysisState", () => {
+	test("returns a never-analysed entry to unanalysed and clears its error", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "queued", { error: "stale" });
+
+		expect(revertAnalysisState(db, id)).toBe(true);
+		const row = getEntryByNumber(db, repoId, 4821);
+		expect(row?.analysis_state).toBe("unanalysed");
+		expect(row?.last_error).toBeNull();
+	});
+
+	test("returns a previously analysed entry to analysed, keeping when that was", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "analysed", {
+			analysedAt: "2026-08-24T00:00:00.000Z",
+			error: null,
+		});
+		setAnalysisState(db, id, "running", { error: null });
+
+		expect(revertAnalysisState(db, id)).toBe(true);
+		const row = getEntryByNumber(db, repoId, 4821);
+		expect(row?.analysis_state).toBe("analysed");
+		expect(row?.analysed_at).toBe("2026-08-24T00:00:00.000Z");
+	});
+
+	test("refuses an entry that is not queued or running", () => {
+		const id = upsertEntry(db, repoId, entry(), NOW).id;
+		setAnalysisState(db, id, "analysed", {
+			analysedAt: "2026-08-24T00:00:00.000Z",
+			error: null,
+		});
+
+		// The race this guards: a stop press landing just after the run it
+		// meant to stop has already written its result.
+		expect(revertAnalysisState(db, id)).toBe(false);
+		expect(getEntryByNumber(db, repoId, 4821)?.analysis_state).toBe("analysed");
 	});
 });

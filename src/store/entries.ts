@@ -174,6 +174,31 @@ export function setAnalysisState(
 }
 
 /**
+ * Undoes a queue press: an entry stops being busy and goes back to where it
+ * was, which is `analysed` when it has been analysed before and `unanalysed`
+ * when it has not.
+ *
+ * Restricted to entries that are actually `queued` or `running`, so a call
+ * that races a run finishing cannot un-analyse an entry that just succeeded.
+ *
+ * `last_error` is cleared rather than restored, and there is nothing to
+ * restore it from: queueing an entry clears it, so by the time anything can be
+ * cancelled the previous failure has already gone. Returns whether a row moved.
+ */
+export function revertAnalysisState(db: Database, entryId: string): boolean {
+	return (
+		db
+			.query(
+				`UPDATE entries
+				 SET analysis_state = CASE WHEN analysed_at IS NULL THEN 'unanalysed' ELSE 'analysed' END,
+				     last_error = NULL
+				 WHERE id = ? AND analysis_state IN ('queued', 'running')`,
+			)
+			.run(entryId).changes > 0
+	);
+}
+
+/**
  * Reclaiming a job left `running` by a dead process returns it to the queue,
  * but the entries table is where the UI reads what analysis is doing, so it
  * has to say the same thing. Restricted to entries a queued analyse job

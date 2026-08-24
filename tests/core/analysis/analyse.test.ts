@@ -2,7 +2,10 @@ import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
 	type AnalysisDeps,
+	type AnalysisEvent,
 	analyseEntry,
+	cancelEntries,
+	cancelRepoEntries,
 	createAnalyseHandler,
 	queueEntries,
 } from "../../../src/core/analysis/index.ts";
@@ -12,9 +15,10 @@ import type {
 	RunnerResult,
 } from "../../../src/core/analysis/runner.ts";
 import { transitionRule } from "../../../src/core/rules/state.ts";
+import { POOL_STOPPED } from "../../../src/jobs/pool.ts";
 import { JobQueue } from "../../../src/jobs/queue.ts";
 import type { EntryRow, JobRow, RepoRow } from "../../../src/shared/types.ts";
-import { getEntry } from "../../../src/store/entries.ts";
+import { getEntry, setAnalysisState } from "../../../src/store/entries.ts";
 import {
 	getPromotion,
 	insertPromotion,
@@ -400,5 +404,184 @@ describe("queueEntries", () => {
 		expect(second.queued).toEqual([]);
 		expect(second.skipped).toEqual([entry.id]);
 		expect(queue.count("queued")).toBe(1);
+	});
+});
+
+describe("cancelling an analysis in flight", () => {
+	function job(targetId: string): JobRow {
+		return {
+			id: "j_1",
+			kind: "analyse",
+			target_id: targetId,
+			state: "running",
+			attempts: 1,
+			error: null,
+			created_at: SEED_NOW.toISOString(),
+			started_at: SEED_NOW.toISOString(),
+			finished_at: null,
+		};
+	}
+
+	/** A runner that stops its own analysis the moment it is called. */
+	function abortsOnCall(controller: AbortController) {
+		const calls: RunnerRequest[] = [];
+		const runner = async (request: RunnerRequest): Promise<RunnerResult> => {
+			calls.push(request);
+			controller.abort();
+			return { ok: false, kind: "aborted", message: "claude was cancelled" };
+		};
+		return Object.assign(runner, { calls });
+	}
+
+	test("records the stop on the entry as a revert, never as a failure", async () => {
+		const controller = new AbortController();
+		const events: AnalysisEvent[] = [];
+		const runner = abortsOnCall(controller);
+		const handler = createAnalyseHandler(
+			deps(runner, { onProgress: (event) => events.push(event) }),
+		);
+
+		await expect(handler(job(entry.id), controller.signal)).rejects.toThrow();
+
+		const row = getEntry(db, entry.id);
+		expect(row?.analysis_state).toBe("unanalysed");
+		expect(row?.last_error).toBeNull();
+		expect(events.map((event) => event.type)).toContain("cancelled");
+		expect(events.map((event) => event.type)).not.toContain("failed");
+	});
+
+	test("returns an entry that had been analysed before to analysed", async () => {
+		setAnalysisState(db, entry.id, "analysed", {
+			analysedAt: SEED_NOW.toISOString(),
+			error: null,
+		});
+		const controller = new AbortController();
+		const handler = createAnalyseHandler(deps(abortsOnCall(controller)));
+
+		await expect(handler(job(entry.id), controller.signal)).rejects.toThrow();
+
+		const row = getEntry(db, entry.id);
+		expect(row?.analysis_state).toBe("analysed");
+		expect(row?.analysed_at).toBe(SEED_NOW.toISOString());
+	});
+
+	test("never retries a run that was killed, however much budget is left", async () => {
+		const controller = new AbortController();
+		const runner = abortsOnCall(controller);
+		const handler = createAnalyseHandler(
+			deps(runner, { maxTransportAttempts: 3 }),
+		);
+
+		await expect(handler(job(entry.id), controller.signal)).rejects.toThrow();
+
+		// A killed child exits non-zero, which the transport-retry branch would
+		// otherwise read as a fault worth spawning claude twice more for.
+		expect(runner.calls).toHaveLength(1);
+		expect(slept).toEqual([]);
+	});
+
+	test("does not spawn at all when the stop lands before the first attempt", async () => {
+		const runner = replies(ok([RULE]));
+		const handler = createAnalyseHandler(deps(runner));
+
+		await expect(handler(job(entry.id), AbortSignal.abort())).rejects.toThrow();
+
+		expect(runner.calls).toHaveLength(0);
+	});
+
+	test("leaves the entry running when the stop is a shutdown, not a user", async () => {
+		const controller = new AbortController();
+		const events: AnalysisEvent[] = [];
+		const runner = async (): Promise<RunnerResult> => {
+			controller.abort(POOL_STOPPED);
+			return { ok: false, kind: "aborted", message: "claude was cancelled" };
+		};
+		const handler = createAnalyseHandler(
+			deps(runner, { onProgress: (event) => events.push(event) }),
+		);
+
+		await expect(handler(job(entry.id), controller.signal)).rejects.toThrow();
+
+		// The pool returns the job to the queue, so the entry has to keep
+		// saying `running` for `requeueRunningEntries` to reconcile it at the
+		// next start. Reverting would strand a queued job behind an entry that
+		// claims nothing is happening.
+		expect(getEntry(db, entry.id)?.analysis_state).toBe("running");
+		expect(events.map((event) => event.type)).not.toContain("cancelled");
+	});
+});
+
+describe("cancelEntries", () => {
+	test("reverts an entry whose job was dequeued and announces it", () => {
+		const queue = new JobQueue(db, () => SEED_NOW);
+		queueEntries(db, queue, [entry.id]);
+		const events: AnalysisEvent[] = [];
+
+		const result = cancelEntries(
+			db,
+			() => "dequeued",
+			[entry.id],
+			(event) => events.push(event),
+		);
+
+		expect(result).toEqual({ cancelled: [entry.id], skipped: [] });
+		expect(getEntry(db, entry.id)?.analysis_state).toBe("unanalysed");
+		expect(events).toEqual([{ type: "cancelled", entryId: entry.id }]);
+	});
+
+	test("leaves an aborted entry to its own handler", () => {
+		const queue = new JobQueue(db, () => SEED_NOW);
+		queueEntries(db, queue, [entry.id]);
+		const events: AnalysisEvent[] = [];
+
+		const result = cancelEntries(
+			db,
+			() => "aborted",
+			[entry.id],
+			(event) => events.push(event),
+		);
+
+		// Still queued here on purpose: the run is unwinding, and the handler
+		// is the one place that writes the row back.
+		expect(result.cancelled).toEqual([entry.id]);
+		expect(getEntry(db, entry.id)?.analysis_state).toBe("queued");
+		expect(events).toEqual([]);
+	});
+
+	test("skips an entry with nothing pending, and touches nothing", () => {
+		const result = cancelEntries(db, () => null, [entry.id]);
+
+		expect(result).toEqual({ cancelled: [], skipped: [entry.id] });
+		expect(getEntry(db, entry.id)?.analysis_state).toBe("unanalysed");
+	});
+});
+
+describe("cancelRepoEntries", () => {
+	test("stops every pending analysis this repository has, and nothing else", () => {
+		const queue = new JobQueue(db, () => SEED_NOW);
+		queueEntries(db, queue, [entry.id]);
+		// A sync job on the same repository: a different kind, and its target is
+		// the repository rather than an entry.
+		queue.enqueue("sync", repo.id);
+		const seen: string[] = [];
+
+		const result = cancelRepoEntries(
+			db,
+			(entryId) => {
+				seen.push(entryId);
+				return "dequeued";
+			},
+			repo.id,
+		);
+
+		expect(result).toEqual({ cancelled: [entry.id] });
+		expect(seen).toEqual([entry.id]);
+		expect(queue.status("sync", repo.id).pending).not.toBeNull();
+	});
+
+	test("finds nothing when the repository has nothing running or queued", () => {
+		expect(cancelRepoEntries(db, () => "dequeued", repo.id)).toEqual({
+			cancelled: [],
+		});
 	});
 });
