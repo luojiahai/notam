@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { parseArgs, webDistImportBase } from "../../scripts/build-binary.ts";
-import { hostPlatform } from "../../scripts/entry-module.ts";
+import { hostPlatform } from "../../src/shared/platform.ts";
 
 describe("parseArgs", () => {
 	test("defaults to this host, version dev, dist/, web/dist", () => {

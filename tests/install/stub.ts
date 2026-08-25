@@ -6,7 +6,7 @@
  * installer's own `notam version` probe works and the test can assert on what
  * it printed.
  */
-import { PLATFORMS } from "../../scripts/entry-module.ts";
+import { PLATFORMS } from "../../src/shared/platform.ts";
 
 export const STUB_REPO = "acme/notam";
 export const STUB_TAG = "v1.2.3";

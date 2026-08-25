@@ -18,8 +18,8 @@ import {
 	isPlatform,
 	PLATFORMS,
 	type Platform,
-	renderEntryModule,
-} from "./entry-module.ts";
+} from "../src/shared/platform.ts";
+import { renderEntryModule } from "./entry-module.ts";
 
 /** Fixed, because the generated entrypoint imports `../src/...` relatively. */
 const BUILD_DIR = "build";

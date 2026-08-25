@@ -3,10 +3,12 @@ import type { EventEmitter } from "node:events";
 import { homedir } from "node:os";
 import { ConfigError } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
+import { UpdateError } from "../core/update/index.ts";
 import { VERSION } from "../version.ts";
 import { runInit } from "./init.ts";
 import { runRun } from "./run.ts";
 import { runSync } from "./sync.ts";
+import { runUpdateCommand } from "./update.ts";
 
 const USAGE = `NOTAM — Notes On Team Agreements & Methods
 
@@ -14,6 +16,7 @@ Usage:
   notam run [--port <n>] [--no-open]  Start the local UI on 127.0.0.1:4317
   notam init [--force]                Write a commented ~/.notam/config.yaml
   notam sync [--repo <owner/repo>]    Sync merged pull requests, then exit
+  notam update [--version <tag>]      Replace this binary with a newer release
   notam version                       Print the version
 
 Options:
@@ -21,12 +24,17 @@ Options:
   --no-open             Do not open a browser
   --repo <owner/repo>   Sync only this repository
   --concurrency <n>     Repositories to sync at once (default 1)
-  --force               Overwrite an existing config
+  --version <tag>       Update to this release instead of the latest
+  --force               Overwrite an existing config (init), or reinstall the
+                        version already running (update)
   --help                Show this help
 
 Environment:
   NOTAM_HOME            Overrides the home directory holding ~/.notam
   NOTAM_WEB_DIST        Overrides where the built web UI is read from
+  NOTAM_REPO            owner/repo that notam update installs from
+  NOTAM_API_BASE        GitHub API base URL that notam update resolves releases on
+  NOTAM_DOWNLOAD_BASE   Release download base URL that notam update fetches from
 `;
 
 /** Tests point this at a temporary directory instead of the real home. */
@@ -124,6 +132,20 @@ export async function main(
 				});
 			}
 
+			case "update": {
+				const requested = flagValue(rest, "--version");
+				await withInterrupt(log, (signal) =>
+					runUpdateCommand({
+						...(requested === undefined ? {} : { requestedVersion: requested }),
+						force: rest.includes("--force"),
+						log,
+						env,
+						signal,
+					}),
+				);
+				return 0;
+			}
+
 			case "init":
 				await runInit({ home, force: rest.includes("--force"), log });
 				return 0;
@@ -151,7 +173,11 @@ export async function main(
 				return 1;
 		}
 	} catch (error) {
-		if (error instanceof ConfigError || error instanceof GitHubError) {
+		if (
+			error instanceof ConfigError ||
+			error instanceof GitHubError ||
+			error instanceof UpdateError
+		) {
 			console.error(error.message);
 		} else {
 			console.error(
