@@ -155,7 +155,7 @@ export type HarnessOptions = {
 
 export const DEFAULT_ANALYSER_STDOUT = JSON.stringify({
 	result:
-		'```json\n[{"kind":"do","directive":"Always add a regression test alongside a bug fix.","rationale":"Reviewers blocked untested payment fixes.","scope_globs":["services/payments/**"],"confidence":0.9,"source_comment_urls":["https://github.com/acme/mono/pull/4821#discussion_r1"]}]\n```',
+		'```json\n[{"type":"testing","directive":"Always add a regression test alongside a bug fix.","rationale":"Reviewers blocked untested payment fixes.","scope_globs":["services/payments/**"],"confidence":0.9,"source_comment_urls":["https://github.com/acme/mono/pull/4821#discussion_r1"]}]\n```',
 });
 
 /** A whole server over an in-memory database, with every outside edge faked. */

@@ -9,7 +9,7 @@ test with the fix", "don't call the payments client from a request handler",
 threads, over years.
 
 NOTAM collects them. It syncs your merged pull requests, uses the
-[`claude` CLI](https://claude.com/claude-code) to extract the Dos and Don'ts
+[`claude` CLI](https://claude.com/claude-code) to extract the agreements
 buried in the review conversations, and promotes the ones you endorse into
 `<repo>/.claude/rules/` through a pull request your team reviews — so the
 agreements become rules your coding agents actually read.

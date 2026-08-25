@@ -11,7 +11,7 @@ const plan: PromotionPlanView = {
 	files: [
 		{
 			rule_id: "ru_1",
-			kind: "do",
+			type: "testing",
 			directive: "Always add a regression test alongside a bug fix.",
 			path: ".claude/rules/always-add-a-regression-test-2.md",
 			content:
@@ -19,7 +19,7 @@ const plan: PromotionPlanView = {
 		},
 		{
 			rule_id: "ru_2",
-			kind: "dont",
+			type: "security",
 			directive: "Never round money with floating point.",
 			path: ".claude/rules/never-round-money-with-floating-point.md",
 			content: "---\nid: ru_2\nnotam: true\n---\n\nNever round money.\n",

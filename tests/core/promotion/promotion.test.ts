@@ -29,7 +29,7 @@ import { normalisedEntry, SEED_NOW, seedDatabase } from "../../helpers/seed.ts";
 
 function newRule(overrides: Partial<NewRule> = {}): NewRule {
 	return {
-		kind: "do",
+		type: "testing",
 		directive: "Always add a regression test alongside a bug fix.",
 		rationale: "Reviewers kept asking for one.",
 		scope_globs: ["services/payments/**"],
@@ -112,7 +112,7 @@ describe("planPromotion", () => {
 		expect(plan.repo.id).toBe(repo.id);
 		expect(plan.files).toHaveLength(1);
 		expect(plan.files[0]?.path).toBe(".claude/rules/always-add-a-test.md");
-		expect(plan.files[0]?.content).toContain("kind: do");
+		expect(plan.files[0]?.content).toContain("type: testing");
 		expect(plan.files[0]?.content).toContain(entry.url);
 		expect(plan.files[0]?.sourceNumber).toBe(4821);
 		expect(plan.collisions).toEqual([]);

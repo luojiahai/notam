@@ -66,7 +66,7 @@ function detail(overrides: Partial<EntryDetail> = {}): EntryDetail {
 				id: "ru_1",
 				repo_id: "r_1",
 				entry_id: "e_1",
-				kind: "do",
+				type: "testing",
 				directive: "Always add a regression test alongside a bug fix.",
 				rationale: "Reviewers blocked untested fixes.",
 				scope_globs: ["services/payments/**"],

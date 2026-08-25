@@ -1,3 +1,8 @@
+import {
+	RULE_TYPE_LABELS,
+	RULE_TYPES,
+	type RuleType,
+} from "../../shared/rule-types.ts";
 import type { RuleRow } from "../../shared/types.ts";
 
 export const RULES_DIR = ".claude/rules";
@@ -23,22 +28,32 @@ function yamlString(value: string): string {
 		.replace(/\t/g, "\\t")}"`;
 }
 
-function yamlScope(globs: string[]): string {
-	if (globs.length === 0) return "scope: []";
-	return `scope:\n${globs.map((glob) => `  - ${yamlString(glob)}`).join("\n")}`;
+/**
+ * `paths` is the frontmatter key Claude Code reads: a rule carrying it loads
+ * only when Claude opens a matching file, and a rule without it loads at launch
+ * and applies everywhere. An unscoped rule therefore has to omit the key
+ * entirely — an empty list is a list that matches nothing, which would keep the
+ * rule out of context altogether.
+ */
+function frontmatter(rule: RuleRow, sourceUrl: string): string {
+	const lines = [`id: ${rule.id}`, `type: ${rule.type}`];
+	if (rule.scope_globs.length > 0) {
+		lines.push("paths:");
+		for (const glob of rule.scope_globs) lines.push(`  - ${yamlString(glob)}`);
+	}
+	lines.push(`source: ${yamlString(sourceUrl)}`, "notam: true");
+	return lines.join("\n");
 }
 
 /**
  * The rule file format. `notam: true` is the marker that lets a
- * repository tell NOTAM-authored rules from hand-written ones.
+ * repository tell NOTAM-authored rules from hand-written ones. `id` and `type`
+ * are unrecognised keys that Claude Code ignores; they are there for NOTAM and
+ * for whoever reads the diff.
  */
 export function renderRuleFile(rule: RuleRow, sourceUrl: string): string {
 	return `---
-id: ${rule.id}
-kind: ${rule.kind}
-${yamlScope(rule.scope_globs)}
-source: ${yamlString(sourceUrl)}
-notam: true
+${frontmatter(rule, sourceUrl)}
 ---
 
 ${rule.directive.trim()}
@@ -58,16 +73,35 @@ export type PRBodyItem = {
 	sourceNumber: number;
 };
 
-/** Every rule links back to the review conversation it came from, so a reviewer can trace it. */
-export function renderPRBody(items: PRBodyItem[]): string {
-	const lines = items.map(
-		(item) =>
-			`- **${item.rule.kind === "do" ? "DO" : "DON'T"}** ${item.rule.directive} ` +
-			`— \`${item.path}\` — from [#${item.sourceNumber}](${item.sourceUrl})`,
+function bullet(item: PRBodyItem): string {
+	return (
+		`- ${item.rule.directive} ` +
+		`— \`${item.path}\` — from [#${item.sourceNumber}](${item.sourceUrl})`
 	);
+}
+
+/**
+ * Grouped by type, because a reviewer opening a promotion of twenty rules reads
+ * them a category at a time. Every rule links back to the review conversation it
+ * came from, so a reviewer can trace it.
+ */
+export function renderPRBody(items: PRBodyItem[]): string {
+	const byType = new Map<RuleType, PRBodyItem[]>();
+	for (const item of items) {
+		const group = byType.get(item.rule.type);
+		if (group) group.push(item);
+		else byType.set(item.rule.type, [item]);
+	}
+
+	const sections = RULE_TYPES.flatMap((type) => {
+		const group = byType.get(type);
+		if (group === undefined) return [];
+		return [`### ${RULE_TYPE_LABELS[type]}\n\n${group.map(bullet).join("\n")}`];
+	});
+
 	return `NOTAM extracted these rules from merged pull request reviews in this repository.
 
-${lines.join("\n")}
+${sections.join("\n\n")}
 
 Each file is a single rule under \`${RULES_DIR}/\`. Merge to adopt them; close to reject them.
 `;

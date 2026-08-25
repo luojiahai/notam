@@ -30,7 +30,7 @@ import { SEED_NOW, seedDatabase } from "../../helpers/seed.ts";
 const NEVER = new AbortController().signal;
 
 const RULE = {
-	kind: "do",
+	type: "testing",
 	directive: "Always add a regression test alongside a bug fix.",
 	rationale: "Reviewers kept asking for one.",
 	scope_globs: ["services/payments/**"],
@@ -149,22 +149,27 @@ describe("analyseEntry — re-analysis", () => {
 			repo.id,
 			entry.id,
 			[
-				{ ...RULE, kind: "do", directive: "old draft", file_slug: "old-draft" },
 				{
 					...RULE,
-					kind: "do",
+					type: "testing",
+					directive: "old draft",
+					file_slug: "old-draft",
+				},
+				{
+					...RULE,
+					type: "testing",
 					directive: "old proposed",
 					file_slug: "old-proposed",
 				},
 				{
 					...RULE,
-					kind: "do",
+					type: "testing",
 					directive: "old verified",
 					file_slug: "old-verified",
 				},
 				{
 					...RULE,
-					kind: "do",
+					type: "testing",
 					directive: "old abandoned",
 					file_slug: "old-abandoned",
 				},
@@ -239,7 +244,14 @@ describe("analyseEntry — validation failure", () => {
 			db,
 			repo.id,
 			entry.id,
-			[{ ...RULE, kind: "do", directive: "old draft", file_slug: "old-draft" }],
+			[
+				{
+					...RULE,
+					type: "testing",
+					directive: "old draft",
+					file_slug: "old-draft",
+				},
+			],
 			SEED_NOW,
 		);
 		await analyseEntry(

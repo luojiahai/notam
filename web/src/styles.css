@@ -41,15 +41,15 @@
 	--text-faint: #7d7d8a;
 
 	/*
-	 * Teal, deliberately cyan-leaning. `--do` is green (hue ~146), and a rule's
-	 * DO badge sits in the same row as an accent-tinted status pill, so a
-	 * conventional teal would blur the one distinction this table exists to
+	 * Teal, deliberately cyan-leaning. `--ok` is green (hue ~146) and carries
+	 * the verified pill, which sits in the same row as an accent-tinted one, so
+	 * a conventional teal would blur the distinction the status column exists to
 	 * make. These sit roughly 40 degrees away from it in both modes.
 	 */
 	--accent: #065f6d;
 
-	--do: #0e7038;
-	--dont: #b81e1e;
+	--ok: #0e7038;
+	--alert: #b81e1e;
 	--warn: #8a5300;
 
 	--ink-fill: #1c1c22;
@@ -85,8 +85,8 @@
 
 		--accent: #54cbdd;
 
-		--do: #4fc98b;
-		--dont: #ff8080;
+		--ok: #4fc98b;
+		--alert: #ff8080;
 		--warn: #e0a33c;
 
 		--ink-fill: #e9e9ef;
@@ -121,8 +121,8 @@
 
 	--accent: #54cbdd;
 
-	--do: #4fc98b;
-	--dont: #ff8080;
+	--ok: #4fc98b;
+	--alert: #ff8080;
 	--warn: #e0a33c;
 
 	--ink-fill: #e9e9ef;
@@ -321,12 +321,12 @@ button:disabled {
 
 /* Destructive-adjacent: abandoning rules is reversible but worth marking. */
 .btn-danger:not(:disabled) {
-	color: var(--dont);
-	border-color: color-mix(in srgb, var(--dont) 40%, var(--border-strong));
+	color: var(--alert);
+	border-color: color-mix(in srgb, var(--alert) 40%, var(--border-strong));
 }
 .btn-danger:hover:not(:disabled) {
-	background: color-mix(in srgb, var(--dont) var(--tint-banner), var(--bg));
-	border-color: var(--dont);
+	background: color-mix(in srgb, var(--alert) var(--tint-banner), var(--bg));
+	border-color: var(--alert);
 }
 
 /* Chromeless: row titles and inline triggers that must read as text. */
@@ -661,7 +661,7 @@ input[type="search"]::-webkit-search-cancel-button {
 	color: var(--text);
 }
 .repo-bar-outcome[data-outcome="failed"] {
-	color: var(--dont);
+	color: var(--alert);
 }
 
 /* --------------------------------------------------------------- sidebar -- */
@@ -919,7 +919,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 }
 
 .error {
-	color: var(--dont);
+	color: var(--alert);
 }
 .warning {
 	color: var(--warn);
@@ -945,17 +945,8 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	color: var(--text-muted);
 	background: color-mix(in srgb, var(--text) 8%, transparent);
 }
-.badge-do {
-	color: var(--do);
-	background: color-mix(in srgb, var(--do) var(--tint), var(--bg));
-}
-.badge-dont {
-	color: var(--dont);
-	background: color-mix(in srgb, var(--dont) var(--tint), var(--bg));
-}
-
 /*
- * Status is a different axis from kind, so it gets a different shape: a pill
+ * Status is a different axis from type, so it gets a different shape: a pill
  * with a hairline rather than a filled tag. Draft is deliberately the quietest
  * — most rules are drafts, and colouring the common case colours everything.
  */
@@ -987,9 +978,9 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	background: none;
 }
 .status-verified {
-	color: var(--do);
-	border-color: color-mix(in srgb, var(--do) 45%, transparent);
-	background: color-mix(in srgb, var(--do) var(--tint), var(--bg));
+	color: var(--ok);
+	border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+	background: color-mix(in srgb, var(--ok) var(--tint), var(--bg));
 }
 .status-abandoned {
 	color: var(--text-faint);
@@ -997,15 +988,15 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	background: none;
 }
 .status-merged {
-	color: var(--do);
-	border-color: color-mix(in srgb, var(--do) 45%, transparent);
-	background: color-mix(in srgb, var(--do) var(--tint), var(--bg));
+	color: var(--ok);
+	border-color: color-mix(in srgb, var(--ok) 45%, transparent);
+	background: color-mix(in srgb, var(--ok) var(--tint), var(--bg));
 }
 .status-closed,
 .status-failed {
-	color: var(--dont);
-	border-color: color-mix(in srgb, var(--dont) 45%, transparent);
-	background: color-mix(in srgb, var(--dont) var(--tint), var(--bg));
+	color: var(--alert);
+	border-color: color-mix(in srgb, var(--alert) 45%, transparent);
+	background: color-mix(in srgb, var(--alert) var(--tint), var(--bg));
 }
 
 /*
@@ -1046,7 +1037,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	font-size: 0.75rem;
 }
 .bulk-error {
-	color: var(--dont);
+	color: var(--alert);
 	font-size: 0.75rem;
 	overflow-wrap: anywhere;
 	/* Server text of unbounded length, now sharing a row with the controls. */
@@ -1105,7 +1096,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	margin: 0;
 }
 .state-error .state-title {
-	color: var(--dont);
+	color: var(--alert);
 }
 
 /* Skeleton rows echo the real row rhythm, so nothing jumps when data lands. */
@@ -1405,8 +1396,8 @@ a.quote-author:hover {
 }
 .notice-error {
 	color: var(--text);
-	background: color-mix(in srgb, var(--dont) var(--tint-banner), var(--bg));
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dont) 30%, transparent);
+	background: color-mix(in srgb, var(--alert) var(--tint-banner), var(--bg));
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alert) 30%, transparent);
 }
 
 /*

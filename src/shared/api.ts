@@ -1,8 +1,8 @@
 import { z } from "zod";
+import { RULE_TYPES } from "./rule-types.ts";
 import type {
 	AnalysisState as RowAnalysisState,
 	PromotionState as RowPromotionState,
-	RuleKind as RowRuleKind,
 	RuleStatus as RowRuleStatus,
 } from "./types.ts";
 
@@ -14,9 +14,11 @@ import type {
  *
  * The *composite* shapes here are deliberately not the row types from
  * shared/types.ts — a row is a storage shape, a summary is what a table renders,
- * counts and all. The four small unions below are the opposite case: they must
- * be identical to the row-level ones, so they are inferred from the schemas and
- * pinned to types.ts by PINNED_ENUMS at the bottom of this file.
+ * counts and all. The small unions below are the opposite case: they must be
+ * identical to the row-level ones, so they are inferred from the schemas and
+ * pinned to types.ts by PINNED_ENUMS at the bottom of this file. RuleType is
+ * absent from that pin because its schema is built from the vocabulary the row
+ * union is built from, so the two cannot disagree.
  */
 
 export const AnalysisStateSchema = z.enum([
@@ -26,7 +28,7 @@ export const AnalysisStateSchema = z.enum([
 	"analysed",
 	"failed",
 ]);
-export const RuleKindSchema = z.enum(["do", "dont"]);
+export const RuleTypeSchema = z.enum(RULE_TYPES);
 export const RuleStatusSchema = z.enum([
 	"draft",
 	"proposed",
@@ -36,7 +38,7 @@ export const RuleStatusSchema = z.enum([
 export const PromotionStateSchema = z.enum(["open", "merged", "closed"]);
 
 export type AnalysisState = z.infer<typeof AnalysisStateSchema>;
-export type RuleKind = z.infer<typeof RuleKindSchema>;
+export type RuleType = z.infer<typeof RuleTypeSchema>;
 export type RuleStatus = z.infer<typeof RuleStatusSchema>;
 export type PromotionState = z.infer<typeof PromotionStateSchema>;
 
@@ -51,10 +53,9 @@ type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : never) : never;
  */
 export const PINNED_ENUMS: [
 	Exact<AnalysisState, RowAnalysisState>,
-	Exact<RuleKind, RowRuleKind>,
 	Exact<RuleStatus, RowRuleStatus>,
 	Exact<PromotionState, RowPromotionState>,
-] = [true, true, true, true];
+] = [true, true, true];
 
 const count = z.number().int().min(0);
 
@@ -180,7 +181,7 @@ export const RuleSummarySchema = z.object({
 	id: z.string(),
 	repo_id: z.string(),
 	entry_id: z.string(),
-	kind: RuleKindSchema,
+	type: RuleTypeSchema,
 	directive: z.string(),
 	rationale: z.string(),
 	scope_globs: z.array(z.string()),
@@ -236,7 +237,7 @@ export const CollisionSchema = z.object({
 
 export const PlannedFileSchema = z.object({
 	rule_id: z.string(),
-	kind: RuleKindSchema,
+	type: RuleTypeSchema,
 	directive: z.string(),
 	path: z.string(),
 	content: z.string(),

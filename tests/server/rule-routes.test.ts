@@ -11,7 +11,7 @@ function seedRules(harness: ReturnType<typeof testContext>) {
 		harness.entryId,
 		[
 			{
-				kind: "do",
+				type: "testing",
 				directive: "Zebra: always add a regression test.",
 				rationale: "Reviewers blocked untested fixes.",
 				scope_globs: ["services/payments/**"],
@@ -20,7 +20,7 @@ function seedRules(harness: ReturnType<typeof testContext>) {
 				file_slug: "zebra-always-add-a-regression-test",
 			},
 			{
-				kind: "dont",
+				type: "security",
 				directive: "Alpha: never round with floats.",
 				rationale: "Money is integers.",
 				scope_globs: [],

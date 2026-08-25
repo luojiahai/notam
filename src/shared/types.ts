@@ -1,3 +1,5 @@
+import type { RuleType } from "./rule-types.ts";
+
 export type AnalysisState =
 	| "unanalysed"
 	| "queued"
@@ -123,7 +125,6 @@ export type JobRow = {
 	finished_at: string | null;
 };
 
-export type RuleKind = "do" | "dont";
 export type RuleStatus = "draft" | "proposed" | "verified" | "abandoned";
 export type PromotionState = "open" | "merged" | "closed";
 
@@ -131,7 +132,7 @@ export type RuleRow = {
 	id: string;
 	repo_id: string;
 	entry_id: string;
-	kind: RuleKind;
+	type: RuleType;
 	directive: string;
 	rationale: string;
 	scope_globs: string[];
@@ -151,7 +152,7 @@ export type RuleRow = {
 
 /** What store/rules.ts inserts: an analysed rule plus its derived slug. */
 export type NewRule = {
-	kind: RuleKind;
+	type: RuleType;
 	directive: string;
 	rationale: string;
 	scope_globs: string[];

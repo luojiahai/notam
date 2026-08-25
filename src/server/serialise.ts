@@ -177,7 +177,7 @@ export function toRuleSummary(rule: RuleRow, entry: EntryRow): RuleSummary {
 		id: rule.id,
 		repo_id: rule.repo_id,
 		entry_id: rule.entry_id,
-		kind: rule.kind,
+		type: rule.type,
 		directive: rule.directive,
 		rationale: rule.rationale,
 		scope_globs: rule.scope_globs,
@@ -234,7 +234,7 @@ export function toPromotionPlanView(plan: PromotionPlan): PromotionPlanView {
 		base_branch: plan.repo.default_branch,
 		files: plan.files.map((file) => ({
 			rule_id: file.rule.id,
-			kind: file.rule.kind,
+			type: file.rule.type,
 			directive: file.rule.directive,
 			path: file.path,
 			content: file.content,
