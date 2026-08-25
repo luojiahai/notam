@@ -43,18 +43,6 @@ const repo: RepoSummary = {
 	open_promotions: 1,
 };
 
-const promotion: PromotionSummary = {
-	id: "pm_1",
-	repo_id: "r_1",
-	branch: "notam/rules-20260823-abc123",
-	pr_number: 900,
-	pr_url: "https://github.com/acme/mono/pull/900",
-	state: "open",
-	created_at: "2026-08-23T09:00:00.000Z",
-	last_checked_at: null,
-	rule_count: 2,
-};
-
 function wrap(ui: ReactElement) {
 	const client = new QueryClient({
 		defaultOptions: { queries: { retry: false } },
@@ -97,18 +85,27 @@ describe("Shell", () => {
 describe("Sidebar", () => {
 	test("lists repositories with their entry counts", () => {
 		wrap(
-			<Sidebar
-				repos={[repo]}
-				promotions={[promotion]}
-				selectedRepoId="r_1"
-				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
-			/>,
+			<Sidebar repos={[repo]} selectedRepoId="r_1" onSelectRepo={() => {}} />,
 		);
 		expect(screen.getByText("acme/mono")).toBeDefined();
 		expect(screen.getByText(/12 entries/)).toBeDefined();
 		expect(screen.getByText(/5 drafts/)).toBeDefined();
+		expect(screen.getByText(/1 open promotion/)).toBeDefined();
+	});
+
+	/**
+	 * Each count on the row names a tab, and a repository nobody has promoted
+	 * from would otherwise carry a nought down the whole column.
+	 */
+	test("leaves the promotion count off a repository with none open", () => {
+		wrap(
+			<Sidebar
+				repos={[{ ...repo, open_promotions: 0 }]}
+				selectedRepoId="r_1"
+				onSelectRepo={() => {}}
+			/>,
+		);
+		expect(screen.queryByText(/open promotion/)).toBeNull();
 	});
 
 	test("marks the selected repository and reports a click", async () => {
@@ -116,11 +113,8 @@ describe("Sidebar", () => {
 		wrap(
 			<Sidebar
 				repos={[repo, { ...repo, id: "r_2", name: "acme/api" }]}
-				promotions={[]}
 				selectedRepoId="r_1"
 				onSelectRepo={(id) => picked.push(id)}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
 			/>,
 		);
 		expect(
@@ -153,11 +147,8 @@ describe("Sidebar", () => {
 					},
 					repo,
 				]}
-				promotions={[]}
 				selectedRepoId="r_1"
 				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
 			/>,
 		);
 		expect(
@@ -174,96 +165,11 @@ describe("Sidebar", () => {
 				repos={[
 					{ ...repo, sync: { state: "queued", started_at: null, last: null } },
 				]}
-				promotions={[]}
 				selectedRepoId="r_1"
 				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
 			/>,
 		);
 		expect(screen.getByText("queued")).toBeDefined();
-	});
-
-	test("shows each promotion with its state badge and a link to the PR", () => {
-		wrap(
-			<Sidebar
-				repos={[repo]}
-				promotions={[promotion]}
-				selectedRepoId="r_1"
-				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
-			/>,
-		);
-		const link = screen.getByRole("link", { name: /#900/ });
-		expect(link.getAttribute("href")).toBe(
-			"https://github.com/acme/mono/pull/900",
-		);
-		expect(screen.getByText("open")).toBeDefined();
-		expect(screen.getByText(/2 rules/)).toBeDefined();
-	});
-
-	test("a failed refresh shows the server's text beside the button", () => {
-		wrap(
-			<Sidebar
-				repos={[repo]}
-				promotions={[]}
-				selectedRepoId="r_1"
-				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={false}
-				refreshError="GET /repos/acme/mono/pulls/900 -> 401: Bad credentials"
-			/>,
-		);
-		expect(
-			screen.getByText(
-				"GET /repos/acme/mono/pulls/900 -> 401: Bad credentials",
-			),
-		).toBeDefined();
-	});
-
-	/**
-	 * The control is an icon on the Promotions heading now, not a labelled
-	 * button under it. An icon with no accessible name is a button nobody using
-	 * a screen reader can find, so the name is asserted alongside the shape.
-	 */
-	test("refresh is an icon that keeps its name and goes down while it runs", () => {
-		wrap(
-			<Sidebar
-				repos={[repo]}
-				promotions={[promotion]}
-				selectedRepoId="r_1"
-				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {}}
-				refreshing={true}
-			/>,
-		);
-		const button = screen.getByRole("button", { name: /refresh status/i });
-		expect(button.textContent).toBe("");
-		expect(button.hasAttribute("disabled")).toBe(true);
-		// The name stays put while it runs — only the state changes. The spin is
-		// decoration, so aria-busy is the only signal a screen reader gets.
-		expect(button.getAttribute("aria-busy")).toBe("true");
-	});
-
-	test("the refresh button reports a click", async () => {
-		let clicks = 0;
-		wrap(
-			<Sidebar
-				repos={[repo]}
-				promotions={[promotion]}
-				selectedRepoId="r_1"
-				onSelectRepo={() => {}}
-				onRefreshPromotions={() => {
-					clicks++;
-				}}
-				refreshing={false}
-			/>,
-		);
-		await userEvent.click(
-			screen.getByRole("button", { name: /refresh status/i }),
-		);
-		await waitFor(() => expect(clicks).toBe(1));
 	});
 });
 
@@ -578,6 +484,18 @@ function entriesFor(repoId: string, number: number): EntriesResponse {
  * does not scope by repository, so it would happily analyse those entries.
  */
 describe("App", () => {
+	const promotion: PromotionSummary = {
+		id: "pm_1",
+		repo_id: "r_1",
+		branch: "notam/rules-20260823-abc123",
+		pr_number: 900,
+		pr_url: "https://github.com/acme/mono/pull/900",
+		state: "open",
+		created_at: "2026-08-23T09:00:00.000Z",
+		last_checked_at: null,
+		rule_count: 2,
+	};
+
 	const originalFetch = globalThis.fetch;
 	afterEach(() => {
 		globalThis.fetch = originalFetch;
@@ -675,5 +593,148 @@ describe("App", () => {
 
 		await screen.findByRole("checkbox", { name: /select #22/i });
 		expect(screen.getByText("0 selected")).toBeDefined();
+	});
+
+	test("offers a tab per list, entries first", async () => {
+		globalThis.fetch = ((input: unknown) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") return Promise.resolve(Response.json([repo]));
+			if (path.startsWith("/api/repos/r_1/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
+			}
+			if (path.endsWith("/promotions")) {
+				return Promise.resolve(Response.json([]));
+			}
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(Response.json(refreshResult));
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		const tabs = await screen.findAllByRole("tab");
+		expect(tabs.map((tab) => tab.textContent)).toEqual([
+			"Entries",
+			"Rules",
+			"Promotions",
+		]);
+		expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
+	});
+
+	test("the promotions tab lists this repository's promotions", async () => {
+		globalThis.fetch = ((input: unknown) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") return Promise.resolve(Response.json([repo]));
+			if (path.startsWith("/api/repos/r_1/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
+			}
+			if (path === "/api/repos/r_1/promotions") {
+				return Promise.resolve(Response.json([promotion]));
+			}
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(Response.json(refreshResult));
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		await userEvent.click(
+			await screen.findByRole("tab", { name: "Promotions" }),
+		);
+		const link = await screen.findByRole("link", { name: "#900" });
+		expect(link.getAttribute("href")).toBe(
+			"https://github.com/acme/mono/pull/900",
+		);
+		expect(screen.getByText("notam/rules-20260823-abc123")).toBeDefined();
+	});
+
+	/**
+	 * The pull request only ever shows on the promotions tab, so the create has
+	 * to land the user there — the wiring runs from the dialog, through the
+	 * rules tab, to the tab state held here.
+	 */
+	test("creating a rules pull request lands on the tab that holds it", async () => {
+		globalThis.fetch = ((input: unknown, init?: RequestInit) => {
+			const path = String(input);
+			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
+			if (path === "/api/repos") return Promise.resolve(Response.json([repo]));
+			if (path.startsWith("/api/repos/r_1/entries")) {
+				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
+			}
+			if (path.startsWith("/api/repos/r_1/rules")) {
+				return Promise.resolve(
+					Response.json({
+						rules: [ruleDetail("draft")],
+						counts: {
+							total: 1,
+							draft: 1,
+							proposed: 0,
+							verified: 0,
+							abandoned: 0,
+						},
+					}),
+				);
+			}
+			if (path === "/api/repos/r_1/promotions") {
+				return Promise.resolve(Response.json([promotion]));
+			}
+			if (path === "/api/promotions/plan") {
+				return Promise.resolve(
+					Response.json({
+						repo_id: "r_1",
+						repo_name: "acme/mono",
+						base_branch: "main",
+						files: [
+							{
+								rule_id: "r1",
+								kind: "do",
+								directive: "Name the boundary",
+								path: "docs/rules/name-the-boundary.md",
+								content: "# Name the boundary\n",
+							},
+						],
+						collisions: [],
+					}),
+				);
+			}
+			if (path === "/api/promotions" && init?.method === "POST") {
+				return Promise.resolve(Response.json(promotion));
+			}
+			if (path === "/api/promotions/refresh") {
+				return Promise.resolve(Response.json(refreshResult));
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		wrap(<App />);
+
+		await userEvent.click(await screen.findByRole("tab", { name: "Rules" }));
+		await userEvent.click(
+			await screen.findByRole("checkbox", { name: /select all rules/i }),
+		);
+		await userEvent.click(
+			screen.getByRole("button", { name: /Create rules PR \(1\)/ }),
+		);
+		await userEvent.click(
+			await screen.findByRole("button", { name: "Create pull request" }),
+		);
+
+		await waitFor(() =>
+			expect(
+				screen
+					.getByRole("tab", { name: "Promotions" })
+					.getAttribute("aria-selected"),
+			).toBe("true"),
+		);
 	});
 });

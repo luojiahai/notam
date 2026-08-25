@@ -382,7 +382,7 @@ button:disabled {
 	flex: none;
 }
 
-/* Square, label-less, and named by `aria-label`: see `.sidebar-heading`. */
+/* Square and label-less, so `aria-label` has to carry the name. */
 .btn-icon {
 	display: grid;
 	place-items: center;
@@ -414,7 +414,7 @@ a.btn-icon {
 	color: var(--text);
 }
 /* A refresh that gives no sign of running reads as a button that did nothing. */
-.btn-icon[data-busy="true"] .icon {
+button[data-busy="true"] .icon {
 	animation: spin 0.9s linear infinite;
 }
 @keyframes spin {
@@ -423,7 +423,7 @@ a.btn-icon {
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	.btn-icon[data-busy="true"] .icon {
+	button[data-busy="true"] .icon {
 		animation: none;
 	}
 }
@@ -748,73 +748,6 @@ input[type="search"]::-webkit-search-cancel-button {
 	font-variant-numeric: tabular-nums;
 	color: var(--text-muted);
 	margin-top: 1px;
-}
-
-/*
- * The refresh control rides on the Promotions heading. `h2` keeps its own
- * margins, so the row aligns on the text rather than stretching the heading.
- */
-.sidebar-heading {
-	display: flex;
-	align-items: center;
-	padding-right: 0.375rem;
-	/*
-	 * The section break lives on the wrapper, not on the heading inside it.
-	 * `.sidebar h2:first-child` exists to tighten the sidebar's own first
-	 * heading, and an `h2` wrapped in here is first by that rule's reckoning
-	 * too — it would claim this one and collapse the gap to 0.25rem.
-	 */
-	margin: 1rem 0 0.375rem;
-}
-/* Specific enough to beat `.sidebar h2:first-child`, which sets a top margin. */
-.sidebar .sidebar-heading h2 {
-	margin: 0 0.375rem;
-}
-
-/*
- * No inset of its own: a promotion row and a repository row are the same kind
- * of thing in the same column, so they get the same box. Padding on the list
- * would stack on top of each row's own, leaving promotions narrower than the
- * repositories above them and their text further right.
- */
-.promotions {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 1px;
-}
-.promotion {
-	display: flex;
-	align-items: baseline;
-	gap: 0.375rem;
-	padding: 0.375rem 0.5rem;
-	border-radius: var(--r);
-	flex-wrap: wrap;
-}
-.promotion:hover {
-	background: color-mix(in srgb, var(--text) 6%, transparent);
-}
-.promotion-ref {
-	font-family: var(--font-mono);
-	font-size: 0.75rem;
-	font-weight: 600;
-}
-.promotion-ref.is-branch {
-	font-weight: 400;
-	color: var(--text-muted);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 8rem;
-}
-.promotion-count {
-	font-family: var(--font-mono);
-	font-size: 0.6875rem;
-	font-variant-numeric: tabular-nums;
-	color: var(--text-faint);
-	margin-left: auto;
 }
 
 /* ------------------------------------------------------------------ main -- */
@@ -1492,9 +1425,6 @@ a.quote-author:hover {
 }
 
 /* Contextual spacing, declared after the base rule it overrides. */
-.sidebar-note.notice {
-	margin: 0 0.375rem 0.375rem;
-}
 .plan-file-head .notice {
 	margin: 0.375rem 0 0 1.375rem;
 }
