@@ -278,9 +278,6 @@ export function EntriesTable(props: EntriesTableProps) {
 												{entry.matched_prefix}
 											</div>
 										)}
-										{entry.last_error && (
-											<div className="cell-error">{entry.last_error}</div>
-										)}
 									</td>
 									<td className="num">
 										{entry.changed_file_count}
@@ -302,7 +299,22 @@ export function EntriesTable(props: EntriesTableProps) {
 										)}
 									</td>
 									<td>
-										<StatusPill status={entry.analysis_state} />
+										{/*
+											A failure is the one state with something to read
+											behind it, and what it has to say is server text of
+											unbounded length — so the pill opens the drawer that
+											already banners it rather than the row growing to fit
+											it. Every other state stays a label.
+										*/}
+										{entry.analysis_state === "failed" ? (
+											<StatusPill
+												status={entry.analysis_state}
+												label={`Open #${entry.number} — analysis failed`}
+												onClick={() => props.onOpenEntry(entry.id)}
+											/>
+										) : (
+											<StatusPill status={entry.analysis_state} />
+										)}
 									</td>
 									{/*
 										The flex box is the inner div, never the cell: a `td`

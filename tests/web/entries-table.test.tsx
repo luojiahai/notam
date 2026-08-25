@@ -205,7 +205,7 @@ describe("EntriesTable", () => {
 		expect(calls.analysed).toEqual([]);
 	});
 
-	test("a failed entry shows its stored error and an Analyse action", async () => {
+	test("a failed entry keeps its error out of the row and still offers Analyse", async () => {
 		const calls = draw({
 			entries: [
 				entry({
@@ -214,15 +214,41 @@ describe("EntriesTable", () => {
 				}),
 			],
 		});
-		expect(
-			screen.getByText(/claude exited with code 1: model overloaded/),
-		).toBeDefined();
+		// The stored error is server text of unbounded length. It belongs to
+		// the drawer, which has room for it; a row that grows to fit it stops
+		// being a row.
+		expect(screen.queryByText(/model overloaded/)).toBeNull();
 		// No drafts on this entry, so the guard has nothing to confirm and the
 		// row action re-runs analysis in one click.
 		await userEvent.click(
 			screen.getByRole("button", { name: /^analyse #4821$/i }),
 		);
 		expect(calls.analysed).toEqual([["e_1"]]);
+	});
+
+	test("a failed entry's status pill opens the drawer", async () => {
+		const calls = draw({
+			entries: [
+				entry({
+					analysis_state: "failed",
+					last_error: "claude exited with code 1: model overloaded",
+				}),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("button", { name: "Open #4821 — analysis failed" }),
+		);
+		expect(calls.opened).toEqual(["e_1"]);
+	});
+
+	test("a status pill with nothing behind it is not a button", () => {
+		draw({ entries: [entry({ analysis_state: "unanalysed" })] });
+		// Only a failure has a reason to read about, so only a failure earns
+		// the affordance. A column of pills that all invite a click and mostly
+		// answer nothing is worse than a column of labels.
+		expect(screen.queryByRole("button", { name: /^open #4821/i })).toBeNull();
+		// Lowercase matches the pill and not the filter chip, which titles it.
+		expect(screen.getByText("unanalysed").tagName).toBe("SPAN");
 	});
 
 	test("re-running a failed entry with drafts confirms the count first", async () => {

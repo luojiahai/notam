@@ -991,12 +991,6 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 .warning {
 	color: var(--warn);
 }
-.cell-error {
-	color: var(--dont);
-	font-size: 0.75rem;
-	margin-top: 2px;
-	overflow-wrap: anywhere;
-}
 
 .truncated {
 	color: var(--warn);
@@ -1079,6 +1073,22 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	color: var(--dont);
 	border-color: color-mix(in srgb, var(--dont) 45%, transparent);
 	background: color-mix(in srgb, var(--dont) var(--tint), var(--bg));
+}
+
+/*
+ * The pill as a button. It keeps its pill shape rather than taking a control's:
+ * the height every other button gets would leave it taller than the pills
+ * beside it in the same column, and the raised-surface hover would drop a
+ * Failed pill to neutral grey at exactly the moment it is pointed at. Hover
+ * deepens the pill's own colour instead, which is why the selector doubles the
+ * class — `button:hover` outranks a single one.
+ */
+.status-button {
+	min-height: 0;
+}
+.status.status-button:hover {
+	border-color: color-mix(in srgb, currentcolor 70%, transparent);
+	background: color-mix(in srgb, currentcolor 22%, var(--bg));
 }
 
 /* --------------------------------------------------- selection controls -- */
@@ -1464,6 +1474,21 @@ a.quote-author:hover {
 	color: var(--text);
 	background: color-mix(in srgb, var(--dont) var(--tint-banner), var(--bg));
 	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dont) 30%, transparent);
+}
+
+/*
+ * A notice carrying machine output rather than a sentence: monospace, its own
+ * line breaks kept, and scrolled past a few lines instead of growing without
+ * limit. `overflow-wrap` matters because the longest token in a trace is
+ * routinely a path with no break opportunity in it.
+ */
+.notice-trace {
+	margin: 0 0 0.5rem;
+	max-height: 12rem;
+	overflow: auto;
+	font-family: var(--font-mono);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 /* Contextual spacing, declared after the base rule it overrides. */
