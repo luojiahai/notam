@@ -28,6 +28,7 @@ export const TEST_CONFIG: Config = {
 			label: "GitHub",
 			api_base: "https://api.github.com",
 			graphql: "https://api.github.com/graphql",
+			web_base: "https://github.com",
 			token_env: "NOTAM_TEST_TOKEN",
 		},
 	],

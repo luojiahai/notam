@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { formatZodError } from "../../shared/zod.ts";
+import { webBaseFromApi } from "../github/urls.ts";
 
 const HostSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1).optional(),
 	api_base: z.url(),
 	graphql: z.url(),
+	/** Where this host's repositories are browsed, as opposed to called. */
+	web_base: z.url().optional(),
 	token_env: z.string().min(1),
 });
 
@@ -62,6 +65,12 @@ export const ConfigSchema = z
 		hosts: config.hosts.map((host) => ({
 			...host,
 			label: host.label ?? host.id,
+			// Normalised here rather than at every join site: a base pasted from a
+			// browser's address bar arrives with a trailing slash.
+			web_base: (host.web_base ?? webBaseFromApi(host.api_base)).replace(
+				/\/+$/,
+				"",
+			),
 		})),
 	}));
 

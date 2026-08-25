@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
+import { GithubMark } from "./GithubMark.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
+
+/** NOTAM's own repository, not a configured host's — a fact of the build. */
+const REPOSITORY_URL = "https://github.com/luojiahai/notam";
 
 export type ShellProps = {
 	version: string;
@@ -25,6 +29,21 @@ export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 				<span className="spacer" />
 				<ThemeToggle />
 				<span className="version">{version}</span>
+				{/*
+					Beside the version rather than the wordmark: both answer
+					"which NOTAM is this", and the heading's accessible name is
+					the wordmark alone.
+				*/}
+				<a
+					className="btn-icon"
+					href={REPOSITORY_URL}
+					target="_blank"
+					rel="noreferrer"
+					aria-label="NOTAM on GitHub"
+					title="NOTAM on GitHub"
+				>
+					<GithubMark className="icon" />
+				</a>
 			</header>
 
 			{/*

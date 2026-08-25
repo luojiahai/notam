@@ -178,6 +178,7 @@ export function createContext(options: ContextOptions): AppContext {
 		label: host.label,
 		api_base: host.api_base,
 		graphql: host.graphql,
+		web_base: host.web_base,
 		token_env: host.token_env,
 	});
 

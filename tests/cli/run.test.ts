@@ -228,6 +228,7 @@ describe("startServer", () => {
 			label: "GitHub",
 			api_base: "https://api.github.com",
 			graphql: "https://api.github.com/graphql",
+			web_base: "https://github.com",
 			token_env: "NOTAM_RUN_TEST_TOKEN",
 		});
 		const repo = upsertRepo(

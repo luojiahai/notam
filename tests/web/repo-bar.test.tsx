@@ -12,6 +12,7 @@ function draw(overrides: Partial<Props> = {}) {
 	const calls = { synced: 0, cancelled: 0 };
 	const props: Props = {
 		repoName: "acme/mono",
+		repoUrl: "https://github.com/acme/mono",
 		syncedAt: "2026-08-20T10:00:00.000Z",
 		sync: IDLE,
 		progress: null,
@@ -31,6 +32,13 @@ describe("RepoBar", () => {
 	test("names the repository the bar acts on", () => {
 		draw();
 		expect(screen.getByText("acme/mono")).toBeDefined();
+	});
+
+	test("links the repository to its page on the host that serves it", () => {
+		draw();
+		const link = screen.getByRole("link", { name: "acme/mono on GitHub" });
+		expect(link.getAttribute("href")).toBe("https://github.com/acme/mono");
+		expect(link.getAttribute("target")).toBe("_blank");
 	});
 
 	/**

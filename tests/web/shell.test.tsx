@@ -25,6 +25,7 @@ const repo: RepoSummary = {
 	name: "acme/mono",
 	host_id: "github",
 	host_label: "GitHub",
+	url: "https://github.com/acme/mono",
 	default_branch: "main",
 	path_globs: ["services/payments/**"],
 	window_days: 180,
@@ -77,6 +78,19 @@ describe("Shell", () => {
 		// `h1` would rewrite the accessible name of the only level-one heading
 		// there is, and nothing else would notice.
 		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("NOTAM");
+	});
+
+	test("links to NOTAM's own repository", () => {
+		wrap(
+			<Shell version="1.0.0" warnings={[]} sidebar={null}>
+				{null}
+			</Shell>,
+		);
+		const link = screen.getByRole("link", { name: "NOTAM on GitHub" });
+		expect(link.getAttribute("href")).toBe(
+			"https://github.com/luojiahai/notam",
+		);
+		expect(link.getAttribute("target")).toBe("_blank");
 	});
 });
 
