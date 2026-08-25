@@ -22,7 +22,7 @@ function seedDraft(harness: ReturnType<typeof testContext>) {
 		harness.entryId,
 		[
 			{
-				kind: "do",
+				type: "testing",
 				directive: "Always add a regression test alongside a bug fix.",
 				rationale: "Reviewers blocked untested payment fixes.",
 				scope_globs: ["services/payments/**"],
@@ -58,7 +58,7 @@ function seedOtherRepo(harness: ReturnType<typeof testContext>) {
 		entry.id,
 		[
 			{
-				kind: "dont",
+				type: "security",
 				directive: "Never round money with floats.",
 				rationale: "Money is integers.",
 				scope_globs: [],
@@ -392,7 +392,7 @@ describe("promotion routes", () => {
 			seeded.entry.id,
 			[
 				{
-					kind: "do",
+					type: "testing",
 					directive: "Always add a regression test alongside a bug fix.",
 					rationale: "Reviewers blocked untested payment fixes.",
 					scope_globs: [],

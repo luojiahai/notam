@@ -143,7 +143,11 @@ describe("migration 002", () => {
 
 	test("creates promotions and rules", () => {
 		const db = openDatabase(":memory:");
-		applyMigrations(db);
+		// Only up to 002: a later migration reshaping `rules` must not break the
+		// block that describes what 002 itself creates.
+		for (const migration of MIGRATIONS.filter((m) => m.version <= 2)) {
+			db.exec(migration.sql);
+		}
 
 		expect(columns(db, "promotions")).toEqual([
 			"id",
@@ -175,7 +179,7 @@ describe("migration 002", () => {
 	});
 
 	test("is version 2 and leaves 001 untouched", () => {
-		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3]);
+		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3, 4]);
 		expect(MIGRATIONS[0]?.name).toBe("hosts_repos_entries_jobs");
 		expect(MIGRATIONS[1]?.name).toBe("rules_promotions");
 	});
@@ -188,11 +192,11 @@ describe("migration 002", () => {
 		db.exec(first.sql);
 		db.exec("PRAGMA user_version = 1");
 
-		expect(applyMigrations(db)).toBe(2);
+		expect(applyMigrations(db)).toBe(3);
 		expect(
 			db.query<{ user_version: number }, []>("PRAGMA user_version").get()
 				?.user_version,
-		).toBe(3);
+		).toBe(4);
 		db.close();
 	});
 
@@ -206,8 +210,8 @@ describe("migration 002", () => {
 			INSERT INTO entries (id, repo_id, number, title, author, url, updated_at, payload_json, created_at)
 				VALUES ('e_1', 'r_1', 1, 't', 'a', 'u', '2026-08-23T00:00:00.000Z', '{}', '2026-08-23T00:00:00.000Z');
 			INSERT INTO promotions (id, repo_id, branch, created_at) VALUES ('pm_1', 'r_1', 'notam/rules-1', '2026-08-23T00:00:00.000Z');
-			INSERT INTO rules (id, repo_id, entry_id, kind, directive, rationale, promotion_id, file_slug, created_at, status_changed_at)
-				VALUES ('ru_1', 'r_1', 'e_1', 'do', 'd', 'r', 'pm_1', 'd', '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z');
+			INSERT INTO rules (id, repo_id, entry_id, type, directive, rationale, promotion_id, file_slug, created_at, status_changed_at)
+				VALUES ('ru_1', 'r_1', 'e_1', 'testing', 'd', 'r', 'pm_1', 'd', '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z');
 		`);
 
 		db.exec("DELETE FROM promotions WHERE id = 'pm_1'");
@@ -269,6 +273,56 @@ describe("migration 003", () => {
 			db.query<{ web_base: string }, []>("SELECT web_base FROM hosts").get()
 				?.web_base,
 		).toBe("");
+		db.close();
+	});
+});
+
+describe("migration 004", () => {
+	function seedThroughVersion3(db: Database): void {
+		for (const migration of MIGRATIONS.filter((m) => m.version <= 3)) {
+			db.exec(migration.sql);
+		}
+		db.exec("PRAGMA user_version = 3");
+		db.exec(`
+			INSERT INTO hosts (id, label, api_base, graphql, token_env, web_base)
+				VALUES ('github', 'GitHub', 'a', 'b', 'T', 'c');
+			INSERT INTO repos (id, host_id, name, created_at) VALUES ('r_1', 'github', 'acme/mono', '2026-08-23T00:00:00.000Z');
+			INSERT INTO entries (id, repo_id, number, title, author, url, updated_at, payload_json, created_at)
+				VALUES ('e_1', 'r_1', 1, 't', 'a', 'u', '2026-08-23T00:00:00.000Z', '{}', '2026-08-23T00:00:00.000Z');
+			INSERT INTO rules (id, repo_id, entry_id, kind, directive, rationale, status, file_slug, created_at, status_changed_at)
+				VALUES ('ru_1', 'r_1', 'e_1', 'do', 'd', 'r', 'verified', 'd', '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z');
+		`);
+	}
+
+	test("is version 4 and leaves the migrations before it untouched", () => {
+		expect(MIGRATIONS[3]?.version).toBe(4);
+		expect(MIGRATIONS[3]?.name).toBe("rule_type");
+	});
+
+	test("the rules table carries a type and no kind", () => {
+		const db = openDatabase(":memory:");
+		applyMigrations(db);
+		const names = db
+			.query<{ name: string }, []>("PRAGMA table_info(rules)")
+			.all()
+			.map((row) => row.name);
+		expect(names).toContain("type");
+		expect(names).not.toContain("kind");
+		db.close();
+	});
+
+	test("classifies a rule that predates the column as other", () => {
+		const db = openDatabase(":memory:");
+		seedThroughVersion3(db);
+
+		applyMigrations(db);
+		expect(
+			db
+				.query<{ type: string; status: string }, []>(
+					"SELECT type, status FROM rules WHERE id = 'ru_1'",
+				)
+				.get(),
+		).toEqual({ type: "other", status: "verified" });
 		db.close();
 	});
 });

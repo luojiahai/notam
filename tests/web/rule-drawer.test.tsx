@@ -7,7 +7,7 @@ const rule: RuleDetail = {
 	id: "ru_1",
 	repo_id: "r_1",
 	entry_id: "e_1",
-	kind: "dont",
+	type: "code-style",
 	directive: "Never round money with floating point.",
 	rationale: "Every rounding bug in payments has come from a float.",
 	scope_globs: ["services/payments/**"],
@@ -25,7 +25,7 @@ const rule: RuleDetail = {
 	source_url: "https://github.com/acme/mono/pull/4821",
 	file_path: ".claude/rules/never-round-money-with-floating-point.md",
 	file_preview:
-		"---\nid: ru_1\nkind: dont\nnotam: true\n---\n\nNever round money with floating point.\n",
+		"---\nid: ru_1\ntype: code-style\nnotam: true\n---\n\nNever round money with floating point.\n",
 };
 
 describe("RuleDrawerView", () => {

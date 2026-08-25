@@ -144,7 +144,7 @@ export function RulesTable(props: RulesTableProps) {
 						hint={
 							filtered
 								? "Clear the filter or widen the search to see the rest."
-								: "Analyse some entries and the Dos and Don'ts they contain land here."
+								: "Analyse some entries and the agreements they contain land here."
 						}
 					/>
 				) : (
@@ -163,7 +163,7 @@ export function RulesTable(props: RulesTableProps) {
 										}
 									/>
 								</th>
-								<th>Kind</th>
+								<th>Type</th>
 								<th>Directive</th>
 								<th>Scope</th>
 								<th className="num">Confidence</th>
@@ -183,9 +183,7 @@ export function RulesTable(props: RulesTableProps) {
 										/>
 									</td>
 									<td>
-										<Badge kind={rule.kind}>
-											{rule.kind === "do" ? "DO" : "DON'T"}
-										</Badge>
+										<Badge>{rule.type}</Badge>
 									</td>
 									<td className="cell-title">
 										<button

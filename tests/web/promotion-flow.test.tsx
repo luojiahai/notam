@@ -37,7 +37,7 @@ const plan = {
 	files: [
 		{
 			rule_id: "ru_1",
-			kind: "do",
+			type: "testing",
 			directive: "Always add a regression test.",
 			path: ".claude/rules/always-add-a-regression-test.md",
 			content: "---\nnotam: true\n---\n",

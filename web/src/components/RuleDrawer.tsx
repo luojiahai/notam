@@ -1,4 +1,5 @@
 import type { RuleDetail } from "../../../src/shared/api.ts";
+import { RULE_TYPE_LABELS } from "../../../src/shared/rule-types.ts";
 import { useRule } from "../api/hooks.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -18,7 +19,7 @@ export function RuleDrawerView({ rule }: { rule: RuleDetail }) {
 	return (
 		<>
 			<p className="meta-line">
-				<Badge kind={rule.kind}>{rule.kind === "do" ? "DO" : "DON'T"}</Badge>
+				<Badge>{RULE_TYPE_LABELS[rule.type]}</Badge>
 				<StatusPill status={rule.status} />
 				<span>confidence {rule.confidence.toFixed(2)}</span>
 			</p>

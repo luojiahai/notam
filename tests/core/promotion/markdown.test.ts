@@ -13,7 +13,7 @@ function rule(overrides: Partial<RuleRow> = {}): RuleRow {
 		id: "ru_01HX9K2",
 		repo_id: "r_1",
 		entry_id: "e_1",
-		kind: "do",
+		type: "testing",
 		directive: "Always add a regression test alongside a bug fix.",
 		rationale:
 			"Reviewers repeatedly blocked payment fixes that shipped without a test\nreproducing the original failure.",
@@ -44,8 +44,8 @@ describe("renderRuleFile", () => {
 			renderRuleFile(rule(), "https://ghe.acme.net/mono/pull/4821"),
 		).toBe(`---
 id: ru_01HX9K2
-kind: do
-scope:
+type: testing
+paths:
   - "services/payments/**"
 source: "https://ghe.acme.net/mono/pull/4821"
 notam: true
@@ -58,19 +58,30 @@ reproducing the original failure.
 `);
 	});
 
-	test("renders a don't", () => {
+	test("renders an unclassified rule with its type like any other", () => {
 		const rendered = renderRuleFile(
-			rule({ kind: "dont", directive: "Don't log full card numbers." }),
+			rule({ type: "other", directive: "Never log full card numbers." }),
 			"https://x/1",
 		);
-		expect(rendered).toContain("kind: dont");
-		expect(rendered).toContain("Don't log full card numbers.");
+		expect(rendered).toContain("type: other");
+		expect(rendered).toContain("Never log full card numbers.");
 	});
 
-	test("renders an empty scope as an empty list, not a null", () => {
-		expect(renderRuleFile(rule({ scope_globs: [] }), "https://x/1")).toContain(
-			"scope: []",
-		);
+	test("omits paths entirely when the rule is unscoped, so it loads at launch", () => {
+		const rendered = renderRuleFile(rule({ scope_globs: [] }), "https://x/1");
+		expect(rendered).not.toContain("paths");
+		expect(rendered).toBe(`---
+id: ru_01HX9K2
+type: testing
+source: "https://x/1"
+notam: true
+---
+
+Always add a regression test alongside a bug fix.
+
+Reviewers repeatedly blocked payment fixes that shipped without a test
+reproducing the original failure.
+`);
 	});
 
 	test("renders several globs as a YAML list", () => {
@@ -131,23 +142,75 @@ describe("renderPRBody", () => {
 				sourceNumber: 4821,
 			},
 			{
-				rule: rule({ id: "ru_2", kind: "dont", directive: "Don't log PANs." }),
-				path: ".claude/rules/don-t-log-pans.md",
+				rule: rule({
+					id: "ru_2",
+					type: "security",
+					directive: "Never log PANs.",
+				}),
+				path: ".claude/rules/never-log-pans.md",
 				sourceUrl: "https://ghe.acme.net/mono/pull/4900",
 				sourceNumber: 4900,
 			},
 		]);
 
-		expect(body).toContain("**DO**");
-		expect(body).toContain("**DON'T**");
 		expect(body).toContain("Always add a regression test alongside a bug fix.");
-		expect(body).toContain("Don't log PANs.");
+		expect(body).toContain("Never log PANs.");
 		expect(body).toContain(
 			"`.claude/rules/always-add-a-regression-test-alongside-a-bug-fix.md`",
 		);
 		expect(body).toContain("[#4821](https://ghe.acme.net/mono/pull/4821)");
 		expect(body).toContain("[#4900](https://ghe.acme.net/mono/pull/4900)");
 		expect(body.toLowerCase()).toContain("notam");
+	});
+
+	test("groups rules under their type's heading, alphabetically", () => {
+		const body = renderPRBody([
+			{
+				rule: rule(),
+				path: ".claude/rules/a.md",
+				sourceUrl: "https://x/1",
+				sourceNumber: 1,
+			},
+			{
+				rule: rule({ id: "ru_2", type: "security", directive: "Never PANs." }),
+				path: ".claude/rules/b.md",
+				sourceUrl: "https://x/2",
+				sourceNumber: 2,
+			},
+			{
+				rule: rule({ id: "ru_3", type: "security", directive: "Never keys." }),
+				path: ".claude/rules/c.md",
+				sourceUrl: "https://x/3",
+				sourceNumber: 3,
+			},
+		]);
+
+		expect(body).toContain("### Security requirements");
+		expect(body).toContain("### Testing conventions");
+		expect(body.indexOf("### Security requirements")).toBeLessThan(
+			body.indexOf("### Testing conventions"),
+		);
+		// Both security rules sit under the one heading.
+		expect(body.indexOf("Never PANs.")).toBeLessThan(
+			body.indexOf("### Testing conventions"),
+		);
+		expect(body.indexOf("Never keys.")).toBeLessThan(
+			body.indexOf("### Testing conventions"),
+		);
+	});
+
+	test("omits a heading for a type no rule in the batch has", () => {
+		const body = renderPRBody([
+			{
+				rule: rule(),
+				path: ".claude/rules/a.md",
+				sourceUrl: "https://x/1",
+				sourceNumber: 1,
+			},
+		]);
+		expect(body).toContain("### Testing conventions");
+		expect(body).not.toContain("### Security requirements");
+		expect(body).not.toContain("### Other");
 	});
 
 	test("handles a single rule without breaking the list", () => {

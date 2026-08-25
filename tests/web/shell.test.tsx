@@ -178,7 +178,7 @@ function ruleDetail(status: RuleStatus): RuleDetail {
 		id: "r1",
 		repo_id: "r_1",
 		entry_id: "e1",
-		kind: "do",
+		type: "testing",
 		directive: "Name the boundary",
 		rationale: "because",
 		scope_globs: ["src/**"],
@@ -695,7 +695,7 @@ describe("App", () => {
 						files: [
 							{
 								rule_id: "r1",
-								kind: "do",
+								type: "testing",
 								directive: "Name the boundary",
 								path: "docs/rules/name-the-boundary.md",
 								content: "# Name the boundary\n",

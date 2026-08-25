@@ -19,7 +19,7 @@ import { SEED_NOW, seedDatabase } from "../helpers/seed.ts";
 
 function newRule(overrides: Partial<NewRule> = {}): NewRule {
 	return {
-		kind: "do",
+		type: "testing",
 		directive: "Always add a regression test alongside a bug fix.",
 		rationale: "Reviewers blocked payment fixes that shipped without one.",
 		scope_globs: ["services/payments/**"],
@@ -67,12 +67,12 @@ describe("insertRules", () => {
 			entry.id,
 			[
 				newRule({ directive: "A", file_slug: "a" }),
-				newRule({ directive: "B", file_slug: "b", kind: "dont" }),
+				newRule({ directive: "B", file_slug: "b", type: "security" }),
 			],
 			SEED_NOW,
 		);
 		expect(rows.map((r) => r.directive)).toEqual(["A", "B"]);
-		expect(rows.map((r) => r.kind)).toEqual(["do", "dont"]);
+		expect(rows.map((r) => r.type)).toEqual(["testing", "security"]);
 	});
 
 	test("inserting an empty list is a no-op", () => {
@@ -285,7 +285,7 @@ describe("batched rule counts", () => {
 			entry.id,
 			[
 				{
-					kind: "do",
+					type: "testing",
 					directive: "Add a test.",
 					rationale: "Because.",
 					scope_globs: [],

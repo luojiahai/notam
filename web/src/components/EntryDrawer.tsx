@@ -1,6 +1,7 @@
 import { Sparkles, Square } from "lucide-react";
 import { useState } from "react";
 import type { EntryDetail } from "../../../src/shared/api.ts";
+import { RULE_TYPE_LABELS } from "../../../src/shared/rule-types.ts";
 import { useEntry } from "../api/hooks.ts";
 import { isBusy } from "../lib/analysis.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
@@ -131,9 +132,7 @@ export function EntryDrawerView({
 				<ul className="rule-list">
 					{entry.rules.map((rule) => (
 						<li key={rule.id}>
-							<Badge kind={rule.kind}>
-								{rule.kind === "do" ? "DO" : "DON'T"}
-							</Badge>
+							<Badge>{RULE_TYPE_LABELS[rule.type]}</Badge>
 							<button
 								type="button"
 								className="btn-plain"

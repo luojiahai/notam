@@ -120,6 +120,17 @@ CREATE INDEX rules_repo_directive ON rules(repo_id, directive COLLATE NOCASE);
 ALTER TABLE hosts ADD COLUMN web_base TEXT NOT NULL DEFAULT '';
 `,
 	},
+	{
+		version: 4,
+		name: "rule_type",
+		sql: `
+-- A rule's subject matter. The default classifies a row carrying none as
+-- honestly unclassified. Deliberately no CHECK constraint, matching status, so
+-- widening the vocabulary stays a code-only change.
+ALTER TABLE rules ADD COLUMN type TEXT NOT NULL DEFAULT 'other';
+ALTER TABLE rules DROP COLUMN kind;
+`,
+	},
 ];
 
 function currentVersion(db: Database): number {

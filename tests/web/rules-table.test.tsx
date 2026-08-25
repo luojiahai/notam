@@ -17,7 +17,7 @@ function rule(overrides: Partial<RuleSummary> = {}): RuleSummary {
 		id: "ru_1",
 		repo_id: "r_1",
 		entry_id: "e_1",
-		kind: "do",
+		type: "testing",
 		directive: "Always add a regression test alongside a bug fix.",
 		rationale: "Reviewers repeatedly blocked untested payment fixes.",
 		scope_globs: ["services/payments/**"],
@@ -80,9 +80,9 @@ function drawAgain(overrides: Partial<Props> = {}) {
 }
 
 describe("RulesTable", () => {
-	test("renders the kind badge, directive, rationale, scope, confidence, and source", () => {
+	test("renders the type badge, directive, rationale, scope, confidence, and source", () => {
 		draw();
-		expect(screen.getByText("DO")).toBeDefined();
+		expect(screen.getByText("testing")).toBeDefined();
 		expect(
 			screen.getByText("Always add a regression test alongside a bug fix."),
 		).toBeDefined();

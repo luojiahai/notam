@@ -1,31 +1,19 @@
 import type { ReactNode } from "react";
 
-export type BadgeKind = "do" | "dont" | "neutral";
-
 /**
- * A rule's kind. Filled and monospace, because in a table of a hundred rules
- * the DO/DON'T column is the one you scan down rather than read.
+ * A rule's type. Filled and monospace, because in a table of a hundred rules
+ * the type column is the one you scan down rather than read. One treatment for
+ * every value on purpose: a tint per type would turn that column into confetti
+ * and would eat the hue separation the accent depends on.
  */
-export function Badge({
-	kind = "neutral",
-	children,
-}: {
-	kind?: BadgeKind;
-	children: ReactNode;
-}) {
-	const className =
-		kind === "do"
-			? "badge badge-do"
-			: kind === "dont"
-				? "badge badge-dont"
-				: "badge";
-	return <span className={className}>{children}</span>;
+export function Badge({ children }: { children: ReactNode }) {
+	return <span className="badge">{children}</span>;
 }
 
 /**
  * Lifecycle state — a rule's draft/proposed/verified/abandoned, a promotion's
  * open/merged/closed. Deliberately a different shape from `Badge`: an outlined
- * pill, so kind and status never read as the same kind of thing when they sit
+ * pill, so type and status never read as the same kind of thing when they sit
  * in adjacent columns.
  *
  * `draft` and `open` take the neutral treatment on purpose. They are the

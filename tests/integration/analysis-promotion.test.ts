@@ -54,7 +54,7 @@ function goodRunner(): ClaudeRunner & { peak: () => number } {
 		const number = request.stdin.replace("PR ", "");
 		const rules = [
 			{
-				kind: "do",
+				type: "testing",
 				directive: `Rule for PR ${number}`,
 				rationale: "Because the reviewers said so.",
 				scope_globs: ["services/payments/**"],

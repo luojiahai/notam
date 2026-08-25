@@ -6,7 +6,7 @@ import {
 } from "../../../src/core/analysis/parse.ts";
 
 const RULE = {
-	kind: "do",
+	type: "testing",
 	directive: "Always add a regression test alongside a bug fix.",
 	rationale: "Reviewers kept asking for one.",
 	scope_globs: ["services/payments/**"],
@@ -94,8 +94,8 @@ describe("parseAnalyserOutput", () => {
 
 	test("fills in the optional arrays a terse model omitted", () => {
 		const terse = {
-			kind: "dont",
-			directive: "Don't log full card numbers.",
+			type: "security",
+			directive: "Never log full card numbers.",
 			rationale: "PCI.",
 			confidence: 1,
 		};
@@ -121,7 +121,7 @@ describe("parseAnalyserOutput", () => {
 	});
 
 	test("reports malformed JSON", () => {
-		const result = parseAnalyserOutput(envelope('```json\n[{"kind": \n```'));
+		const result = parseAnalyserOutput(envelope('```json\n[{"type": \n```'));
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected a failure");
 		expect(result.error).toContain("not valid JSON");
@@ -143,9 +143,18 @@ describe("parseAnalyserOutput", () => {
 		expect(result.ok).toBe(false);
 	});
 
+	test("keeps the rest of a reply when one rule's type is off-list", () => {
+		const result = parseAnalyserOutput(
+			envelope(fenced([{ ...RULE, type: "ci" }, RULE])),
+		);
+		expect(result.ok).toBe(true);
+		if (!result.ok) throw new Error(result.error);
+		expect(result.rules.map((rule) => rule.type)).toEqual(["other", "testing"]);
+	});
+
 	test("reports a partial rule with the missing field named", () => {
 		const result = parseAnalyserOutput(
-			envelope(fenced([{ kind: "do", directive: "Something." }])),
+			envelope(fenced([{ type: "testing", directive: "Something." }])),
 		);
 		expect(result.ok).toBe(false);
 		if (result.ok) throw new Error("expected a failure");

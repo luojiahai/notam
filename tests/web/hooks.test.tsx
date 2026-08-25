@@ -30,7 +30,7 @@ function ruleDetail(status: RuleStatus): RuleDetail {
 		id: "r1",
 		repo_id: "repo1",
 		entry_id: "e1",
-		kind: "do",
+		type: "testing",
 		directive: "Name the boundary",
 		rationale: "because",
 		scope_globs: ["src/**"],

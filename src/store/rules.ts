@@ -1,11 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { newId } from "../shared/ids.ts";
-import type {
-	NewRule,
-	RuleKind,
-	RuleRow,
-	RuleStatus,
-} from "../shared/types.ts";
+import type { RuleType } from "../shared/rule-types.ts";
+import type { NewRule, RuleRow, RuleStatus } from "../shared/types.ts";
 
 const STATUSES: RuleStatus[] = ["draft", "proposed", "verified", "abandoned"];
 
@@ -13,7 +9,7 @@ type RawRule = {
 	id: string;
 	repo_id: string;
 	entry_id: string;
-	kind: string;
+	type: string;
 	directive: string;
 	rationale: string;
 	scope_globs: string;
@@ -29,7 +25,7 @@ type RawRule = {
 function hydrate(raw: RawRule): RuleRow {
 	return {
 		...raw,
-		kind: raw.kind as RuleKind,
+		type: raw.type as RuleType,
 		status: raw.status as RuleStatus,
 		scope_globs: JSON.parse(raw.scope_globs) as string[],
 		source_comment_urls: JSON.parse(raw.source_comment_urls) as string[],
@@ -52,13 +48,13 @@ export function insertRules(
 			const id = newId("ru", now.getTime());
 			ids.push(id);
 			db.query(
-				`INSERT INTO rules (id, repo_id, entry_id, kind, directive, rationale, scope_globs, confidence, source_comment_urls, status, promotion_id, file_slug, created_at, status_changed_at)
-				 VALUES ($id, $repo_id, $entry_id, $kind, $directive, $rationale, $scope_globs, $confidence, $source_comment_urls, 'draft', NULL, $file_slug, $created_at, $created_at)`,
+				`INSERT INTO rules (id, repo_id, entry_id, type, directive, rationale, scope_globs, confidence, source_comment_urls, status, promotion_id, file_slug, created_at, status_changed_at)
+				 VALUES ($id, $repo_id, $entry_id, $type, $directive, $rationale, $scope_globs, $confidence, $source_comment_urls, 'draft', NULL, $file_slug, $created_at, $created_at)`,
 			).run({
 				$id: id,
 				$repo_id: repoId,
 				$entry_id: entryId,
-				$kind: rule.kind,
+				$type: rule.type,
 				$directive: rule.directive,
 				$rationale: rule.rationale,
 				$scope_globs: JSON.stringify(rule.scope_globs),

@@ -21,7 +21,7 @@ const LATER = new Date("2026-08-24T09:00:00.000Z");
 
 function newRule(overrides: Partial<NewRule> = {}): NewRule {
 	return {
-		kind: "do",
+		type: "testing",
 		directive: "Always add a regression test alongside a bug fix.",
 		rationale: "Because reviewers keep asking for one.",
 		scope_globs: [],

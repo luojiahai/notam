@@ -13,7 +13,7 @@ const rule = {
 	id: "ru_1",
 	repo_id: "r_1",
 	entry_id: "e_1",
-	kind: "do",
+	type: "testing",
 	directive: "Always add a regression test alongside a bug fix.",
 	rationale: "Reviewers repeatedly blocked fixes without one.",
 	scope_globs: ["services/payments/**"],
@@ -33,8 +33,8 @@ describe("the wire contract", () => {
 		expect(RuleSummarySchema.parse(rule).directive).toBe(rule.directive);
 	});
 
-	test("rejects a rule with an unknown kind", () => {
-		const result = RuleSummarySchema.safeParse({ ...rule, kind: "maybe" });
+	test("rejects a rule with an unknown type", () => {
+		const result = RuleSummarySchema.safeParse({ ...rule, type: "maybe" });
 		expect(result.success).toBe(false);
 	});
 
@@ -77,7 +77,7 @@ describe("the wire contract", () => {
 			files: [
 				{
 					rule_id: "ru_1",
-					kind: "do",
+					type: "testing",
 					directive: rule.directive,
 					path: ".claude/rules/always-add-a-regression-test-2.md",
 					content: "---\nid: ru_1\n---\n",
@@ -135,7 +135,7 @@ describe("the wire contract", () => {
 	test("the wire enums are pinned to the row-level unions", () => {
 		// The value is trivial; the type is the assertion. If a state is added to
 		// shared/types.ts and not here (or the reverse), this file stops compiling.
-		expect(PINNED_ENUMS).toEqual([true, true, true, true]);
+		expect(PINNED_ENUMS).toEqual([true, true, true]);
 	});
 
 	test("meta reports the analysis settings the server actually used", () => {

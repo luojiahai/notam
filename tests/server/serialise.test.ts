@@ -27,7 +27,7 @@ function withRule() {
 		seeded.entry.id,
 		[
 			{
-				kind: "do",
+				type: "testing",
 				directive: "Always add a regression test alongside a bug fix.",
 				rationale: "Reviewers blocked untested payment fixes.",
 				scope_globs: ["services/payments/**"],

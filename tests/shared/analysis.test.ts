@@ -3,9 +3,10 @@ import {
 	AnalysedRuleSchema,
 	AnalysedRulesSchema,
 } from "../../src/shared/analysis.ts";
+import { ANALYSABLE_RULE_TYPES } from "../../src/shared/rule-types.ts";
 
 const VALID = {
-	kind: "do" as const,
+	type: "testing" as const,
 	directive: "Always add a regression test alongside a bug fix.",
 	rationale: "Reviewers repeatedly blocked fixes that shipped without one.",
 	scope_globs: ["services/payments/**"],
@@ -20,8 +21,8 @@ describe("AnalysedRuleSchema", () => {
 
 	test("defaults the two array fields so a terse model answer still parses", () => {
 		const parsed = AnalysedRuleSchema.parse({
-			kind: "dont",
-			directive: "Don't log full card numbers.",
+			type: "security",
+			directive: "Never log full card numbers.",
 			rationale: "PCI.",
 			confidence: 1,
 		});
@@ -29,9 +30,23 @@ describe("AnalysedRuleSchema", () => {
 		expect(parsed.source_comment_urls).toEqual([]);
 	});
 
-	test("rejects a kind outside do/dont", () => {
-		const invalid = { ...VALID, kind: "maybe" };
-		expect(() => AnalysedRuleSchema.parse(invalid)).toThrow();
+	test("keeps every type the analyser is offered", () => {
+		for (const type of ANALYSABLE_RULE_TYPES) {
+			expect(AnalysedRuleSchema.parse({ ...VALID, type }).type).toBe(type);
+		}
+	});
+
+	test("coerces a type outside the seven to other rather than failing", () => {
+		for (const type of ["style", "perf", "ci", "other", ""]) {
+			expect(AnalysedRuleSchema.parse({ ...VALID, type }).type).toBe("other");
+		}
+	});
+
+	test("still rejects a type that is not a string", () => {
+		expect(() => AnalysedRuleSchema.parse({ ...VALID, type: 42 })).toThrow();
+		expect(() => AnalysedRuleSchema.parse({ ...VALID, type: null })).toThrow();
+		const { type: _, ...missing } = VALID;
+		expect(() => AnalysedRuleSchema.parse(missing)).toThrow();
 	});
 
 	test("rejects confidence outside 0..1", () => {

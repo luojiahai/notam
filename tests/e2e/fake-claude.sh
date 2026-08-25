@@ -15,4 +15,4 @@ fi
 N=$(cat "${NOTAM_FAKE_CLAUDE_COUNTER}" 2>/dev/null || echo 0)
 N=$((N + 1))
 echo "$N" > "${NOTAM_FAKE_CLAUDE_COUNTER}"
-printf '{"result":"```json\\n[{\\"kind\\":\\"do\\",\\"directive\\":\\"Always add a regression test number %s.\\",\\"rationale\\":\\"Reviewers blocked untested fixes.\\",\\"scope_globs\\":[\\"services/payments/**\\"],\\"confidence\\":0.9,\\"source_comment_urls\\":[]}]\\n```"}\n' "$N"
+printf '{"result":"```json\\n[{\\"type\\":\\"testing\\",\\"directive\\":\\"Always add a regression test number %s.\\",\\"rationale\\":\\"Reviewers blocked untested fixes.\\",\\"scope_globs\\":[\\"services/payments/**\\"],\\"confidence\\":0.9,\\"source_comment_urls\\":[]}]\\n```"}\n' "$N"
