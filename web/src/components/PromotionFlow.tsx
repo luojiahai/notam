@@ -15,9 +15,12 @@ import { PromotionDialog } from "./PromotionDialog.tsx";
 export function PromotionFlow({
 	ruleIds,
 	onClose,
+	onPromoted,
 }: {
 	ruleIds: string[];
 	onClose: () => void;
+	/** Fired once the pull request exists, so the app can show what it made. */
+	onPromoted: () => void;
 }) {
 	const [included, setIncluded] = useState<string[]>(ruleIds);
 	const [shown, setShown] = useState<PromotionPlanView | null>(null);
@@ -73,7 +76,10 @@ export function PromotionFlow({
 			onCancel={onClose}
 			onConfirm={() =>
 				create.mutate(included, {
-					onSuccess: () => onClose(),
+					onSuccess: () => {
+						onPromoted();
+						onClose();
+					},
 				})
 			}
 		/>

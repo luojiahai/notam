@@ -8,9 +8,11 @@ import { TableError } from "./TableState.tsx";
 export function RulesTab({
 	repoId,
 	onOpenRule,
+	onPromoted,
 }: {
 	repoId: string;
 	onOpenRule: (ruleId: string) => void;
+	onPromoted: () => void;
 }) {
 	const [status, setStatus] = useState<RuleStatus | "">("");
 	const [query, setQuery] = useState("");
@@ -51,7 +53,11 @@ export function RulesTab({
 				error={setRuleStatus.error?.message ?? null}
 			/>
 			{promoting && (
-				<PromotionFlow ruleIds={promoting} onClose={() => setPromoting(null)} />
+				<PromotionFlow
+					ruleIds={promoting}
+					onClose={() => setPromoting(null)}
+					onPromoted={onPromoted}
+				/>
 			)}
 		</>
 	);

@@ -6,6 +6,7 @@ import type {
 	EntrySummary,
 } from "../../../src/shared/api.ts";
 import { isBusy } from "../lib/analysis.ts";
+import { day } from "../lib/day.ts";
 import { useSelection } from "../state/selection.ts";
 import { StatusPill } from "./Badge.tsx";
 import { Dialog } from "./Dialog.tsx";
@@ -35,11 +36,6 @@ const STATE_LABELS: Record<AnalysisState, string> = {
 	analysed: "Analysed",
 	failed: "Failed",
 };
-
-/** ISO, not a locale format: a table of dates should sort by eye and never move under a test. */
-function day(timestamp: string | null): string | null {
-	return timestamp === null ? null : timestamp.slice(0, 10);
-}
 
 /**
  * Presentational on purpose. Everything it needs arrives as a prop and every

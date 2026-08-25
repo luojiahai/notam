@@ -1,6 +1,7 @@
 import { ArrowDownToLine, Square } from "lucide-react";
 import type { RepoSync } from "../../../src/shared/api.ts";
 import type { SyncProgress } from "../App.tsx";
+import { day } from "../lib/day.ts";
 import { GithubMark } from "./GithubMark.tsx";
 
 export type RepoBarProps = {
@@ -21,11 +22,6 @@ export type RepoBarProps = {
 	onSync: () => void;
 	onCancelSync: () => void;
 };
-
-/** ISO, not a locale format, to match the dates in the entries table. */
-function day(timestamp: string | null): string | null {
-	return timestamp === null ? null : timestamp.slice(0, 10);
-}
 
 /**
  * What the disabled Sync button says about itself. Being mid-sync and being

@@ -64,10 +64,21 @@ test("unanalysed → analyse → review rules → create promotion PR", async ({
 
 	await dialog.getByRole("button", { name: "Create pull request" }).click();
 
-	// The rules moved to proposed and the stub received one pull request with
+	// Creating the pull request lands on the tab that holds it, with the branch
+	// it was cut from and the rules it carries.
+	await expect(
+		page.getByRole("tab", { name: "Promotions", selected: true }),
+	).toBeVisible();
+	const row = page.getByRole("row").filter({ hasText: "#900" });
+	await expect(row.getByRole("link", { name: "#900" })).toBeVisible();
+	await expect(row).toContainText("notam/rules-");
+	await expect(row).toContainText("open");
+	await expect(row.getByRole("cell", { name: "2", exact: true })).toBeVisible();
+
+	// The rules moved to proposed, and the stub received one pull request with
 	// two files.
+	await page.getByRole("tab", { name: "Rules" }).click();
 	await expect(page.getByRole("button", { name: "Proposed 2" })).toBeVisible();
-	await expect(page.getByRole("link", { name: "#900" })).toBeVisible();
 	expect(stub.pulls).toHaveLength(1);
 	expect(stub.blobs).toHaveLength(2);
 	expect(stub.pulls[0]?.base).toBe("main");

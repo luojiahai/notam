@@ -10,13 +10,13 @@ import {
 	useCancelRepoAnalysis,
 	useCancelSync,
 	useMeta,
-	usePromotions,
 	useRefreshPromotions,
 	useRepos,
 	useSync,
 } from "./api/hooks.ts";
 import { EntriesTab } from "./components/EntriesTab.tsx";
 import { EntryDrawer } from "./components/EntryDrawer.tsx";
+import { PromotionsTab } from "./components/PromotionsTab.tsx";
 import { RepoBar } from "./components/RepoBar.tsx";
 import { RuleDrawer } from "./components/RuleDrawer.tsx";
 import { RulesTab } from "./components/RulesTab.tsx";
@@ -117,7 +117,7 @@ export function App() {
 	const meta = useMeta();
 	const repos = useRepos();
 	const [repoId, setRepoId] = useState<string | null>(null);
-	const [tab, setTab] = useState<"entries" | "rules">("entries");
+	const [tab, setTab] = useState<"entries" | "rules" | "promotions">("entries");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
 	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
 
@@ -129,9 +129,10 @@ export function App() {
 		}
 	}, [repoId, repos.data]);
 
-	const promotions = usePromotions(repoId);
 	const sync = useSync();
 	const cancelSync = useCancelSync();
+	// App's own instance, and only for the pass on mount below: the button that
+	// refreshes on demand lives in the promotions tab and owns its own.
 	const refresh = useRefreshPromotions();
 	const analyse = useAnalyse();
 	// Owned here rather than in the tab, so one press has one mutation: the
@@ -195,15 +196,11 @@ export function App() {
 			sidebar={
 				<Sidebar
 					repos={repos.data ?? []}
-					promotions={promotions.data ?? []}
 					selectedRepoId={repoId}
 					onSelectRepo={(id) => {
 						setRepoId(id);
 						setDrawer(null);
 					}}
-					onRefreshPromotions={() => refresh.mutate(repoId ?? undefined)}
-					refreshing={refresh.isPending}
-					refreshError={refresh.error?.message ?? null}
 				/>
 			}
 		>
@@ -235,13 +232,22 @@ export function App() {
 				>
 					Rules
 				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={tab === "promotions"}
+					onClick={() => setTab("promotions")}
+				>
+					Promotions
+				</button>
 			</div>
 			{repoId === null ? (
 				<div className="table-wrap">
 					<div className="state">
 						<p className="state-title">No repository selected</p>
 						<p className="state-hint">
-							Pick one from the sidebar to see its entries and rules.
+							Pick one from the sidebar to see its entries, rules, and
+							promotions.
 						</p>
 					</div>
 				</div>
@@ -256,12 +262,19 @@ export function App() {
 					onCancel={(ids) => cancelAnalysis.mutate(ids)}
 					onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
 				/>
-			) : (
+			) : tab === "rules" ? (
 				<RulesTab
 					key={repoId}
 					repoId={repoId}
 					onOpenRule={(id) => setDrawer({ kind: "rule", id })}
+					// A created pull request is only ever shown on the promotions
+					// tab, so making one moves the user there. Left where they were,
+					// the one thing the screen would not show is the thing the dialog
+					// just made.
+					onPromoted={() => setTab("promotions")}
 				/>
+			) : (
+				<PromotionsTab key={repoId} repoId={repoId} />
 			)}
 			{drawer?.kind === "entry" && (
 				<EntryDrawer
