@@ -30,7 +30,31 @@ export function Badge({
  *
  * `draft` and `open` take the neutral treatment on purpose. They are the
  * common case, and colouring the common case colours the whole screen.
+ *
+ * With `onClick` the pill *is* the button rather than sitting inside one: a
+ * wrapper would put a second focus ring around the outline the pill already
+ * has. `label` is then required, because a column of pills whose accessible
+ * name is the word they display reads as a column of identical buttons.
  */
-export function StatusPill({ status }: { status: string }) {
-	return <span className={`status status-${status}`}>{status}</span>;
+export function StatusPill({
+	status,
+	onClick,
+	label,
+}:
+	| { status: string; onClick?: undefined; label?: undefined }
+	| { status: string; onClick: () => void; label: string }) {
+	const className = `status status-${status}`;
+	if (onClick === undefined) {
+		return <span className={className}>{status}</span>;
+	}
+	return (
+		<button
+			type="button"
+			className={`${className} status-button`}
+			aria-label={label}
+			onClick={onClick}
+		>
+			{status}
+		</button>
+	);
 }

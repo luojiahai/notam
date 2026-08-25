@@ -67,8 +67,16 @@ export function EntryDrawerView({
 				{entry.labels.length > 0 && <span>{entry.labels.join(", ")}</span>}
 			</p>
 
+			{/*
+				The only place this text is readable, and it is process output
+				rather than prose: `pre` keeps the line breaks `claude` printed,
+				and the height cap stops a long trace from pushing the rest of
+				the drawer past the fold.
+			*/}
 			{entry.analysis_state === "failed" && (
-				<p className="notice notice-error">{entry.last_error}</p>
+				<pre className="notice notice-error notice-trace">
+					{entry.last_error}
+				</pre>
 			)}
 
 			{/*
