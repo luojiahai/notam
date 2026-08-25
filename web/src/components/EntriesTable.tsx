@@ -304,34 +304,44 @@ export function EntriesTable(props: EntriesTableProps) {
 									<td>
 										<StatusPill status={entry.analysis_state} />
 									</td>
-									<td className="row-actions">
-										{/*
-											Two controls rather than one that changes verb: a row
-											transitions under the pointer, and a position the user
-											has learned is disabled while busy must not become a
-											live Stop at exactly the moment it is busy. The
-											aria-labels carry the number so a column of them does
-											not read as identical buttons.
-										*/}
-										<button
-											type="button"
-											className="btn-sm"
-											aria-label={`Analyse #${entry.number}`}
-											disabled={isBusy(entry)}
-											onClick={() => requestAnalyse([entry.id])}
-										>
-											<Sparkles className="icon" aria-hidden="true" />
-											Analyse
-										</button>
-										<button
-											type="button"
-											className="btn-sm btn-icon"
-											aria-label={`Stop analysing #${entry.number}`}
-											disabled={!isBusy(entry)}
-											onClick={() => props.onCancel([entry.id])}
-										>
-											<Square className="icon" aria-hidden="true" />
-										</button>
+									{/*
+										The flex box is the inner div, never the cell: a `td`
+										laying out its own children with flex stops generating a
+										table-cell box, so it no longer takes the row's height
+										and draws its bottom border against its own content
+										instead of the row's baseline. Every row taller than one
+										line shows the seam.
+									*/}
+									<td>
+										<div className="row-actions">
+											{/*
+												Two controls rather than one that changes verb: a
+												row transitions under the pointer, and a position
+												the user has learned is disabled while busy must
+												not become a live Stop at exactly the moment it is
+												busy. The aria-labels carry the number so a column
+												of them does not read as identical buttons.
+											*/}
+											<button
+												type="button"
+												className="btn-sm"
+												aria-label={`Analyse #${entry.number}`}
+												disabled={isBusy(entry)}
+												onClick={() => requestAnalyse([entry.id])}
+											>
+												<Sparkles className="icon" aria-hidden="true" />
+												Analyse
+											</button>
+											<button
+												type="button"
+												className="btn-sm btn-icon"
+												aria-label={`Stop analysing #${entry.number}`}
+												disabled={!isBusy(entry)}
+												onClick={() => props.onCancel([entry.id])}
+											>
+												<Square className="icon" aria-hidden="true" />
+											</button>
+										</div>
 									</td>
 								</tr>
 							))}
