@@ -9,7 +9,7 @@ import {
 import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { hostPlatform } from "../../scripts/entry-module.ts";
+import { hostPlatform } from "../../src/shared/platform.ts";
 import {
 	defaultChecksums,
 	type ReleaseStub,

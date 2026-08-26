@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { hostPlatform } from "../../scripts/entry-module.ts";
 import { defaultConfigPath } from "../../src/core/config/load.ts";
 import { MetaSchema } from "../../src/shared/api.ts";
+import { hostPlatform } from "../../src/shared/platform.ts";
 
 const root = resolve(import.meta.dir, "..", "..");
 

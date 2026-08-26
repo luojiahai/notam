@@ -5,6 +5,11 @@ export type Migration = { version: number; name: string; sql: string };
 
 /**
  * Forward-only. Never edit a migration that has shipped — add a new one.
+ *
+ * A migration that renames or drops anything also breaks every older build,
+ * which opens this database and finds a shape it cannot read. Prefer adding
+ * over changing; when a rename is genuinely necessary, treat it as the reason
+ * `notam update` refuses to go backwards.
  */
 export const MIGRATIONS: Migration[] = [
 	{

@@ -45,6 +45,9 @@ curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | N
 
 Supported platforms: `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`.
 
+Once installed, `notam update` does the same thing from the inside — see
+[Updating](#updating).
+
 Prefer to check the download yourself:
 
 ```sh
@@ -103,6 +106,7 @@ verification is a judgement you make.
 | `notam run` | Migrate the database, serve the UI on `127.0.0.1:4317`, open a browser |
 | `notam sync` | Sync every configured repository, print a summary, exit |
 | `notam init` | Write `~/.notam/config.yaml` and check for the `claude` CLI |
+| `notam update` | Replace this binary with a newer release |
 | `notam version` | Print the version |
 
 | Flag | For | Meaning |
@@ -111,7 +115,9 @@ verification is a judgement you make.
 | `--no-open` | `run` | Do not launch a browser |
 | `--repo <owner/repo>` | `sync` | Sync only this repository |
 | `--concurrency <n>` | `sync` | Repositories to sync at once (default 1) |
+| `--version <tag>` | `update` | Install this release instead of the latest |
 | `--force` | `init` | Overwrite an existing config |
+| `--force` | `update` | Reinstall even if already on that version |
 
 `notam sync` is headless and exits non-zero if any repository failed, which
 makes it safe to put in `cron`:
@@ -186,6 +192,43 @@ Environment variables NOTAM itself reads:
 | `NOTAM_HOME` | Use this directory instead of `$HOME` when locating `.notam/` |
 | `NOTAM_WEB_DIST` | Serve the web UI from this directory instead of the copy compiled into the binary |
 | `NOTAM_VERSION` | Read by `src/version.ts` as the version string `notam version` prints when running from source (a compiled binary ignores it — its version is baked in at compile time). Also read by `install.sh`, unrelatedly, as the release tag to install — see [Install](#install) |
+| `NOTAM_REPO` | The `owner/repo` `notam update` installs from, and the one `install.sh` downloads from. Defaults to `luojiahai/notam` |
+| `NOTAM_API_BASE` | Where `notam update` and `install.sh` resolve the latest release. Defaults to `https://api.github.com` |
+| `NOTAM_DOWNLOAD_BASE` | Where `notam update` and `install.sh` fetch release assets from. Defaults to `https://github.com` |
+
+## Updating
+
+```sh
+notam update                   # move to the latest release
+notam update --version 0.2.0   # move to a specific one
+```
+
+It resolves the release, downloads the binary for this platform along with
+`SHA256SUMS`, checks the digest, and replaces the running executable with an
+atomic rename — so a half-written binary is never visible, and replacing one
+that is currently running is safe. If `notam` on your `PATH` is a symlink, the
+file behind it is what changes.
+
+The lookup is always anonymous. Your GitHub token belongs to whichever host
+`token_env` names, which may be an enterprise instance, and it is never sent to
+github.com.
+
+**Updates only move forward.** `notam update --version` will refuse a release
+older than the one you are running, because migrations are forward-only: an
+older build opens a database a newer one has already migrated. If you need an
+older version anyway, install it directly and accept that it may not read your
+existing database:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | NOTAM_VERSION=vX.Y.Z sh
+```
+
+The checksum proves the bytes arrived intact. It does not prove who produced
+them — the manifest comes from the same host as the binary, so anyone able to
+serve one can serve the other. Releases are not signed.
+
+`notam update` only works on an installed release binary. Running from source it
+refuses, because there is nothing to replace but your Bun installation.
 
 ## How it works
 
@@ -270,18 +313,21 @@ bun run test
 
 ```
 src/
-  cli/          run | sync | init | version — parse args, call core, exit
+  cli/          run | sync | init | update | version — parse args, call core, exit
   server/       Hono app: REST routes, SSE progress stream, the SPA assets
   core/
     config/     load and validate config.yaml, resolve tokens from the environment
-    github/     one client, GHES-aware base URLs
+    github/     one client, GHES-aware base URLs; release lookups for updates
     sync/       github → normalise → store
     analysis/   prompt template → claude -p → parse and validate → rules
     promotion/  rules → markdown files → tree/commit/branch/PR → status
     rules/      the lifecycle state machine; legal transitions live only here
+    update/     verify a downloaded release and replace the running binary
   store/        schema, migrations, typed queries
   jobs/         queue table and bounded worker pool, resumable across restarts
-  shared/       zod schemas and types, imported by both the server and the web app
+  shared/       types shared across boundaries: zod schemas the server and the
+                web app both use, and the platform table scripts/ and core/update/
+                must agree on
 web/            React + Vite SPA
 scripts/        the binary and checksum builds
 ```
@@ -293,7 +339,8 @@ They are what keep the tests cheap, and they are worth preserving:
 1. **`store/` is the only module that writes SQL.** No other file contains a SQL
    string.
 2. **`github/` is the only module that touches the network.** No other file calls
-   `fetch`.
+   `fetch` — including `core/update/`, which asks `github/releases.ts` for the
+   bytes and confines itself to verifying and installing them.
 3. **`analysis/` is the only module in `core/` that spawns a subprocess.**
 
 Everything else receives those as injected dependencies — which is why **no test

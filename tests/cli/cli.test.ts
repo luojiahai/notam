@@ -96,6 +96,7 @@ describe("notam (no command)", () => {
 		expect(result.exitCode).not.toBe(0);
 		expect(result.output).toContain("notam init");
 		expect(result.output).toContain("notam sync");
+		expect(result.output).toContain("notam update");
 		expect(result.output).toContain("notam version");
 	});
 
@@ -116,6 +117,47 @@ describe("notam (no command)", () => {
 		const result = await notam(["frobnicate"]);
 		expect(result.exitCode).not.toBe(0);
 		expect(result.output).toContain("frobnicate");
+	});
+});
+
+describe("notam update", () => {
+	test("refuses to update a binary that is running from source", async () => {
+		const result = await notam(["update"]);
+		expect(result.exitCode).toBe(1);
+		expect(result.output).toContain("running from source");
+		// A refusal, not a crash: no stack reaches the user.
+		expect(result.output).not.toContain("    at ");
+	});
+
+	test("refuses before reaching the network", async () => {
+		// An unroutable base: anything that resolved a release would hang or
+		// fail here rather than reporting the refusal.
+		const result = await notam(["update"], {
+			NOTAM_API_BASE: "http://127.0.0.1:1",
+		});
+		expect(result.output).toContain("running from source");
+	});
+
+	test("reports a --version with no value", async () => {
+		const result = await notam(["update", "--version"]);
+		expect(result.exitCode).toBe(1);
+		expect(result.output).toContain("--version needs a value");
+	});
+
+	test("reports an unknown --version tag without a stack trace", async () => {
+		// An unroutable API base: the failure comes from the transport, which is
+		// the path most likely to surface a raw error to the user.
+		const result = await notam(["update", "--version", "9.9.9"], {
+			NOTAM_DOWNLOAD_BASE: "http://127.0.0.1:1",
+		});
+		expect(result.exitCode).toBe(1);
+		expect(result.output).not.toContain("    at ");
+	});
+
+	test("--help documents the update command and its release overrides", async () => {
+		const result = await notam(["--help"]);
+		expect(result.output).toContain("notam update");
+		expect(result.output).toContain("NOTAM_DOWNLOAD_BASE");
 	});
 });
 

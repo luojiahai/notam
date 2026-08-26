@@ -1,39 +1,10 @@
 /**
- * The platform table and the generator for `build/entry.ts`, the entrypoint
- * `bun build --compile` is pointed at.
+ * The generator for `build/entry.ts`, the entrypoint `bun build --compile` is
+ * pointed at.
  *
  * Kept apart from `build-binary.ts` so the interesting half — string in, string
  * out — is testable without compiling a 60 MB executable.
  */
-
-/** The Bun target is `bun-` plus one of these, verbatim. */
-export const PLATFORMS = [
-	"darwin-arm64",
-	"darwin-x64",
-	"linux-x64",
-	"linux-arm64",
-] as const;
-
-export type Platform = (typeof PLATFORMS)[number];
-
-export function isPlatform(value: string): value is Platform {
-	return (PLATFORMS as readonly string[]).includes(value);
-}
-
-export function hostPlatform(
-	platform: string = process.platform,
-	arch: string = process.arch,
-): Platform {
-	const os =
-		platform === "darwin" ? "darwin" : platform === "linux" ? "linux" : null;
-	const cpu = arch === "arm64" ? "arm64" : arch === "x64" ? "x64" : null;
-	if (os === null || cpu === null) {
-		throw new Error(
-			`Cannot build on ${platform}-${arch}. NOTAM ships ${PLATFORMS.join(", ")}.`,
-		);
-	}
-	return `${os}-${cpu}`;
-}
 
 /**
  * Renders the compile entrypoint.
