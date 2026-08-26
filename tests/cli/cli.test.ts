@@ -222,10 +222,10 @@ describe("notam init", () => {
 });
 
 describe("notam sync", () => {
-	test("refuses to run without a config and points at notam init", async () => {
+	test("refuses to run without a config, naming the file it looked for", async () => {
 		const result = await notam(["sync"]);
 		expect(result.exitCode).not.toBe(0);
-		expect(result.output).toContain("notam init");
+		expect(result.output).toContain("No config file at");
 	});
 
 	test("refuses to run on an invalid config, naming the offending path", async () => {

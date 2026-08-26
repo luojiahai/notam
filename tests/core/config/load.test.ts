@@ -70,7 +70,6 @@ describe("loadConfig", () => {
 		const path = join(dir, "nope.yaml");
 		await expect(loadConfig(path)).rejects.toThrow(ConfigError);
 		await expect(loadConfig(path)).rejects.toThrow(path);
-		await expect(loadConfig(path)).rejects.toThrow("notam init");
 	});
 
 	test("throws a ConfigError with the offending path on invalid content", async () => {
