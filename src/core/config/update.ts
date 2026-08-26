@@ -104,13 +104,31 @@ export type RenameWrite = {
 };
 
 /**
- * Renames a repository without it reading as a removal.
+ * The shape both renames share: rewrite the document, and move the rows in the
+ * same transaction that writes it.
  *
- * A repo's identity in config.yaml is `(host, name)`, so editing the name in
- * the file archives one row and creates an empty other. The store rename runs
- * first, inside the same transaction, so the row applyConfig then matches is
- * the original — watermark, entries, and rules included.
+ * `move` runs before applyConfig deliberately. Identity here is the name — a
+ * repo's is `(host, name)`, a host's is its primary key — so applyConfig alone
+ * would read the new document as one thing arriving and the old one leaving,
+ * archiving the row that holds the watermark, the entries, and the rules.
+ * Moving first means the row it matches is the original.
  */
+async function renameIn(
+	write: RenameWrite,
+	rewrite: (current: Config) => unknown,
+	move: () => void,
+): Promise<ConfigResult> {
+	const current = parseConfig(await Bun.file(write.path).text(), write.path);
+	const config = ConfigSchema.parse(rewrite(current));
+	const contents = renderConfig(config);
+	write.db.transaction(() => {
+		move();
+		applyConfig(write.db, config, write.now);
+		writeConfigFileSync(write.path, contents);
+	})();
+	return { config, hash: configHash(contents) };
+}
+
 export async function renameRepo(write: RenameWrite): Promise<ConfigResult> {
 	await assertUnchanged(write.path, write.expectedHash);
 
@@ -123,26 +141,21 @@ export async function renameRepo(write: RenameWrite): Promise<ConfigResult> {
 		);
 	}
 
-	const current = parseConfig(await Bun.file(write.path).text(), write.path);
-	const config = ConfigSchema.parse({
-		...current,
-		repos: current.repos.map((entry) =>
-			entry.host === repo.host_id && entry.name === repo.name
-				? { ...entry, name: write.next }
-				: entry,
-		),
-	});
-
-	const contents = renderConfig(config);
-	write.db.transaction(() => {
-		repos.renameRepo(write.db, write.id, write.next);
-		applyConfig(write.db, config, write.now);
-		writeConfigFileSync(write.path, contents);
-	})();
-	return { config, hash: configHash(contents) };
+	return renameIn(
+		write,
+		(current) => ({
+			...current,
+			repos: current.repos.map((entry) =>
+				entry.host === repo.host_id && entry.name === repo.name
+					? { ...entry, name: write.next }
+					: entry,
+			),
+		}),
+		() => repos.renameRepo(write.db, write.id, write.next),
+	);
 }
 
-/** The same trade as renameRepo, one level up: repos follow the host across. */
+/** One level up, and the repositories follow the host across. */
 export async function renameHost(write: RenameWrite): Promise<ConfigResult> {
 	await assertUnchanged(write.path, write.expectedHash);
 
@@ -154,50 +167,49 @@ export async function renameHost(write: RenameWrite): Promise<ConfigResult> {
 		);
 	}
 
-	const current = parseConfig(await Bun.file(write.path).text(), write.path);
-	const config = ConfigSchema.parse({
-		...current,
-		hosts: current.hosts.map((entry) =>
-			entry.id === write.id ? { ...entry, id: write.next } : entry,
-		),
-		repos: current.repos.map((entry) =>
-			entry.host === write.id ? { ...entry, host: write.next } : entry,
-		),
-	});
-
-	const contents = renderConfig(config);
-	write.db.transaction(() => {
-		hosts.renameHost(write.db, write.id, write.next);
-		applyConfig(write.db, config, write.now);
-		writeConfigFileSync(write.path, contents);
-	})();
-	return { config, hash: configHash(contents) };
+	return renameIn(
+		write,
+		(current) => ({
+			...current,
+			hosts: current.hosts.map((entry) =>
+				entry.id === write.id ? { ...entry, id: write.next } : entry,
+			),
+			repos: current.repos.map((entry) =>
+				entry.host === write.id ? { ...entry, host: write.next } : entry,
+			),
+		}),
+		() => hosts.renameHost(write.db, write.id, write.next),
+	);
 }
 
 /**
- * Destroys an archived repository and everything that cascades from it.
+ * Destroys an archived row and everything that cascades from it.
  *
- * Only an archived one: a repository still named in config.yaml would be
- * recreated empty by the next boot, which reads as data loss with extra steps.
+ * Only an archived one. Something still named in config.yaml would be recreated
+ * empty by the next boot, so destroying it here reads as data loss with extra
+ * steps rather than as a deletion.
  */
+function purgeArchived(
+	name: string,
+	archivedAt: string | null,
+	destroy: () => void,
+): void {
+	if (archivedAt === null) {
+		throw new ConfigValidationError(
+			`${name} is still in config.yaml. Remove it there first — it is archived, not deleted, and can be restored until you delete it here.`,
+		);
+	}
+	destroy();
+}
+
 export function purgeRepo(db: Database, id: string): void {
 	const repo = repos.getRepo(db, id);
 	if (!repo) throw new ConfigValidationError(`No repository with id ${id}`);
-	if (repo.archived_at === null) {
-		throw new ConfigValidationError(
-			`${repo.name} is still in config.yaml. Remove it there first — it is archived, not deleted, and can be restored until you delete it here.`,
-		);
-	}
-	repos.purgeRepo(db, id);
+	purgeArchived(repo.name, repo.archived_at, () => repos.purgeRepo(db, id));
 }
 
 export function purgeHost(db: Database, id: string): void {
 	const host = hosts.getHost(db, id);
 	if (!host) throw new ConfigValidationError(`No host with id ${id}`);
-	if (host.archived_at === null) {
-		throw new ConfigValidationError(
-			`${host.id} is still in config.yaml. Remove it there first — it is archived, not deleted, and can be restored until you delete it here.`,
-		);
-	}
-	hosts.purgeHost(db, id);
+	purgeArchived(host.id, host.archived_at, () => hosts.purgeHost(db, id));
 }

@@ -77,7 +77,6 @@ function RenameControl({
 	current,
 	label,
 	action,
-	busy,
 	onRename,
 }: {
 	current: string;
@@ -85,7 +84,6 @@ function RenameControl({
 	label: string;
 	/** Names the button that opens this. Hosts and repositories both have one. */
 	action: string;
-	busy: boolean;
 	onRename: (next: string) => void;
 }) {
 	const [open, setOpen] = useState(false);
@@ -119,7 +117,7 @@ function RenameControl({
 				type="button"
 				className="btn-primary btn-sm"
 				aria-label={`Save ${label}`}
-				disabled={busy || value === current || value.trim() === ""}
+				disabled={value === current || value.trim() === ""}
 				onClick={() => {
 					onRename(value.trim());
 					setOpen(false);
@@ -138,6 +136,30 @@ function RenameControl({
 	);
 }
 
+/**
+ * A host is six text fields that differ only in which key they write, so they
+ * are declared rather than repeated. The order is the order they render in.
+ */
+const HOST_FIELDS: {
+	key: "label" | "api_base" | "graphql" | "web_base" | "token_env";
+	label: string;
+	hint?: string;
+}[] = [
+	{ key: "label", label: "Label" },
+	{ key: "api_base", label: "API base" },
+	{ key: "graphql", label: "GraphQL endpoint" },
+	{
+		key: "web_base",
+		label: "Web base",
+		hint: "Where this host's repositories are browsed.",
+	},
+	{
+		key: "token_env",
+		label: "Token variable",
+		hint: "The name of an environment variable. NOTAM never stores the token itself.",
+	},
+];
+
 function HostSection({
 	draft,
 	response,
@@ -155,6 +177,24 @@ function HostSection({
 	onTest: (hostId: string) => void;
 	testing: boolean;
 }) {
+	/**
+	 * Everything a host takes with it, summed across its repositories.
+	 *
+	 * Removing a host is the most expensive thing in this drawer — the
+	 * repositories under it cannot stay in a document that no longer names
+	 * their host, so they archive too — and it is the one place where what
+	 * disappears is not on screen next to the button.
+	 */
+	const hostCost = (hostId: string) => {
+		const under = response.status.repos.filter((row) => row.host === hostId);
+		return {
+			repos: under.length,
+			entries: under.reduce((sum, row) => sum + row.entries, 0),
+			rules: under.reduce((sum, row) => sum + row.rules, 0),
+			verified_rules: under.reduce((sum, row) => sum + row.verified_rules, 0),
+		};
+	};
+
 	return (
 		<>
 			<h3>Hosts</h3>
@@ -170,7 +210,6 @@ function HostSection({
 									current={host.id}
 									label={`new id for host ${host.id}`}
 									action={`Rename host ${host.id}`}
-									busy={false}
 									onRename={(next) => onRename(host.id, next)}
 								/>
 							)}
@@ -178,7 +217,20 @@ function HostSection({
 								type="button"
 								className="btn-plain btn-sm btn-danger"
 								aria-label={`Remove host ${host.id}`}
-								onClick={() => onChange(removeHost(draft, index))}
+								onClick={() => {
+									const cost = hostCost(host.id);
+									if (
+										cost.repos > 0 &&
+										!window.confirm(
+											`Removing ${host.id} also archives ${cost.repos} ${
+												cost.repos === 1 ? "repository" : "repositories"
+											} and ${costLabel(cost)}. They are kept and come back if you add it again. Continue?`,
+										)
+									) {
+										return;
+									}
+									onChange(removeHost(draft, index));
+								}}
 							>
 								Remove
 							</button>
@@ -200,67 +252,21 @@ function HostSection({
 								/>
 							</Field>
 						)}
-						<Field label="Label">
-							<input
-								type="text"
-								value={host.label}
-								onChange={(event) =>
-									onChange(
-										updateHost(draft, index, { label: event.target.value }),
-									)
-								}
-							/>
-						</Field>
-						<Field label="API base">
-							<input
-								type="text"
-								value={host.api_base}
-								onChange={(event) =>
-									onChange(
-										updateHost(draft, index, { api_base: event.target.value }),
-									)
-								}
-							/>
-						</Field>
-						<Field label="GraphQL endpoint">
-							<input
-								type="text"
-								value={host.graphql}
-								onChange={(event) =>
-									onChange(
-										updateHost(draft, index, { graphql: event.target.value }),
-									)
-								}
-							/>
-						</Field>
-						<Field
-							label="Web base"
-							hint="Where this host's repositories are browsed."
-						>
-							<input
-								type="text"
-								value={host.web_base}
-								onChange={(event) =>
-									onChange(
-										updateHost(draft, index, { web_base: event.target.value }),
-									)
-								}
-							/>
-						</Field>
-						<Field
-							label="Token variable"
-							hint="The name of an environment variable. NOTAM never stores the token itself."
-						>
-							<input
-								type="text"
-								value={host.token_env}
-								onChange={(event) =>
-									onChange(
-										updateHost(draft, index, { token_env: event.target.value }),
-									)
-								}
-							/>
-						</Field>
+						{HOST_FIELDS.map((field) => (
+							<Field key={field.key} label={field.label} hint={field.hint}>
+								<input
+									type="text"
+									value={host[field.key]}
+									onChange={(event) =>
+										onChange(
+											updateHost(draft, index, {
+												[field.key]: event.target.value,
+											}),
+										)
+									}
+								/>
+							</Field>
+						))}
 
 						<p className="card-foot">
 							{status?.token_present === false && (
@@ -341,7 +347,6 @@ function RepoSection({
 									current={repo.name}
 									label={`new name for ${repo.name}`}
 									action={`Rename ${repo.name}`}
-									busy={false}
 									onRename={(next) => onRename(row.id, next)}
 								/>
 							)}
@@ -379,9 +384,17 @@ function RepoSection({
 								/>
 							</Field>
 						)}
-						<Field label="Host">
+						<Field
+							label="Host"
+							hint={
+								row === null
+									? undefined
+									: "Fixed. A repository is identified by its host and its name together, so moving it between hosts is removing it from one and adding it to the other."
+							}
+						>
 							<select
 								value={repo.host}
+								disabled={row !== null}
 								onChange={(event) =>
 									onChange(
 										updateRepo(draft, index, { host: event.target.value }),
@@ -752,7 +765,7 @@ export function SettingsForm({
 }
 
 export function SettingsDrawer({ onClose }: { onClose: () => void }) {
-	const config = useConfig(true);
+	const config = useConfig();
 	const save = useSaveConfig();
 	const renameRepoMutation = useRenameRepo();
 	const renameHostMutation = useRenameHost();

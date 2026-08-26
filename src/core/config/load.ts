@@ -75,11 +75,7 @@ export function parseConfig(text: string, path: string): Config {
 }
 
 export async function loadConfig(path: string): Promise<Config> {
-	const file = Bun.file(path);
-	if (!(await file.exists())) {
-		throw new ConfigError(`No config file at ${path}`);
-	}
-	return parseConfig(await file.text(), path);
+	return (await readConfig(path)).config;
 }
 
 /**
@@ -131,10 +127,24 @@ export function resolveToken(
 	return token;
 }
 
+/**
+ * Whether the variable a host names holds anything.
+ *
+ * The one place that question is answered, so the boot warning and the
+ * settings drawer's per-host indicator cannot disagree about it. An empty
+ * string counts as absent, matching resolveToken.
+ */
+export function hasToken(
+	host: Pick<HostConfig, "token_env">,
+	env: Record<string, string | undefined> = process.env,
+): boolean {
+	return Boolean(env[host.token_env]);
+}
+
 /** Names the hosts whose token variable is unset, for the warnings the UI shows. */
 export function missingTokenHosts(
 	config: Config,
 	env: Record<string, string | undefined> = process.env,
 ): HostConfig[] {
-	return config.hosts.filter((host) => !env[host.token_env]);
+	return config.hosts.filter((host) => !hasToken(host, env));
 }

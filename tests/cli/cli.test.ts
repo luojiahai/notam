@@ -92,13 +92,16 @@ describe("unknown commands", () => {
 		["run", "notam` on its own"],
 		["init", "created on first run"],
 		["sync", "curl -X POST"],
-	])("%s says what replaced it", async (command, replacement) => {
-		const result = await notam([command]);
-		expect(result.exitCode).not.toBe(0);
-		expect(result.output).toContain(replacement);
-	});
+	])(
+		"%s is reserved, and answers with what to do instead",
+		async (command, instead) => {
+			const result = await notam([command]);
+			expect(result.exitCode).not.toBe(0);
+			expect(result.output).toContain(instead);
+		},
+	);
 
-	test("a removed command does not dump the whole usage over its message", async () => {
+	test("a reserved word answers with its one line, not the whole usage", async () => {
 		const result = await notam(["sync"]);
 		expect(result.output).not.toContain("Environment:");
 	});

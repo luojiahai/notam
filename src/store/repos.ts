@@ -104,10 +104,6 @@ export function archiveRepo(db: Database, id: string, now: Date): void {
 	).run(now.toISOString(), id);
 }
 
-export function restoreRepo(db: Database, id: string): void {
-	db.query("UPDATE repos SET archived_at = NULL WHERE id = ?").run(id);
-}
-
 /** Deletes the repo and, through the schema's cascade, its entries and rules. */
 export function purgeRepo(db: Database, id: string): void {
 	db.query("DELETE FROM repos WHERE id = ?").run(id);

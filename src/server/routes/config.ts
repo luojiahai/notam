@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { readConfig } from "../../core/config/load.ts";
+import { hasToken, readConfig } from "../../core/config/load.ts";
 import {
 	purgeHost,
 	purgeRepo,
@@ -7,6 +7,7 @@ import {
 	renameRepo,
 	updateConfig,
 } from "../../core/config/update.ts";
+import { toConfigDocument } from "../../core/config/write.ts";
 import {
 	type ConfigResponse,
 	ConfigUpdateRequestSchema,
@@ -16,12 +17,7 @@ import { listArchivedHosts } from "../../store/hosts.ts";
 import { listArchivedRepos, listRepos } from "../../store/repos.ts";
 import type { AppContext } from "../context.ts";
 import { requireAnyRepo, requireHost } from "../lookup.ts";
-import {
-	repoCost,
-	toArchivedHost,
-	toArchivedRepo,
-	toConfigDocument,
-} from "../serialise.ts";
+import { repoCost, toArchivedHost, toArchivedRepo } from "../serialise.ts";
 
 /**
  * Reads config from disk rather than from `ctx.config`.
@@ -43,7 +39,7 @@ async function buildConfigResponse(ctx: AppContext): Promise<ConfigResponse> {
 				id: host.id,
 				token_env: host.token_env,
 				// The name and whether it is set, never the value.
-				token_present: Boolean(ctx.env[host.token_env]),
+				token_present: hasToken(host, ctx.env),
 			})),
 			repos: listRepos(ctx.db).map((repo) => ({
 				id: repo.id,

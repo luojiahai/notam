@@ -305,9 +305,8 @@ export function useRefreshPromotions() {
  * hash in this response is the precondition every write carries, and a stale
  * one is a 409 the user did nothing to deserve.
  */
-export function useConfig(enabled: boolean): UseQueryResult<ConfigResponse> {
+export function useConfig(): UseQueryResult<ConfigResponse> {
 	return useQuery({
-		enabled,
 		queryKey: queryKeys.config,
 		queryFn: () => request(ConfigResponseSchema, "/api/config"),
 		staleTime: 0,

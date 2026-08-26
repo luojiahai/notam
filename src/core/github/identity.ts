@@ -10,7 +10,10 @@ export type TokenCheck = {
 
 export type TokenCheckOptions = {
 	apiBase: string;
-	token: string;
+	/** The variable the token was meant to come from, for the refusal to name. */
+	tokenEnv: string;
+	/** Whatever that variable holds, which may be nothing. */
+	token: string | undefined;
 	fetch?: typeof fetch;
 };
 
@@ -29,6 +32,14 @@ export type TokenCheckOptions = {
 export async function checkToken(
 	options: TokenCheckOptions,
 ): Promise<TokenCheck> {
+	if (!options.token) {
+		return {
+			ok: false,
+			login: null,
+			message: `Environment variable ${options.tokenEnv} is not set.`,
+		};
+	}
+
 	const base = options.apiBase.replace(/\/+$/, "");
 	const fetchImpl = options.fetch ?? fetch;
 

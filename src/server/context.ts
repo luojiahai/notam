@@ -342,17 +342,12 @@ export function createContext(options: ContextOptions): AppContext {
 
 	const testHost =
 		options.checkToken ??
-		(async (host: HostRow) => {
-			const token = env[host.token_env];
-			if (!token) {
-				return {
-					ok: false,
-					login: null,
-					message: `Environment variable ${host.token_env} is not set.`,
-				};
-			}
-			return await checkToken({ apiBase: host.api_base, token });
-		});
+		((host: HostRow) =>
+			checkToken({
+				apiBase: host.api_base,
+				tokenEnv: host.token_env,
+				token: env[host.token_env],
+			}));
 
 	return {
 		db,

@@ -122,8 +122,8 @@ notam                          # serves http://127.0.0.1:4317 and opens a browse
 ```
 
 There is nothing to set up first. The first run writes `~/.notam/config.yaml`
-with the github.com host filled in and no repositories, and opens on the
-settings drawer.
+with the github.com host filled in and no repositories, so the page opens on
+an empty state offering the settings drawer.
 
 Then, in the browser:
 

@@ -1,5 +1,4 @@
 import type { Database } from "bun:sqlite";
-import type { Config } from "../core/config/schema.ts";
 import { repoWebUrl } from "../core/github/urls.ts";
 import type { PromotionPlan } from "../core/promotion/index.ts";
 import { renderRuleFile, rulePath } from "../core/promotion/markdown.ts";
@@ -8,7 +7,6 @@ import { matchedPrefix } from "../core/sync/globs.ts";
 import type {
 	ArchivedHost,
 	ArchivedRepo,
-	ConfigDocument,
 	EntryCounts,
 	EntryDetail,
 	EntrySummary,
@@ -293,44 +291,6 @@ export function toRefreshSummaryView(
 			promotion_id: error.promotionId,
 			message: error.message,
 		})),
-	};
-}
-
-/**
- * The config document exactly as it will be written back.
- *
- * Taken from the parsed config rather than the file's bytes, so what a form
- * renders is what the schema resolved — `label` and `web_base` included, both
- * of which may have been derived rather than typed.
- */
-export function toConfigDocument(config: Config): ConfigDocument {
-	return {
-		hosts: config.hosts.map((host) => ({
-			id: host.id,
-			label: host.label,
-			api_base: host.api_base,
-			graphql: host.graphql,
-			web_base: host.web_base,
-			token_env: host.token_env,
-		})),
-		repos: config.repos.map((repo) => ({
-			host: repo.host,
-			name: repo.name,
-			path_globs: repo.path_globs,
-			default_branch: repo.default_branch,
-			window_days: repo.window_days,
-			...(repo.prompt_template === undefined
-				? {}
-				: { prompt_template: repo.prompt_template }),
-		})),
-		analysis: {
-			concurrency: config.analysis.concurrency,
-			timeout_seconds: config.analysis.timeout_seconds,
-			...(config.analysis.model === undefined
-				? {}
-				: { model: config.analysis.model }),
-		},
-		server: { port: config.server.port },
 	};
 }
 

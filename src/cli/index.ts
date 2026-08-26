@@ -31,16 +31,17 @@ Environment:
 `;
 
 /**
- * Commands that used to exist, and what replaced them.
+ * Words this CLI answers to without accepting.
  *
- * A bare "Unknown command" would be a dead end for anyone with the old
- * invocation in a script, a shell history, or their fingers. Naming the
- * replacement is what turns a breaking change into its own migration note.
+ * Each names what to do instead, because a bare "Unknown command" is a dead
+ * end for anyone who typed it from a script, a shell history, or muscle
+ * memory. Keep them reserved: a future command that reuses one of these
+ * spellings would silently mean something else to everyone still typing it.
  */
-const REMOVED: Record<string, string> = {
-	run: "`run` was removed — `notam` on its own starts the server.",
-	init: "`init` was removed — config is created on first run, and edited in the settings drawer or in ~/.notam/config.yaml.",
-	sync: "`sync` was removed — sync from the UI, or:\n  curl -X POST http://127.0.0.1:4317/api/repos/<id>/sync",
+const RESERVED: Record<string, string> = {
+	run: "`notam` on its own starts the server.",
+	init: "There is nothing to initialise: config is created on first run, and edited in the settings drawer or in ~/.notam/config.yaml.",
+	sync: "Sync from the UI, or:\n  curl -X POST http://127.0.0.1:4317/api/repos/<id>/sync",
 };
 
 /** Tests point this at a temporary directory instead of the real home. */
@@ -160,9 +161,9 @@ export async function main(
 			}
 
 			default: {
-				const replacement = REMOVED[command];
-				console.error(replacement ?? `Unknown command "${command}"\n`);
-				if (replacement === undefined) console.error(USAGE);
+				const reserved = RESERVED[command];
+				console.error(reserved ?? `Unknown command "${command}"\n`);
+				if (reserved === undefined) console.error(USAGE);
 				return 1;
 			}
 		}

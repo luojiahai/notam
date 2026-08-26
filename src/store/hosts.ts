@@ -63,10 +63,6 @@ export function archiveHost(db: Database, id: string, now: Date): void {
 	).run(now.toISOString(), id);
 }
 
-export function restoreHost(db: Database, id: string): void {
-	db.query("UPDATE hosts SET archived_at = NULL WHERE id = ?").run(id);
-}
-
 /** Deletes the host and, through the schema's cascade, everything under it. */
 export function purgeHost(db: Database, id: string): void {
 	db.query("DELETE FROM hosts WHERE id = ?").run(id);

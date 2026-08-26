@@ -6,6 +6,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
+import type { ConfigDocument } from "../../shared/api.ts";
 import type { Config } from "./schema.ts";
 
 /**
@@ -50,13 +51,17 @@ export const DEFAULT_CONFIG = {
 };
 
 /**
- * The exact document that gets serialised.
+ * The exact document, and the only definition of it.
+ *
+ * What is written to the file and what the browser edits are the same shape by
+ * design — the drawer edits the file — so one function produces both. Two
+ * would be two things that must never drift, one of them the wire contract.
  *
  * Built key by key rather than handed the parsed config directly, for two
  * reasons: an optional the user never set must stay absent rather than appear
  * as `null`, and the order below is the order a reader sees.
  */
-function toDocument(config: Config): unknown {
+export function toConfigDocument(config: Config): ConfigDocument {
 	return {
 		hosts: config.hosts.map((host) => ({
 			id: host.id,
@@ -88,7 +93,7 @@ function toDocument(config: Config): unknown {
 }
 
 export function renderConfig(config: Config): string {
-	return HEADER + Bun.YAML.stringify(toDocument(config));
+	return HEADER + Bun.YAML.stringify(toConfigDocument(config));
 }
 
 /**

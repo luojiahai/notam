@@ -9,7 +9,7 @@ import {
 	listHosts,
 	purgeHost,
 	renameHost,
-	restoreHost,
+	upsertHost,
 } from "../../src/store/hosts.ts";
 import {
 	archiveRepo,
@@ -18,8 +18,8 @@ import {
 	listRepos,
 	purgeRepo,
 	renameRepo,
-	restoreRepo,
 	setWatermark,
+	upsertRepo,
 } from "../../src/store/repos.ts";
 import { insertRules, listRules } from "../../src/store/rules.ts";
 import { seedDatabase } from "../helpers/seed.ts";
@@ -65,13 +65,26 @@ describe("repo lifecycle", () => {
 		expect(listRules(db, repo.id)).toHaveLength(1);
 	});
 
-	test("restoring returns the repo to the active list", () => {
+	test("re-adding an archived repo clears its stamp on the same row", () => {
 		archiveRepo(db, repo.id, LATER);
-		restoreRepo(db, repo.id);
+
+		upsertRepo(
+			db,
+			repo.host_id,
+			{
+				host: repo.host_id,
+				name: repo.name,
+				path_globs: repo.path_globs,
+				default_branch: repo.default_branch,
+				window_days: repo.window_days,
+			},
+			LATER,
+		);
 
 		expect(listRepos(db).map((r) => r.id)).toEqual([repo.id]);
 		expect(listArchivedRepos(db)).toHaveLength(0);
 		expect(getRepo(db, repo.id)?.archived_at).toBeNull();
+		expect(listRules(db, repo.id)).toHaveLength(1);
 	});
 
 	test("purging deletes the repo and cascades to its entries and rules", () => {
@@ -117,9 +130,19 @@ describe("host lifecycle", () => {
 		expect(getRepo(db, repo.id)?.id).toBe(repo.id);
 	});
 
-	test("restoring a host returns it to the active list", () => {
+	test("re-adding an archived host clears its stamp on the same row", () => {
+		const before = getHost(db, "github");
+		if (!before) throw new Error("missing host");
 		archiveHost(db, "github", LATER);
-		restoreHost(db, "github");
+
+		upsertHost(db, {
+			id: before.id,
+			label: before.label,
+			api_base: before.api_base,
+			graphql: before.graphql,
+			web_base: before.web_base,
+			token_env: before.token_env,
+		});
 
 		expect(listHosts(db).map((h) => h.id)).toEqual(["github"]);
 		expect(getHost(db, "github")?.archived_at).toBeNull();

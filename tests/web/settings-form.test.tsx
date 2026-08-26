@@ -223,6 +223,75 @@ describe("SettingsForm", () => {
 		expect(next).toBeNull();
 	});
 
+	test("fixes a saved repository's host, which is half its identity", () => {
+		render(<SettingsForm {...props()} />);
+		// Changing it would make the row lookup miss, put the name back in play,
+		// and turn Save into an archive-and-recreate that strands every rule.
+		const host = screen.getByLabelText("Host") as HTMLSelectElement;
+		expect(host.disabled).toBe(true);
+	});
+
+	test("leaves the host open on a repository that has no row yet", () => {
+		render(
+			<SettingsForm
+				{...props({
+					draft: {
+						...DOC,
+						repos: [
+							...DOC.repos,
+							{
+								host: "github",
+								name: "",
+								path_globs: [],
+								default_branch: "main",
+								window_days: 180,
+							},
+						],
+					},
+				})}
+			/>,
+		);
+		const hosts = screen.getAllByLabelText("Host") as HTMLSelectElement[];
+		expect(hosts.map((select) => select.disabled)).toEqual([true, false]);
+	});
+
+	test("says what removing a host takes with it, repositories included", () => {
+		let next: ConfigDocument | null = null;
+		const { asked } = withConfirm(false, () => {
+			render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
+			fireEvent.click(
+				screen.getByRole("button", { name: "Remove host github" }),
+			);
+		});
+		expect(asked).toContain("1 repository");
+		expect(asked).toContain("42 entries and 3 verified rules");
+		expect(next).toBeNull();
+	});
+
+	test("removes a host with nothing under it without asking", () => {
+		let next: ConfigDocument | null = null;
+		const { asked } = withConfirm(false, () => {
+			render(
+				<SettingsForm
+					{...props({
+						onChange: (doc) => (next = doc),
+						draft: { ...DOC, repos: [] },
+						response: {
+							...RESPONSE,
+							config: { ...DOC, repos: [] },
+							status: { ...RESPONSE.status, repos: [] },
+						},
+					})}
+				/>,
+			);
+			fireEvent.click(
+				screen.getByRole("button", { name: "Remove host github" }),
+			);
+		});
+		expect(asked).toBeNull();
+		expect(next).not.toBeNull();
+	});
+
 	test("cannot be saved until something changes", () => {
 		render(<SettingsForm {...props()} />);
 		expect(
