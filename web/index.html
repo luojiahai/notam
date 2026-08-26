@@ -11,20 +11,32 @@
 		<meta name="color-scheme" content="light dark" />
 		<title>NOTAM</title>
 		<!--
-			Applied before first paint, on purpose. Reading the stored theme from
-			React would leave one frame of light chrome on a dark machine, and
-			that flash is the single most visible defect a themed app can ship.
-			Kept in sync afterwards by web/src/lib/theme.ts.
+			Applied before first paint, on purpose. Reading these from React would
+			leave one frame of light chrome on a dark machine, and one frame of
+			default-width sidebar for anyone who has resized theirs. That flash is
+			the single most visible defect a themed app can ship.
+			Kept in sync afterwards by web/src/lib/theme.ts and sidebar-width.ts.
 		-->
 		<script>
-			var stored = null;
+			var theme = null;
+			var width = null;
 			try {
-				stored = localStorage.getItem("notam.theme");
+				theme = localStorage.getItem("notam.theme");
+				width = parseFloat(localStorage.getItem("notam.sidebar-width"));
 			} catch {
-				// Storage can be unavailable; the OS preference still applies.
+				// Storage can be unavailable; the defaults still apply.
 			}
-			if (stored === "light" || stored === "dark") {
-				document.documentElement.setAttribute("data-theme", stored);
+			if (theme === "light" || theme === "dark") {
+				document.documentElement.setAttribute("data-theme", theme);
+			}
+			// The stylesheet clamps this, so the bounds are not repeated here. A
+			// nonsense value is dropped rather than written: the token is typed as
+			// a length, and an invalid one would fall back past the default.
+			if (Number.isFinite(width) && width > 0) {
+				document.documentElement.style.setProperty(
+					"--sidebar-w",
+					`${width}px`,
+				);
 			}
 		</script>
 	</head>

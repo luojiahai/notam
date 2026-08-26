@@ -152,6 +152,26 @@
 	--gutter: 0.875rem;
 
 	/*
+	 * Sidebar width. `--sidebar-w` is the reader's raw preference, written to
+	 * `<html>` by the pre-paint script in index.html and by SidebarResizer;
+	 * `--sidebar-w-clamped` is what anything laying out actually consumes, so
+	 * the bounds are enforced in one place and a stored width from a wider
+	 * window is displayed correctly with no JavaScript involved.
+	 *
+	 * The ceiling is viewport-relative because it protects the *main* content,
+	 * whose share of the window is what varies; the floor is not, because it
+	 * protects the sidebar's own rows, which are the same size at every width.
+	 */
+	--sidebar-w: 15rem;
+	--sidebar-w-min: 11rem;
+	--sidebar-w-max: min(30rem, 40vw);
+	--sidebar-w-clamped: clamp(
+		var(--sidebar-w-min),
+		var(--sidebar-w),
+		var(--sidebar-w-max)
+	);
+
+	/*
 	 * System fonts, deliberately. A webfont would have to be embedded in the
 	 * binary and would block first paint on a tool whose whole point is that it
 	 * starts instantly and works offline.
@@ -162,6 +182,34 @@
 	--font-mono:
 		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
 		monospace;
+}
+
+/*
+ * Registered so they compute to resolved pixel lengths: an unregistered custom
+ * property hands `getComputedStyle` back the literal `11rem` it was written
+ * with, and SidebarResizer needs real numbers for `aria-valuemin`/`max` and
+ * for Home/End. Registration also types the value, so a nonsense width can
+ * never reach the grid track.
+ *
+ * An initial value has to be a fixed length — `rem` and `vw` are not allowed
+ * here — so these are zeros rather than a second copy of the real bounds that
+ * could drift from them. `:root` above sets all three, and the handle treats a
+ * zero as unresolved and falls back on its own.
+ */
+@property --sidebar-w {
+	syntax: "<length>";
+	inherits: true;
+	initial-value: 0px;
+}
+@property --sidebar-w-min {
+	syntax: "<length>";
+	inherits: true;
+	initial-value: 0px;
+}
+@property --sidebar-w-max {
+	syntax: "<length>";
+	inherits: true;
+	initial-value: 0px;
 }
 
 /* ------------------------------------------------------------------ base -- */
@@ -578,8 +626,10 @@ input[type="search"]::-webkit-search-cancel-button {
 
 .body {
 	display: grid;
-	grid-template-columns: 15rem 1fr;
+	grid-template-columns: var(--sidebar-w-clamped) 1fr;
 	min-height: 0;
+	/* Containing block for the resize handle, which is positioned, not tracked. */
+	position: relative;
 }
 
 /* Below tablet the sidebar stops being a column and becomes a scrollable rail. */
@@ -669,6 +719,7 @@ input[type="search"]::-webkit-search-cancel-button {
 .sidebar {
 	background: var(--bg-sunken);
 	border-right: 1px solid var(--border);
+	transition: border-color 0.12s ease;
 	overflow-y: auto;
 	padding: 0.5rem 0.5rem 1rem;
 	min-width: 0;
@@ -748,6 +799,69 @@ input[type="search"]::-webkit-search-cancel-button {
 	font-variant-numeric: tabular-nums;
 	color: var(--text-muted);
 	margin-top: 1px;
+}
+
+/* -------------------------------------------------------- sidebar resize -- */
+
+/*
+ * Positioned over the sidebar's right border rather than given a grid track of
+ * its own: a track wide enough to grab comfortably would permanently steal
+ * that width from the layout, and this way the target can grow for a coarse
+ * pointer without moving anything. It sits outside `.sidebar` because that
+ * element scrolls, and a handle that scrolls away is not a handle.
+ */
+.sidebar-resizer {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: var(--sidebar-w-clamped);
+	width: 9px;
+	transform: translateX(-50%);
+	z-index: 1;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+/*
+ * The border already there is the affordance; the handle only brightens it.
+ * Colour alone, deliberately — nothing moves or resizes on hover, so there is
+ * no motion for the reduced-motion block at the end of this file to suppress.
+ */
+.sidebar:has(+ .sidebar-resizer:hover),
+[data-resizing] .sidebar {
+	border-right-color: var(--accent);
+}
+
+/*
+ * Held for the duration of a drag: without it the pointer selects text across
+ * the whole app, and the cursor reverts to a caret the moment it crosses the
+ * handle onto a table.
+ */
+[data-resizing] {
+	cursor: col-resize;
+	user-select: none;
+}
+
+/*
+ * Declared after the base rules, not in the layout media block further up: a
+ * media query adds no specificity, so an override that appears earlier in the
+ * file loses to the unconditional rule at every width.
+ */
+@media (pointer: coarse) {
+	.sidebar-resizer {
+		width: 24px;
+	}
+}
+
+/*
+ * Below tablet the sidebar is a full-width rail with a height, not a column
+ * with a width, so there is no horizontal edge to drag and `--sidebar-w` does
+ * not participate in the layout at all.
+ */
+@media (max-width: 767px) {
+	.sidebar-resizer {
+		display: none;
+	}
 }
 
 /* ------------------------------------------------------------------ main -- */
