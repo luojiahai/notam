@@ -215,7 +215,7 @@ describe("EntriesTable", () => {
 			],
 		});
 		// The stored error is server text of unbounded length. It belongs to
-		// the drawer, which has room for it; a row that grows to fit it stops
+		// the panel, which has room for it; a row that grows to fit it stops
 		// being a row.
 		expect(screen.queryByText(/model overloaded/)).toBeNull();
 		// No drafts on this entry, so the guard has nothing to confirm and the
@@ -226,7 +226,7 @@ describe("EntriesTable", () => {
 		expect(calls.analysed).toEqual([["e_1"]]);
 	});
 
-	test("a failed entry's status pill opens the drawer", async () => {
+	test("a failed entry's status pill opens the panel", async () => {
 		const calls = draw({
 			entries: [
 				entry({
@@ -514,7 +514,7 @@ describe("EntriesTable", () => {
 		expect(screen.getByText("2 selected")).toBeDefined();
 	});
 
-	test("clicking the title opens the drawer", async () => {
+	test("clicking the title opens the panel", async () => {
 		const calls = draw();
 		await userEvent.click(
 			screen.getByRole("button", { name: "Fix rounding in payments" }),

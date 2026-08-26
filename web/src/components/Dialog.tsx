@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
+import { useRef } from "react";
 import { useDismissOnEscape } from "../lib/dismiss.ts";
+import { useBackdropDismiss, useModalFocus } from "../lib/modal.ts";
 
+/**
+ * A decision to take: the same window `Panel` renders, with a foot carrying
+ * the two answers.
+ */
 export function Dialog({
 	title,
 	confirmLabel,
@@ -16,25 +22,33 @@ export function Dialog({
 	confirmDisabled?: boolean;
 	children: ReactNode;
 }) {
+	const surface = useRef<HTMLDivElement>(null);
 	useDismissOnEscape(onCancel);
+	useModalFocus(surface);
+	// Dismissal, not confirmation: a click that lands outside a window can only
+	// ever mean "not this", and a pre-flight that committed files to someone
+	// else's repository on a stray click would be indefensible.
+	const backdrop = useBackdropDismiss(onCancel);
 	return (
-		<div className="dialog-backdrop">
+		<div className="overlay" {...backdrop}>
 			<div
-				className="dialog"
+				className="window"
 				role="dialog"
 				aria-modal="true"
 				aria-label={title}
+				ref={surface}
+				tabIndex={-1}
 			>
-				<div className="dialog-head">
+				<div className="window-head">
 					<h2>{title}</h2>
 				</div>
-				<div className="dialog-body">{children}</div>
+				<div className="window-body">{children}</div>
 				{/*
-					The footer is pinned rather than trailing the content: a promotion
+					The foot is pinned rather than trailing the content: a promotion
 					plan can run to several screens of file previews, and a confirm
 					button you have to scroll to find is a confirm button people miss.
 				*/}
-				<div className="dialog-foot">
+				<div className="window-foot">
 					<button type="button" onClick={onCancel}>
 						Cancel
 					</button>

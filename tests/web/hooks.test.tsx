@@ -21,7 +21,7 @@ afterEach(() => {
 
 /**
  * A detail query and a mutation, mounted together — the shape Task 15's rule
- * drawer takes. The drawer stays mounted across the mutation and
+ * panel takes. The panel stays mounted across the mutation and
  * `refetchOnWindowFocus` is off, so an invalidation that misses the detail
  * family leaves stale text on screen forever.
  */
@@ -92,7 +92,7 @@ function client(): QueryClient {
 	});
 }
 
-function RuleDrawer() {
+function RulePanel() {
 	const rule = useRule("r1");
 	const setStatus = useSetRuleStatus();
 	return (
@@ -110,7 +110,7 @@ function RuleDrawer() {
 	);
 }
 
-function EntryDrawer() {
+function EntryPanel() {
 	const entry = useEntry("e1");
 	const analyse = useAnalyse();
 	return (
@@ -143,7 +143,7 @@ describe("mutation invalidation reaches the detail queries", () => {
 		const queries = client();
 		render(
 			<QueryClientProvider client={queries}>
-				<RuleDrawer />
+				<RulePanel />
 			</QueryClientProvider>,
 		);
 
@@ -175,7 +175,7 @@ describe("mutation invalidation reaches the detail queries", () => {
 		const queries = client();
 		render(
 			<QueryClientProvider client={queries}>
-				<EntryDrawer />
+				<EntryPanel />
 			</QueryClientProvider>,
 		);
 

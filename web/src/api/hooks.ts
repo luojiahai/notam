@@ -153,7 +153,7 @@ export function usePromotions(
  * A mutation that moves a row invalidates the detail family beside the list
  * family — `["rule"]` next to `["rules"]`, `["entry"]` next to `["entries"]`.
  * The two are separate key families, so `["rules"]` does not prefix-match
- * `["rule", id]`: without the second call an open drawer keeps rendering the
+ * `["rule", id]`: without the second call an open panel keeps rendering the
  * status the row has just left, and with `refetchOnWindowFocus` off nothing
  * ever refetches it.
  */
@@ -301,7 +301,7 @@ export function useRefreshPromotions() {
  * Reads config from disk on every fetch, so a file edited in a text editor
  * shows up here.
  *
- * `staleTime: 0` for the same reason, and the drawer refetches on mount: the
+ * `staleTime: 0` for the same reason, and the panel refetches on mount: the
  * hash in this response is the precondition every write carries, and a stale
  * one is a 409 the user did nothing to deserve.
  */
@@ -316,7 +316,7 @@ export function useConfig(): UseQueryResult<ConfigResponse> {
 /**
  * Every settings write returns the whole config afresh, so each of these seeds
  * the cache from its own response rather than invalidating and refetching. A
- * refetch would leave a window in which the drawer holds the hash it just
+ * refetch would leave a window in which the panel holds the hash it just
  * superseded.
  *
  * `repos` is invalidated alongside, because adding, removing, or renaming a

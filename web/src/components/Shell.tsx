@@ -20,6 +20,11 @@ export type ShellProps = {
  * process regardless of what is selected. Anything scoped to a single
  * repository belongs in `RepoBar`, above the tabs; in this header a
  * one-repository action reads as a global one.
+ *
+ * The header band takes the dark ink in both themes. It is the one surface
+ * that is never data, so giving it a fixed colour rather than the theme's own
+ * makes the boundary between the tool and what the tool is showing you legible
+ * without a rule.
  */
 export function Shell({
 	version,
@@ -33,11 +38,10 @@ export function Shell({
 			<header className="header">
 				<h1 className="brand">NOTAM</h1>
 				<span className="brand-expansion">
-					Notes On Team Agreements &amp; Methods
+					notes on team agreements &amp; methods
 				</span>
 				<span className="spacer" />
 				<ThemeToggle />
-				<span className="version">{version}</span>
 				{/*
 					App-wide, like everything else in this header: it edits the one
 					config file, not the selected repository.
@@ -57,11 +61,6 @@ export function Shell({
 				>
 					<Settings className="icon" aria-hidden="true" />
 				</button>
-				{/*
-					Beside the version rather than the wordmark: both answer
-					"which NOTAM is this", and the heading's accessible name is
-					the wordmark alone.
-				*/}
 				<a
 					className="btn-icon"
 					href={REPOSITORY_URL}
@@ -97,6 +96,24 @@ export function Shell({
 				*/}
 				<SidebarResizer />
 				<main className="main">{children}</main>
+			</div>
+
+			{/*
+				Where this process is and which build it is, and nothing else. Both
+				answer "which NOTAM am I talking to" — the question you ask when two
+				of them are open, which is what the address settles. Anything about
+				the selected repository would be a second copy of the repository bar
+				four rows above it.
+			*/}
+			<div className="statusline">
+				<span className="statusline-addr">{location.host}</span>
+				<span className="spacer" />
+				{warnings.length > 0 && (
+					<span className="statusline-warn">
+						{warnings.length} warning{warnings.length === 1 ? "" : "s"}
+					</span>
+				)}
+				<span>notam {version}</span>
 			</div>
 		</div>
 	);

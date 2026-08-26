@@ -89,7 +89,7 @@ export function PromotionsTable(props: PromotionsTableProps) {
 				</div>
 			</div>
 
-			<div className="table-wrap">
+			<div className="table-wrap" aria-busy={props.loading}>
 				{props.loading ? (
 					<TableSkeleton />
 				) : props.promotions.length === 0 ? (

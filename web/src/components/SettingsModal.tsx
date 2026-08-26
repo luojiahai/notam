@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
 	ConfigDocument,
 	ConfigResponse,
@@ -22,6 +22,7 @@ import {
 	restoreRepo,
 } from "../lib/config.ts";
 import { useDismissOnEscape } from "../lib/dismiss.ts";
+import { useModalFocus } from "../lib/modal.ts";
 import {
 	ArchivedPane,
 	costLabel,
@@ -264,11 +265,13 @@ export function SettingsForm({
 /**
  * The window itself.
  *
- * `Dialog` is not reused: it is a confirmation, with a Cancel and a Confirm
- * that name one decision, and this is an editor with Save and Discard and no
- * decision to name. It borrows that dialog's backdrop and surface and nothing
- * else. Escape closes it; the backdrop does not, because a stray click beside
- * a form holding unsaved edits should not be able to throw them away.
+ * `Panel` is not reused: it scrolls its whole body, and this window's rail and
+ * pane scroll independently beneath a head and a foot that do not. It is the
+ * same surface and the same behaviour, laid out differently.
+ *
+ * The backdrop is the one in the app that does *not* dismiss. Everywhere else
+ * a click beside a window can only mean "not this"; here it would throw away
+ * a form holding unsaved edits, so Escape and Close are the only ways out.
  */
 
 function SettingsWindow({
@@ -278,16 +281,20 @@ function SettingsWindow({
 	onClose: () => void;
 	children: React.ReactNode;
 }) {
+	const surface = useRef<HTMLDivElement>(null);
 	useDismissOnEscape(onClose);
+	useModalFocus(surface);
 	return (
-		<div className="dialog-backdrop">
+		<div className="overlay">
 			<div
-				className="dialog settings-modal"
+				className="window settings-modal"
 				role="dialog"
 				aria-modal="true"
 				aria-label="Settings"
+				ref={surface}
+				tabIndex={-1}
 			>
-				<div className="settings-head">
+				<div className="window-head">
 					<h2>Settings</h2>
 					<button
 						type="button"

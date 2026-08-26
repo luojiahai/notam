@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { render, screen } from "@testing-library/react";
 import type { RuleDetail } from "../../src/shared/api.ts";
-import { RuleDrawerView } from "../../web/src/components/RuleDrawer.tsx";
+import { RulePanelView } from "../../web/src/components/RulePanel.tsx";
 
 const rule: RuleDetail = {
 	id: "ru_1",
@@ -28,9 +28,9 @@ const rule: RuleDetail = {
 		"---\nid: ru_1\ntype: code-style\nnotam: true\n---\n\nNever round money with floating point.\n",
 };
 
-describe("RuleDrawerView", () => {
+describe("RulePanelView", () => {
 	test("shows the rationale, the source links, and the file preview", () => {
-		render(<RuleDrawerView rule={rule} />);
+		render(<RulePanelView rule={rule} />);
 		expect(
 			screen.getByText("Every rounding bug in payments has come from a float."),
 		).toBeDefined();
@@ -45,14 +45,14 @@ describe("RuleDrawerView", () => {
 		expect(screen.getByText(/notam: true/)).toBeDefined();
 	});
 
-	test("offers nothing editable — the drawer is read-only in v1", () => {
-		render(<RuleDrawerView rule={rule} />);
+	test("offers nothing editable — the panel is read-only in v1", () => {
+		render(<RulePanelView rule={rule} />);
 		expect(screen.queryAllByRole("textbox")).toHaveLength(0);
 		expect(screen.queryAllByRole("button")).toHaveLength(0);
 	});
 
 	test("says when a rule has no source comments rather than rendering nothing", () => {
-		render(<RuleDrawerView rule={{ ...rule, source_comment_urls: [] }} />);
+		render(<RulePanelView rule={{ ...rule, source_comment_urls: [] }} />);
 		expect(screen.getByText(/no source comments/i)).toBeDefined();
 	});
 });

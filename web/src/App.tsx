@@ -15,16 +15,28 @@ import {
 	useSync,
 } from "./api/hooks.ts";
 import { EntriesTab } from "./components/EntriesTab.tsx";
-import { EntryDrawer } from "./components/EntryDrawer.tsx";
+import { EntryPanel } from "./components/EntryPanel.tsx";
 import { PromotionsTab } from "./components/PromotionsTab.tsx";
 import { RepoBar } from "./components/RepoBar.tsx";
-import { RuleDrawer } from "./components/RuleDrawer.tsx";
+import { RulePanel } from "./components/RulePanel.tsx";
 import { RulesTab } from "./components/RulesTab.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
+import { type Tab, Tabs } from "./components/Tabs.tsx";
 
-export type DrawerTarget = { kind: "entry" | "rule"; id: string } | null;
+type WorkspaceTab = "entries" | "rules" | "promotions";
+
+const TABS: readonly Tab<WorkspaceTab>[] = [
+	{ id: "entries", label: "Entries" },
+	{ id: "rules", label: "Rules" },
+	{ id: "promotions", label: "Promotions" },
+];
+
+/** Shared by every tab and the panel they control, so the pair can be wired. */
+const WORKSPACE_PANEL_ID = "workspace";
+
+export type PanelTarget = { kind: "entry" | "rule"; id: string } | null;
 
 /** The running totals of a sync still walking pages, as the wire reports them. */
 export type SyncProgress = {
@@ -43,15 +55,15 @@ export type SyncProgress = {
  * `"rules"` and `"sync"` events carry no rule/entry id, so they invalidate the
  * bare `["rule"]` / `["entry"]` prefixes (the same partial-match pattern
  * `useSetRuleStatus` and `useCreatePromotion` use in hooks.ts) rather than a
- * single detail key: every open drawer of that kind needs to refetch, not just
+ * single detail key: every open panel of that kind needs to refetch, not just
  * one.
  *
  * - `"rules"` (any rule's status changed: verify/abandon, new rules from
  *   analysis, promotion creation, rules returned to draft on refresh) strands
- *   both an open rule drawer (`["rule"]`) and an open entry drawer, whose
+ *   both an open rule panel (`["rule"]`) and an open entry panel, whose
  *   `EntryDetailSchema.rules` embeds each rule's status (`["entry"]`).
  * - `"sync"` can update an existing entry's title/body/labels
- *   (`upsertEntry` on a repeat sync), so it strands an open entry drawer too.
+ *   (`upsertEntry` on a repeat sync), so it strands an open entry panel too.
  */
 export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 	switch (event.type) {
@@ -64,7 +76,7 @@ export function invalidationsFor(event: ServerEvent): (readonly unknown[])[] {
 			// sync state, and no pull request has been ingested yet, so asking
 			// for entries would be a round trip for data that cannot have
 			// changed. `progress` refreshes the rows and the counts but leaves
-			// the drawers alone — a throttled tick must not refetch an open
+			// the panels alone — a throttled tick must not refetch an open
 			// entry twice a second, and the terminal event reconciles them.
 			if (event.phase === "started") return [queryKeys.repos];
 			if (event.phase === "progress") return [["entries"], queryKeys.repos];
@@ -118,8 +130,8 @@ export function App() {
 	const meta = useMeta();
 	const repos = useRepos();
 	const [repoId, setRepoId] = useState<string | null>(null);
-	const [tab, setTab] = useState<"entries" | "rules" | "promotions">("entries");
-	const [drawer, setDrawer] = useState<DrawerTarget>(null);
+	const [tab, setTab] = useState<WorkspaceTab>("entries");
+	const [panel, setPanel] = useState<PanelTarget>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
 
@@ -138,7 +150,7 @@ export function App() {
 	const refresh = useRefreshPromotions();
 	const analyse = useAnalyse();
 	// Owned here rather than in the tab, so one press has one mutation: the
-	// table, the drawer and the sweep share these, and a stop that never
+	// table, the panel and the sweep share these, and a stop that never
 	// reached the server surfaces in the banner below whichever raised it.
 	const cancelAnalysis = useCancelAnalysis();
 	const cancelRepoAnalysis = useCancelRepoAnalysis();
@@ -202,7 +214,7 @@ export function App() {
 					selectedRepoId={repoId}
 					onSelectRepo={(id) => {
 						setRepoId(id);
-						setDrawer(null);
+						setPanel(null);
 					}}
 				/>
 			}
@@ -218,47 +230,40 @@ export function App() {
 					onCancelSync={() => cancelSync.mutate(repo.id)}
 				/>
 			)}
-			<div className="tabs" role="tablist">
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "entries"}
-					onClick={() => setTab("entries")}
-				>
-					Entries
-				</button>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "rules"}
-					onClick={() => setTab("rules")}
-				>
-					Rules
-				</button>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "promotions"}
-					onClick={() => setTab("promotions")}
-				>
-					Promotions
-				</button>
-			</div>
-			{repoId === null ? (
-				<div className="table-wrap">
-					{/*
+			<Tabs
+				tabs={TABS}
+				active={tab}
+				onChange={setTab}
+				panelId={WORKSPACE_PANEL_ID}
+			/>
+			{/*
+				One panel for the whole run rather than three, only one of which is
+				ever mounted: `aria-labelledby` names whichever tab is live, which is
+				what tells a screen reader what it just landed in.
+			*/}
+			<div
+				className="workspace"
+				id={WORKSPACE_PANEL_ID}
+				role="tabpanel"
+				aria-labelledby={`tab-${tab}`}
+				// biome-ignore lint/a11y/noNoninteractiveTabindex: a tabpanel is this rule's documented exception. With no repository selected, or a query still in flight, this panel holds nothing focusable — and arrowing to a tab whose panel cannot then be reached is the failure the tabindex prevents.
+				tabIndex={0}
+			>
+				{repoId === null ? (
+					<div className="table-wrap">
+						{/*
 						Two different nothings. With no repositories configured at all
 						there is nothing to pick, and the answer is the settings
 						window — which is what replaces a separate first-run wizard.
 					*/}
-					{repos.data?.length === 0 ? (
-						<div className="state">
-							<p className="state-title">No repositories yet</p>
-							<p className="state-hint">
-								Add one in Settings, then sync it to collect the agreements
-								buried in its merged pull requests.
-							</p>
-							{/*
+						{repos.data?.length === 0 ? (
+							<div className="state">
+								<p className="state-title">No repositories yet</p>
+								<p className="state-hint">
+									Add one in Settings, then sync it to collect the agreements
+									buried in its merged pull requests.
+								</p>
+								{/*
 								Named for the job rather than the destination: this is the
 								first-run path, and "settings" undersells what it does. It
 								also keeps this button's accessible name clear of the
@@ -266,60 +271,61 @@ export function App() {
 								else — two controls whose names contain one another are two
 								controls a screen reader cannot tell apart.
 							*/}
-							<button
-								type="button"
-								className="btn-primary"
-								onClick={() => setSettingsOpen(true)}
-							>
-								Configure a repository
-							</button>
-						</div>
-					) : (
-						<div className="state">
-							<p className="state-title">No repository selected</p>
-							<p className="state-hint">
-								Pick one from the sidebar to see its entries, rules, and
-								promotions.
-							</p>
-						</div>
-					)}
-				</div>
-			) : tab === "entries" ? (
-				// Keyed on the repository: without it React keeps the tab's state
-				// across a switch, and a selection made in one repository would
-				// still be sitting there — and still actionable — in the next.
-				<EntriesTab
-					key={repoId}
-					repoId={repoId}
-					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
-					onCancel={(ids) => cancelAnalysis.mutate(ids)}
-					onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
-				/>
-			) : tab === "rules" ? (
-				<RulesTab
-					key={repoId}
-					repoId={repoId}
-					onOpenRule={(id) => setDrawer({ kind: "rule", id })}
-					// A created pull request is only ever shown on the promotions
-					// tab, so making one moves the user there. Left where they were,
-					// the one thing the screen would not show is the thing the dialog
-					// just made.
-					onPromoted={() => setTab("promotions")}
-				/>
-			) : (
-				<PromotionsTab key={repoId} repoId={repoId} />
-			)}
-			{drawer?.kind === "entry" && (
-				<EntryDrawer
-					entryId={drawer.id}
-					onClose={() => setDrawer(null)}
+								<button
+									type="button"
+									className="btn-primary"
+									onClick={() => setSettingsOpen(true)}
+								>
+									Configure a repository
+								</button>
+							</div>
+						) : (
+							<div className="state">
+								<p className="state-title">No repository selected</p>
+								<p className="state-hint">
+									Pick one from the sidebar to see its entries, rules, and
+									promotions.
+								</p>
+							</div>
+						)}
+					</div>
+				) : tab === "entries" ? (
+					// Keyed on the repository: without it React keeps the tab's state
+					// across a switch, and a selection made in one repository would
+					// still be sitting there — and still actionable — in the next.
+					<EntriesTab
+						key={repoId}
+						repoId={repoId}
+						onOpenEntry={(id) => setPanel({ kind: "entry", id })}
+						onCancel={(ids) => cancelAnalysis.mutate(ids)}
+						onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
+					/>
+				) : tab === "rules" ? (
+					<RulesTab
+						key={repoId}
+						repoId={repoId}
+						onOpenRule={(id) => setPanel({ kind: "rule", id })}
+						// A created pull request is only ever shown on the promotions
+						// tab, so making one moves the user there. Left where they were,
+						// the one thing the screen would not show is the thing the dialog
+						// just made.
+						onPromoted={() => setTab("promotions")}
+					/>
+				) : (
+					<PromotionsTab key={repoId} repoId={repoId} />
+				)}
+			</div>
+			{panel?.kind === "entry" && (
+				<EntryPanel
+					entryId={panel.id}
+					onClose={() => setPanel(null)}
 					onReanalyse={(entryId) => analyse.mutate([entryId])}
 					onCancel={(entryId) => cancelAnalysis.mutate([entryId])}
-					onOpenRule={(ruleId) => setDrawer({ kind: "rule", id: ruleId })}
+					onOpenRule={(ruleId) => setPanel({ kind: "rule", id: ruleId })}
 				/>
 			)}
-			{drawer?.kind === "rule" && (
-				<RuleDrawer ruleId={drawer.id} onClose={() => setDrawer(null)} />
+			{panel?.kind === "rule" && (
+				<RulePanel ruleId={panel.id} onClose={() => setPanel(null)} />
 			)}
 			{settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
 		</Shell>

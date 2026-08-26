@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { EntryDetail } from "../../src/shared/api.ts";
-import { EntryDrawerView } from "../../web/src/components/EntryDrawer.tsx";
+import { EntryPanelView } from "../../web/src/components/EntryPanel.tsx";
 
 const url = "https://github.com/acme/mono/pull/4821";
 
@@ -85,10 +85,10 @@ function detail(overrides: Partial<EntryDetail> = {}): EntryDetail {
 	};
 }
 
-describe("EntryDrawerView", () => {
+describe("EntryPanelView", () => {
 	test("shows the PR body, the threads with anchors, and the issue comments", () => {
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail()}
 				onReanalyse={() => {}}
 				onCancel={() => {}}
@@ -107,7 +107,7 @@ describe("EntryDrawerView", () => {
 	test("lists the derived rules with their status and opens one on click", async () => {
 		const opened: string[] = [];
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail()}
 				onReanalyse={() => {}}
 				onCancel={() => {}}
@@ -125,7 +125,7 @@ describe("EntryDrawerView", () => {
 
 	test("says so explicitly when the file list was truncated", () => {
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({ paths_truncated: true })}
 				onReanalyse={() => {}}
 				onCancel={() => {}}
@@ -137,7 +137,7 @@ describe("EntryDrawerView", () => {
 
 	test("says so when the conversation itself was capped", () => {
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({ conversation_truncated: true })}
 				onReanalyse={() => {}}
 				onCancel={() => {}}
@@ -147,10 +147,10 @@ describe("EntryDrawerView", () => {
 		expect(screen.getByText(/conversation is truncated/i)).toBeDefined();
 	});
 
-	test("re-analysing from the drawer confirms the draft count first", async () => {
+	test("re-analysing from the panel confirms the draft count first", async () => {
 		let clicks = 0;
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail()}
 				onReanalyse={() => {
 					clicks++;
@@ -175,7 +175,7 @@ describe("EntryDrawerView", () => {
 	test("with no drafts to lose, analysis fires straight away", async () => {
 		let clicks = 0;
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({ rules: [], rule_count: 0, draft_rule_count: 0 })}
 				onReanalyse={() => {
 					clicks++;
@@ -188,9 +188,9 @@ describe("EntryDrawerView", () => {
 		expect(clicks).toBe(1);
 	});
 
-	test("a running entry cannot be queued again from the drawer", () => {
+	test("a running entry cannot be queued again from the panel", () => {
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({
 					analysis_state: "running",
 					rules: [],
@@ -211,7 +211,7 @@ describe("EntryDrawerView", () => {
 	test("a failed entry shows its error and offers Analyse", async () => {
 		let clicks = 0;
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({
 					analysis_state: "failed",
 					last_error: "claude did not finish within 120000ms",
@@ -233,7 +233,7 @@ describe("EntryDrawerView", () => {
 	test("offers Stop beside Analyse, live only while the entry is busy", async () => {
 		const stopped: number[] = [];
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail({ analysis_state: "running" })}
 				onReanalyse={() => {}}
 				onCancel={() => stopped.push(1)}
@@ -251,7 +251,7 @@ describe("EntryDrawerView", () => {
 
 	test("takes Stop down for an entry with nothing running", () => {
 		render(
-			<EntryDrawerView
+			<EntryPanelView
 				entry={detail()}
 				onReanalyse={() => {}}
 				onCancel={() => {}}

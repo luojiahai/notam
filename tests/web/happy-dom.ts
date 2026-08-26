@@ -14,6 +14,6 @@ GlobalRegistrator.register({ url: "http://127.0.0.1:4317/" });
 const { cleanup } = await import("@testing-library/react");
 
 // Testing Library's auto-cleanup keys off a global afterEach that bun:test does
-// not install for it. Unmounting between tests keeps one test's drawer from
+// not install for it. Unmounting between tests keeps one test's panel from
 // being found by the next one's query.
 afterEach(cleanup);

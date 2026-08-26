@@ -6,7 +6,7 @@ import { useEntry } from "../api/hooks.ts";
 import { isBusy } from "../lib/analysis.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
 import { Dialog } from "./Dialog.tsx";
-import { Drawer } from "./Drawer.tsx";
+import { Panel } from "./Panel.tsx";
 
 /**
  * GitHub's review states arrive as SCREAMING_SNAKE enums. They are rendered as
@@ -32,7 +32,7 @@ function ReviewState({ state }: { state: string }) {
 	);
 }
 
-export function EntryDrawerView({
+export function EntryPanelView({
 	entry,
 	onReanalyse,
 	onCancel,
@@ -46,7 +46,7 @@ export function EntryDrawerView({
 	const [confirming, setConfirming] = useState(false);
 
 	/**
-	 * The draft count belongs on the row action, in this drawer, and on the bulk
+	 * The draft count belongs on the row action, in this panel, and on the bulk
 	 * action alike, so the guard lives with each entry point rather than at the
 	 * one the user happened to reach first.
 	 */
@@ -72,7 +72,7 @@ export function EntryDrawerView({
 				The only place this text is readable, and it is process output
 				rather than prose: `pre` keeps the line breaks `claude` printed,
 				and the height cap stops a long trace from pushing the rest of
-				the drawer past the fold.
+				the panel past the fold.
 			*/}
 			{entry.analysis_state === "failed" && (
 				<pre className="notice notice-error notice-trace">
@@ -85,7 +85,7 @@ export function EntryDrawerView({
 				the row abbreviates its Stop is that a column of them would read
 				as identical buttons, and there is no column here.
 			*/}
-			<div className="drawer-actions">
+			<div className="panel-actions">
 				<button
 					type="button"
 					disabled={isBusy(entry)}
@@ -241,7 +241,7 @@ export function EntryDrawerView({
 	);
 }
 
-export function EntryDrawer({
+export function EntryPanel({
 	entryId,
 	onClose,
 	onReanalyse,
@@ -256,7 +256,7 @@ export function EntryDrawer({
 }) {
 	const entry = useEntry(entryId);
 	return (
-		<Drawer title={entry.data?.title ?? "Entry"} onClose={onClose}>
+		<Panel title={entry.data?.title ?? "Entry"} onClose={onClose}>
 			{entry.error && (
 				<p className="notice notice-error" role="alert">
 					{entry.error.message}
@@ -264,13 +264,13 @@ export function EntryDrawer({
 			)}
 			{entry.isPending && <p className="secondary">Loading…</p>}
 			{entry.data && (
-				<EntryDrawerView
+				<EntryPanelView
 					entry={entry.data}
 					onReanalyse={() => onReanalyse(entryId)}
 					onCancel={() => onCancel(entryId)}
 					onOpenRule={onOpenRule}
 				/>
 			)}
-		</Drawer>
+		</Panel>
 	);
 }

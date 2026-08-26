@@ -1,4 +1,4 @@
-import { Sparkles, Square } from "lucide-react";
+import { Sparkles, Square, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import type {
 	AnalysisState,
@@ -205,7 +205,7 @@ export function EntriesTable(props: EntriesTableProps) {
 				</div>
 			</div>
 
-			<div className="table-wrap">
+			<div className="table-wrap" aria-busy={props.loading}>
 				{props.loading ? (
 					<TableSkeleton />
 				) : props.entries.length === 0 ? (
@@ -277,13 +277,22 @@ export function EntriesTable(props: EntriesTableProps) {
 									</td>
 									<td className="num">
 										{entry.changed_file_count}
+										{/*
+											A glyph plus the sentence it stands for. The tooltip
+											alone reaches neither a screen reader nor a touch
+											device, and the count beside it is the one number on
+											this row that would otherwise be quietly wrong.
+										*/}
 										{entry.paths_truncated && (
 											<span
 												className="truncated"
 												title="This pull request changed more than 300 files; the list is truncated."
 											>
-												{" "}
-												⚠
+												<TriangleAlert className="icon" aria-hidden="true" />
+												<span className="visually-hidden">
+													— more than 300 files changed; the file list is
+													truncated
+												</span>
 											</span>
 										)}
 									</td>
@@ -298,7 +307,7 @@ export function EntriesTable(props: EntriesTableProps) {
 										{/*
 											A failure is the one state with something to read
 											behind it, and what it has to say is server text of
-											unbounded length — so the pill opens the drawer that
+											unbounded length — so the pill opens the panel that
 											already banners it rather than the row growing to fit
 											it. Every other state stays a label.
 										*/}
