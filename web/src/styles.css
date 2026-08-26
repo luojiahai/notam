@@ -1648,8 +1648,8 @@ a.quote-author:hover {
  * rail's own scrollbar out of reach.
  */
 .settings-modal {
-	width: min(54rem, 100%);
-	height: min(85dvh, 42rem);
+	width: min(62rem, 100%);
+	height: min(88dvh, 46rem);
 	max-height: none;
 }
 
@@ -1710,7 +1710,7 @@ a.quote-author:hover {
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: 14rem minmax(0, 1fr);
+	grid-template-columns: 15rem minmax(0, 1fr);
 }
 
 .settings-rail {
@@ -1842,7 +1842,7 @@ a.quote-author:hover {
  * prose more room without stretching a one-line input across the screen.
  */
 .pane-fields {
-	max-width: 30rem;
+	max-width: 33rem;
 }
 
 .pane-note {
