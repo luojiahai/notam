@@ -121,26 +121,21 @@ describe("Shell", () => {
 });
 
 describe("Sidebar", () => {
-	test("lists repositories with a figure per pipeline stage", () => {
+	test("lists repositories with their entry counts", () => {
 		wrap(
 			<Sidebar repos={[repo]} selectedRepoId="r_1" onSelectRepo={() => {}} />,
 		);
-		const row = screen.getByRole("button", { name: /acme\/mono/ });
 		expect(screen.getByText("acme/mono")).toBeDefined();
-		expect(row.textContent).toContain("12");
-		expect(row.textContent).toContain("sources");
-		expect(row.textContent).toContain("5");
-		expect(row.textContent).toContain("draft");
-		expect(row.textContent).toContain("1");
-		expect(row.textContent).toContain("open");
+		expect(screen.getByText(/12 entries/)).toBeDefined();
+		expect(screen.getByText(/5 drafts/)).toBeDefined();
+		expect(screen.getByText(/1 open promotion/)).toBeDefined();
 	});
 
 	/**
-	 * The rail is read by scanning down a column, and a figure that appears and
-	 * disappears moves the two beside it. Every stage keeps its place at zero,
-	 * so the three numbers are always in the same three positions.
+	 * Each count on the row names a tab, and a repository nobody has promoted
+	 * from would otherwise carry a nought down the whole column.
 	 */
-	test("keeps the promotion figure in place on a repository with none open", () => {
+	test("leaves the promotion count off a repository with none open", () => {
 		wrap(
 			<Sidebar
 				repos={[{ ...repo, open_promotions: 0 }]}
@@ -148,9 +143,7 @@ describe("Sidebar", () => {
 				onSelectRepo={() => {}}
 			/>,
 		);
-		expect(
-			screen.getByRole("button", { name: /acme\/mono/ }).textContent,
-		).toContain("open");
+		expect(screen.queryByText(/open promotion/)).toBeNull();
 	});
 
 	test("marks the selected repository and reports a click", async () => {
@@ -799,7 +792,7 @@ describe("App", () => {
 		expect(screen.getByText("0 selected")).toBeDefined();
 	});
 
-	test("offers a tab per pipeline stage, in order, starting at sources", async () => {
+	test("offers a tab per list, entries first", async () => {
 		globalThis.fetch = ((input: unknown) => {
 			const path = String(input);
 			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
@@ -821,49 +814,15 @@ describe("App", () => {
 		wrap(<App />);
 
 		const tabs = await screen.findAllByRole("tab");
-		// The run is the order an agreement travels in, with the off-line stage
-		// last. The counts come from the repository summary, so the labels are
-		// checked rather than the full accessible names.
-		expect(
-			tabs.map((tab) => tab.querySelector(".stage-label")?.textContent),
-		).toEqual(["Sources", "Draft", "In review", "Adopted", "Set aside"]);
+		expect(tabs.map((tab) => tab.textContent)).toEqual([
+			"Entries",
+			"Rules",
+			"Promotions",
+		]);
 		expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
 	});
 
-	/**
-	 * The tabs are useless as a map if they are not also a tally, and the tally
-	 * has to come from the repository summary rather than from whichever list
-	 * happens to be loaded — the point of the bar is to say what is waiting in
-	 * the stages you are NOT looking at.
-	 */
-	test("each stage carries its own count from the repository summary", async () => {
-		globalThis.fetch = ((input: unknown) => {
-			const path = String(input);
-			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
-			if (path === "/api/repos") return Promise.resolve(Response.json([repo]));
-			if (path.startsWith("/api/repos/r_1/entries")) {
-				return Promise.resolve(Response.json(entriesFor("r_1", 11)));
-			}
-			if (path.endsWith("/promotions")) {
-				return Promise.resolve(Response.json([]));
-			}
-			if (path === "/api/promotions/refresh") {
-				return Promise.resolve(Response.json(refreshResult));
-			}
-			return Promise.resolve(
-				new Response(`unexpected ${path}`, { status: 404 }),
-			);
-		}) as typeof fetch;
-
-		wrap(<App />);
-
-		const tabs = await screen.findAllByRole("tab");
-		expect(
-			tabs.map((tab) => tab.querySelector(".stage-value")?.textContent),
-		).toEqual(["12", "5", "2", "1", "1"]);
-	});
-
-	test("the review stage lists this repository's open promotions", async () => {
+	test("the promotions tab lists this repository's promotions", async () => {
 		globalThis.fetch = ((input: unknown) => {
 			const path = String(input);
 			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
@@ -873,22 +832,6 @@ describe("App", () => {
 			}
 			if (path === "/api/repos/r_1/promotions") {
 				return Promise.resolve(Response.json([promotion]));
-			}
-			// The review stage joins the promotions to the rules riding in them,
-			// so it asks for both.
-			if (path.startsWith("/api/repos/r_1/rules")) {
-				return Promise.resolve(
-					Response.json({
-						rules: [{ ...ruleDetail("proposed"), promotion_id: "pm_1" }],
-						counts: {
-							total: 1,
-							draft: 0,
-							proposed: 1,
-							verified: 0,
-							abandoned: 0,
-						},
-					}),
-				);
 			}
 			if (path === "/api/promotions/refresh") {
 				return Promise.resolve(Response.json(refreshResult));
@@ -901,7 +844,7 @@ describe("App", () => {
 		wrap(<App />);
 
 		await userEvent.click(
-			await screen.findByRole("tab", { name: /In review/ }),
+			await screen.findByRole("tab", { name: "Promotions" }),
 		);
 		const link = await screen.findByRole("link", { name: "#900" });
 		expect(link.getAttribute("href")).toBe(
@@ -911,12 +854,11 @@ describe("App", () => {
 	});
 
 	/**
-	 * A promoted rule is no longer a draft, so the stage the user pressed the
-	 * button on is precisely the one place the thing they just made does not
-	 * appear. The wiring runs from the dialog, through the draft stage, to the
-	 * stage state held here.
+	 * The pull request only ever shows on the promotions tab, so the create has
+	 * to land the user there — the wiring runs from the dialog, through the
+	 * rules tab, to the tab state held here.
 	 */
-	test("creating a rules pull request lands on the stage that holds it", async () => {
+	test("creating a rules pull request lands on the tab that holds it", async () => {
 		globalThis.fetch = ((input: unknown, init?: RequestInit) => {
 			const path = String(input);
 			if (path === "/api/meta") return Promise.resolve(Response.json(meta));
@@ -973,7 +915,7 @@ describe("App", () => {
 
 		wrap(<App />);
 
-		await userEvent.click(await screen.findByRole("tab", { name: /Draft/ }));
+		await userEvent.click(await screen.findByRole("tab", { name: "Rules" }));
 		await userEvent.click(
 			await screen.findByRole("checkbox", { name: /select all rules/i }),
 		);
@@ -987,7 +929,7 @@ describe("App", () => {
 		await waitFor(() =>
 			expect(
 				screen
-					.getByRole("tab", { name: /In review/ })
+					.getByRole("tab", { name: "Promotions" })
 					.getAttribute("aria-selected"),
 			).toBe("true"),
 		);

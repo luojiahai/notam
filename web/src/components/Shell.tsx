@@ -1,6 +1,5 @@
 import { Settings } from "lucide-react";
 import type { ReactNode } from "react";
-import { BrandMark } from "./BrandMark.tsx";
 import { GithubMark } from "./GithubMark.tsx";
 import { SidebarResizer } from "./SidebarResizer.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
@@ -32,16 +31,7 @@ export function Shell({
 	return (
 		<div className="shell">
 			<header className="header">
-				{/*
-					The mark is inside the heading rather than beside it: the two are
-					one lockup, and a mark that scrolls or wraps away from its
-					wordmark stops being a mark. It is hidden from the accessible
-					tree so the heading's name stays the wordmark alone.
-				*/}
-				<h1 className="brand">
-					<BrandMark className="brand-mark" />
-					NOTAM
-				</h1>
+				<h1 className="brand">NOTAM</h1>
 				<span className="brand-expansion">
 					Notes On Team Agreements &amp; Methods
 				</span>

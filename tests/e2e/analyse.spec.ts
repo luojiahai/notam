@@ -28,15 +28,15 @@ test("analyse → stop → the entry returns to unanalysed and is analysable aga
 	// SSE drives the counter without a reload, so reaching this means both
 	// analysers have really been spawned. Both at once: the seeded config
 	// allows two.
-	await expect(page.getByText(/Analysing 2 entries/)).toBeVisible({
+	await expect(page.getByText(/2 running, 0 queued/)).toBeVisible({
 		timeout: 30_000,
 	});
 
 	await page.getByRole("button", { name: /^Stop all$/ }).click();
 
-	// The strip can only go away if both subprocesses were killed: the fake
-	// analyser never returns on its own.
-	await expect(page.getByText(/Analysing/)).toHaveCount(0, {
+	// The counter can only reach zero if both subprocesses were killed: the
+	// fake analyser never returns on its own.
+	await expect(page.getByText(/0 running, 0 queued/)).toBeVisible({
 		timeout: 30_000,
 	});
 	await expect(
@@ -57,7 +57,7 @@ test("a single row can be stopped on its own", async ({ page }) => {
 
 	const row = page.getByRole("row").nth(1);
 	await row.getByRole("button", { name: /^Analyse #/ }).click();
-	await expect(page.getByText(/Analysing 1 entry/)).toBeVisible({
+	await expect(page.getByText(/1 running, 0 queued/)).toBeVisible({
 		timeout: 30_000,
 	});
 
@@ -66,7 +66,7 @@ test("a single row can be stopped on its own", async ({ page }) => {
 	await expect(row.getByRole("button", { name: /^Analyse #/ })).toBeDisabled();
 	await row.getByRole("button", { name: /^Stop analysing #/ }).click();
 
-	await expect(page.getByText(/Analysing/)).toHaveCount(0, {
+	await expect(page.getByText(/0 running, 0 queued/)).toBeVisible({
 		timeout: 30_000,
 	});
 	await expect(row.getByRole("button", { name: /^Analyse #/ })).toBeEnabled();
