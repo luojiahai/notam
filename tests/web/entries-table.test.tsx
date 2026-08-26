@@ -355,25 +355,16 @@ describe("EntriesTable", () => {
 		expect(screen.getByTitle(/more than 300 files/i)).toBeDefined();
 	});
 
-	test("the activity strip reports this repository's own analysis states", () => {
+	test("the counter reports this repository's own analysis states", () => {
 		draw({ counts: { ...counts, queued: 4, running: 2 } });
-		expect(screen.getByText(/analysing 2 entries, 4 queued/i)).toBeDefined();
+		const counter = screen.getByText(/2 running, 4 queued/);
+		expect(counter.dataset.active).toBe("true");
 	});
 
-	test("a single running entry is not reported in the plural", () => {
-		draw({ counts: { ...counts, queued: 0, running: 1 } });
-		expect(screen.getByText(/analysing 1 entry$/i)).toBeDefined();
-	});
-
-	/**
-	 * Nothing running is not a fact worth a strip. The alternative — a dimmed
-	 * "0 running, 0 queued" that is always there — spends a row of chrome on
-	 * the state the screen is in almost all the time.
-	 */
-	test("the strip is absent, not dimmed, when nothing is running", () => {
-		draw({ counts: { ...counts, running: 0, queued: 0 } });
-		expect(screen.queryByText(/analysing/i)).toBeNull();
-		expect(screen.queryByRole("button", { name: /^stop all$/i })).toBeNull();
+	test("an idle counter stays mounted so the toolbar does not reflow", () => {
+		draw();
+		const counter = screen.getByText(/0 running, 0 queued/);
+		expect(counter.dataset.active).toBe("false");
 	});
 
 	/**
@@ -611,6 +602,17 @@ describe("stopping an analysis", () => {
 		// Stopped rows leave the Queued and Running chips, so a selection kept
 		// here would point at ids no longer on screen.
 		expect(screen.getByText("0 selected")).toBeTruthy();
+	});
+
+	test("Stop all goes down when the counter it sits beside reads zero", () => {
+		draw({ counts: { ...counts, running: 0, queued: 0 } });
+		expect(
+			(
+				screen.getByRole("button", {
+					name: /^stop all$/i,
+				}) as HTMLButtonElement
+			).disabled,
+		).toBe(true);
 	});
 
 	test("Stop all sweeps the repository, not the selection", async () => {
