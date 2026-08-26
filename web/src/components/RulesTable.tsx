@@ -1,61 +1,61 @@
 import { useEffect } from "react";
-import type {
-	RuleCounts,
-	RuleStatus,
-	RuleSummary,
-} from "../../../src/shared/api.ts";
+import type { RuleSummary } from "../../../src/shared/api.ts";
 import { useSelection } from "../state/selection.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
-import { type Chip, FilterChips } from "./FilterChips.tsx";
+import { Confidence } from "./Confidence.tsx";
 import { TableEmpty, TableSkeleton } from "./TableState.tsx";
 
 export type RulesTableProps = {
 	rules: RuleSummary[];
-	counts: RuleCounts;
-	status: RuleStatus | "";
-	onStatusChange: (status: RuleStatus | "") => void;
 	query: string;
 	onQueryChange: (query: string) => void;
 	onOpenRule: (ruleId: string) => void;
-	onAbandon: (ruleIds: string[]) => void;
-	onVerify: (ruleIds: string[]) => void;
-	onCreatePromotion: (ruleIds: string[]) => void;
+	/**
+	 * Absent on a stage whose rules can no longer move. An abandoned rule is
+	 * terminal, and a checkbox column that enables nothing reads as a broken
+	 * one, so those stages render without a selection at all.
+	 */
+	selection?: {
+		onAbandon: (ruleIds: string[]) => void;
+		onCreatePromotion: (ruleIds: string[]) => void;
+	};
 	loading: boolean;
+	emptyTitle: string;
+	emptyHint: string;
 	/** The last mutation failure, verbatim from the server. */
 	error?: string | null;
 };
 
-const STATUS_LABELS: Record<RuleStatus, string> = {
-	draft: "Draft",
-	proposed: "Proposed",
-	verified: "Verified",
-	abandoned: "Abandoned",
-};
-
 /**
- * Presentational on purpose, matching EntriesTable's shape: everything it
- * needs arrives as a prop and every decision leaves as a callback, so the
- * selection-dependent bulk-action rules below are testable without a server.
+ * The scanning view of one stage's rules. It no longer carries a status
+ * filter: the pipeline above it *is* that filter, and a second set of controls
+ * meaning the same thing is how a screen ends up with two answers to the same
+ * question.
+ *
+ * Presentational on purpose — everything arrives as a prop and every decision
+ * leaves as a callback, so the selection-dependent rules below are testable
+ * without a server.
  */
 export function RulesTable(props: RulesTableProps) {
 	const selection = useSelection<RuleSummary>();
+
+	// A selection must never outlive the row set it was made in. The search box
+	// changes which rows exist, and `clear` is stable, so this fires exactly on
+	// a context change — the repository and stage switches are covered by App
+	// keying the stage on both.
+	const { clear } = selection;
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the query is the trigger, not a value the effect reads; `clear` is a stable useCallback.
+	useEffect(() => {
+		clear();
+	}, [props.query]);
+
 	const visibleIds = props.rules.map((rule) => rule.id);
 	const allSelected =
 		visibleIds.length > 0 && visibleIds.every((id) => selection.has(id));
 
-	// A selection must never outlive the row set it was made in. The chip and
-	// the search box change which rows exist, and `clear` is stable, so this
-	// fires exactly on a context change — the repository switch is covered by
-	// App keying the tab on `repoId`.
-	const { clear } = selection;
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the context props are the trigger, not values the effect reads; `clear` is a stable useCallback.
-	useEffect(() => {
-		clear();
-	}, [props.status, props.query]);
-
-	// The whole selection, not the visible slice: a rule the current filter
-	// hides is still going to be sent, so it still has to be able to veto a
-	// bulk action. Visible rows are taken fresh in case a refetch moved them.
+	// The whole selection, not the visible slice: a rule the search box hides is
+	// still going to be sent, so it still has to be able to veto a bulk action.
+	// Visible rows are taken fresh in case a refetch moved them.
 	const visible = new Map(props.rules.map((rule) => [rule.id, rule]));
 	const selected = selection.rows.map((rule) => visible.get(rule.id) ?? rule);
 
@@ -64,28 +64,13 @@ export function RulesTable(props: RulesTableProps) {
 	// "409" for something the screen could have greyed out.
 	const allDraft =
 		selected.length > 0 && selected.every((rule) => rule.status === "draft");
-	const allProposed =
-		selected.length > 0 && selected.every((rule) => rule.status === "proposed");
 	const anyAbandoned = selected.some((rule) => rule.status === "abandoned");
 
-	const chips: Chip[] = (
-		["draft", "proposed", "verified", "abandoned"] as RuleStatus[]
-	).map((status) => ({
-		value: status,
-		label: STATUS_LABELS[status],
-		count: props.counts[status],
-	}));
-
-	const filtered = props.status !== "" || props.query !== "";
+	const selectable = props.selection !== undefined;
 
 	return (
 		<>
 			<div className="toolbar">
-				<FilterChips
-					chips={chips}
-					active={props.status}
-					onChange={(value) => props.onStatusChange(value as RuleStatus | "")}
-				/>
 				<input
 					type="search"
 					aria-label="Filter rules by directive"
@@ -94,79 +79,59 @@ export function RulesTable(props: RulesTableProps) {
 					onChange={(event) => props.onQueryChange(event.target.value)}
 				/>
 				<span className="spacer" />
-				{/*
-					The selection controls sit here rather than in a footer of their
-					own, matching the entries tab. Four chips and three buttons will
-					not fit beside them on a narrow window, so they are grouped: the
-					set drops to a second line together instead of shedding one
-					button at a time.
-				*/}
-				<div className="toolbar-actions">
-					<span className="bulk-count" data-active={selection.size > 0}>
-						{selection.size} selected
-					</span>
-					<button
-						type="button"
-						className="btn-primary"
-						disabled={!allDraft}
-						onClick={() => props.onCreatePromotion(selection.ids)}
-					>
-						Create rules PR ({selection.size})
-					</button>
-					<button
-						type="button"
-						disabled={!allProposed}
-						onClick={() => props.onVerify(selection.ids)}
-					>
-						Mark verified
-					</button>
-					<button
-						type="button"
-						className="btn-danger"
-						disabled={selection.size === 0 || anyAbandoned}
-						onClick={() => props.onAbandon(selection.ids)}
-					>
-						Abandon
-					</button>
-					{selection.size > 0 && !allDraft && (
-						<span className="bulk-hint">Only draft rules can be promoted.</span>
-					)}
-					{props.error && <span className="bulk-error">{props.error}</span>}
-				</div>
+				{props.selection && (
+					<div className="toolbar-actions">
+						<span className="bulk-count" data-active={selection.size > 0}>
+							{selection.size} selected
+						</span>
+						<button
+							type="button"
+							className="btn-primary"
+							disabled={!allDraft}
+							onClick={() => props.selection?.onCreatePromotion(selection.ids)}
+						>
+							Create rules PR ({selection.size})
+						</button>
+						<button
+							type="button"
+							className="btn-danger"
+							disabled={selection.size === 0 || anyAbandoned}
+							onClick={() => props.selection?.onAbandon(selection.ids)}
+						>
+							Abandon
+						</button>
+						{props.error && <span className="bulk-error">{props.error}</span>}
+					</div>
+				)}
 			</div>
 
 			<div className="table-wrap">
 				{props.loading ? (
 					<TableSkeleton />
 				) : props.rules.length === 0 ? (
-					<TableEmpty
-						title={filtered ? "No rules match this filter." : "No rules yet."}
-						hint={
-							filtered
-								? "Clear the filter or widen the search to see the rest."
-								: "Analyse some entries and the agreements they contain land here."
-						}
-					/>
+					<TableEmpty title={props.emptyTitle} hint={props.emptyHint} />
 				) : (
 					<table>
 						<thead>
 							<tr>
-								<th>
-									<input
-										type="checkbox"
-										aria-label="Select all rules"
-										checked={allSelected}
-										onChange={() =>
-											allSelected
-												? selection.clear()
-												: selection.setAll(props.rules)
-										}
-									/>
-								</th>
+								{selectable && (
+									<th>
+										<input
+											type="checkbox"
+											aria-label="Select all rules"
+											checked={allSelected}
+											onChange={() =>
+												allSelected
+													? selection.clear()
+													: selection.setAll(props.rules)
+											}
+										/>
+									</th>
+								)}
 								<th>Type</th>
 								<th>Directive</th>
 								<th>Scope</th>
-								<th className="num">Confidence</th>
+								<th>Confidence</th>
 								<th>Source</th>
 								<th>Status</th>
 							</tr>
@@ -174,21 +139,23 @@ export function RulesTable(props: RulesTableProps) {
 						<tbody>
 							{props.rules.map((rule) => (
 								<tr key={rule.id}>
-									<td>
-										<input
-											type="checkbox"
-											aria-label={`Select ${rule.directive}`}
-											checked={selection.has(rule.id)}
-											onChange={() => selection.toggle(rule)}
-										/>
-									</td>
+									{selectable && (
+										<td>
+											<input
+												type="checkbox"
+												aria-label={`Select ${rule.directive}`}
+												checked={selection.has(rule.id)}
+												onChange={() => selection.toggle(rule)}
+											/>
+										</td>
+									)}
 									<td>
 										<Badge>{rule.type}</Badge>
 									</td>
 									<td className="cell-title">
 										<button
 											type="button"
-											className="btn-plain"
+											className="btn-plain cell-directive"
 											onClick={() => props.onOpenRule(rule.id)}
 										>
 											{rule.directive}
@@ -200,7 +167,9 @@ export function RulesTable(props: RulesTableProps) {
 											? "whole repository"
 											: rule.scope_globs.join(", ")}
 									</td>
-									<td className="num">{rule.confidence.toFixed(2)}</td>
+									<td>
+										<Confidence value={rule.confidence} />
+									</td>
 									<td className="mono">
 										<a href={rule.source_url} target="_blank" rel="noreferrer">
 											#{rule.source_number}

@@ -14,12 +14,15 @@ import {
 	useRepos,
 	useSync,
 } from "./api/hooks.ts";
+import { AdoptedStage } from "./components/AdoptedStage.tsx";
 import { EntriesTab } from "./components/EntriesTab.tsx";
 import { EntryDrawer } from "./components/EntryDrawer.tsx";
-import { PromotionsTab } from "./components/PromotionsTab.tsx";
+import type { Stage } from "./components/Pipeline.tsx";
+import { Pipeline, stageTabId } from "./components/Pipeline.tsx";
 import { RepoBar } from "./components/RepoBar.tsx";
+import { ReviewStage } from "./components/ReviewStage.tsx";
 import { RuleDrawer } from "./components/RuleDrawer.tsx";
-import { RulesTab } from "./components/RulesTab.tsx";
+import { RulesStage } from "./components/RulesStage.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
@@ -118,7 +121,9 @@ export function App() {
 	const meta = useMeta();
 	const repos = useRepos();
 	const [repoId, setRepoId] = useState<string | null>(null);
-	const [tab, setTab] = useState<"entries" | "rules" | "promotions">("entries");
+	// Sources is where a repository with nothing in it starts, and where the
+	// work starts on any given morning: everything downstream is fed from it.
+	const [stage, setStage] = useState<Stage>("sources");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
@@ -218,47 +223,45 @@ export function App() {
 					onCancelSync={() => cancelSync.mutate(repo.id)}
 				/>
 			)}
-			<div className="tabs" role="tablist">
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "entries"}
-					onClick={() => setTab("entries")}
-				>
-					Entries
-				</button>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "rules"}
-					onClick={() => setTab("rules")}
-				>
-					Rules
-				</button>
-				<button
-					type="button"
-					role="tab"
-					aria-selected={tab === "promotions"}
-					onClick={() => setTab("promotions")}
-				>
-					Promotions
-				</button>
-			</div>
-			{repoId === null ? (
-				<div className="table-wrap">
-					{/*
+			{repo && (
+				<Pipeline
+					repo={repo}
+					stage={stage}
+					onStageChange={(next) => {
+						setStage(next);
+						// A drawer belongs to the stage it was opened from. Left
+						// open across a move it covers the screen the user just
+						// asked to see, over a row that stage may not even list.
+						setDrawer(null);
+					}}
+				/>
+			)}
+			{/*
+				The one panel the pipeline drives. It is labelled by whichever tab
+				is live rather than carrying a name of its own, so the region a
+				screen reader lands in after the tab list announces itself as the
+				stage the reader just chose.
+			*/}
+			<div
+				className="panel"
+				role="tabpanel"
+				aria-labelledby={repo ? stageTabId(stage) : undefined}
+			>
+				{repoId === null ? (
+					<div className="table-wrap">
+						{/*
 						Two different nothings. With no repositories configured at all
 						there is nothing to pick, and the answer is the settings
 						window — which is what replaces a separate first-run wizard.
 					*/}
-					{repos.data?.length === 0 ? (
-						<div className="state">
-							<p className="state-title">No repositories yet</p>
-							<p className="state-hint">
-								Add one in Settings, then sync it to collect the agreements
-								buried in its merged pull requests.
-							</p>
-							{/*
+						{repos.data?.length === 0 ? (
+							<div className="state">
+								<p className="state-title">No repositories yet</p>
+								<p className="state-hint">
+									Add one in Settings, then sync it to collect the agreements
+									buried in its merged pull requests.
+								</p>
+								{/*
 								Named for the job rather than the destination: this is the
 								first-run path, and "settings" undersells what it does. It
 								also keeps this button's accessible name clear of the
@@ -266,49 +269,64 @@ export function App() {
 								else — two controls whose names contain one another are two
 								controls a screen reader cannot tell apart.
 							*/}
-							<button
-								type="button"
-								className="btn-primary"
-								onClick={() => setSettingsOpen(true)}
-							>
-								Configure a repository
-							</button>
-						</div>
-					) : (
-						<div className="state">
-							<p className="state-title">No repository selected</p>
-							<p className="state-hint">
-								Pick one from the sidebar to see its entries, rules, and
-								promotions.
-							</p>
-						</div>
-					)}
-				</div>
-			) : tab === "entries" ? (
-				// Keyed on the repository: without it React keeps the tab's state
-				// across a switch, and a selection made in one repository would
-				// still be sitting there — and still actionable — in the next.
-				<EntriesTab
-					key={repoId}
-					repoId={repoId}
-					onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
-					onCancel={(ids) => cancelAnalysis.mutate(ids)}
-					onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
-				/>
-			) : tab === "rules" ? (
-				<RulesTab
-					key={repoId}
-					repoId={repoId}
-					onOpenRule={(id) => setDrawer({ kind: "rule", id })}
-					// A created pull request is only ever shown on the promotions
-					// tab, so making one moves the user there. Left where they were,
-					// the one thing the screen would not show is the thing the dialog
-					// just made.
-					onPromoted={() => setTab("promotions")}
-				/>
-			) : (
-				<PromotionsTab key={repoId} repoId={repoId} />
-			)}
+								<button
+									type="button"
+									className="btn-primary"
+									onClick={() => setSettingsOpen(true)}
+								>
+									Configure a repository
+								</button>
+							</div>
+						) : (
+							<div className="state">
+								<p className="state-title">No repository selected</p>
+								<p className="state-hint">
+									Pick one from the sidebar to see its entries, rules, and
+									promotions.
+								</p>
+							</div>
+						)}
+					</div>
+				) : stage === "sources" ? (
+					// Keyed on the repository: without it React keeps the stage's state
+					// across a switch, and a selection made in one repository would
+					// still be sitting there — and still actionable — in the next.
+					<EntriesTab
+						key={repoId}
+						repoId={repoId}
+						onOpenEntry={(id) => setDrawer({ kind: "entry", id })}
+						onCancel={(ids) => cancelAnalysis.mutate(ids)}
+						onCancelAll={() => cancelRepoAnalysis.mutate(repoId)}
+					/>
+				) : stage === "draft" || stage === "aside" ? (
+					// Keyed on the stage as well as the repository: the two stages share
+					// a component, and without it a search typed over the drafts would
+					// still be narrowing the abandoned list after the move.
+					<RulesStage
+						key={`${repoId}:${stage}`}
+						repoId={repoId}
+						status={stage === "draft" ? "draft" : "abandoned"}
+						onOpenRule={(id) => setDrawer({ kind: "rule", id })}
+						// A rule that has just been promoted is no longer a draft, so
+						// the stage the user is standing on is precisely the one place
+						// the thing they just made does not appear. Move them to it.
+						onPromoted={() => setStage("review")}
+					/>
+				) : stage === "review" ? (
+					<ReviewStage
+						key={repoId}
+						repoId={repoId}
+						onOpenRule={(id) => setDrawer({ kind: "rule", id })}
+					/>
+				) : (
+					<AdoptedStage
+						key={repoId}
+						repoId={repoId}
+						repoName={repo?.name ?? ""}
+						onOpenRule={(id) => setDrawer({ kind: "rule", id })}
+					/>
+				)}
+			</div>
 			{drawer?.kind === "entry" && (
 				<EntryDrawer
 					entryId={drawer.id}

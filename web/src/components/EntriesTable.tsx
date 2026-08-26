@@ -177,33 +177,36 @@ export function EntriesTable(props: EntriesTableProps) {
 						Stop selected ({selection.size})
 					</button>
 					{props.error && <span className="bulk-error">{props.error}</span>}
-					<span className="toolbar-divider" />
-					{/*
-						Counted from this repository's own entry states — the source
-						the chips count too, so the two can never disagree about what
-						is running. Dimmed rather than unmounted at zero: starting an
-						analysis must not reflow the toolbar under the button that
-						started it.
-					*/}
-					<span className="bulk-progress" data-active={pendingWork > 0}>
-						{props.counts.running} running, {props.counts.queued} queued
+				</div>
+			</div>
+
+			{/*
+				Work in flight gets a strip of its own rather than two more items in
+				the toolbar. Analysis is the one thing on this screen that takes
+				minutes and happens without the user, so while it runs it is the
+				most important fact on the page — and when nothing is running it is
+				not a fact at all, so the strip is gone rather than dimmed. The
+				table below does not shift under a press, because the strip appears
+				above it, not between it and the button.
+
+				Counted from this repository's own entry states — the source the
+				chips count too, so the two can never disagree about what is running.
+			*/}
+			{pendingWork > 0 && (
+				<div className="activity" role="status">
+					<span className="activity-pulse" aria-hidden="true" />
+					<span className="activity-text">
+						Analysing {props.counts.running} entr
+						{props.counts.running === 1 ? "y" : "ies"}
+						{props.counts.queued > 0 && `, ${props.counts.queued} queued`}
 					</span>
-					{/*
-						Beside the counter it empties, rather than in the repository
-						bar: the two read as one statement, and the count is what
-						tells the user what the button is about to do.
-					*/}
-					<button
-						type="button"
-						className="btn-sm"
-						disabled={pendingWork === 0}
-						onClick={props.onCancelAll}
-					>
+					<span className="spacer" />
+					<button type="button" className="btn-sm" onClick={props.onCancelAll}>
 						<Square className="icon" aria-hidden="true" />
 						Stop all
 					</button>
 				</div>
-			</div>
+			)}
 
 			<div className="table-wrap">
 				{props.loading ? (
@@ -320,8 +323,16 @@ export function EntriesTable(props: EntriesTableProps) {
 										instead of the row's baseline. Every row taller than one
 										line shows the seam.
 									*/}
+									{/*
+										`data-busy` keeps the controls up while the row is
+										working: a stop the user needs must not be something
+										they have to find the row again to reach. Otherwise
+										they rest until the pointer or the keyboard arrives,
+										which is what stops a hundred rows of buttons from
+										out-shouting the data they belong to.
+									*/}
 									<td>
-										<div className="row-actions">
+										<div className="row-actions" data-busy={isBusy(entry)}>
 											{/*
 												Two controls rather than one that changes verb: a
 												row transitions under the pointer, and a position
