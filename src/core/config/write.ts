@@ -1,4 +1,11 @@
-import { chmodSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	renameSync,
+	unlinkSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname } from "node:path";
 import type { Config } from "./schema.ts";
 
 /**
@@ -93,6 +100,13 @@ export function renderConfig(config: Config): string {
  * set on the temporary file, since `rename` carries the source's permissions.
  */
 export function writeConfigFileSync(path: string, contents: string): void {
+	// `~/.notam` may not exist yet — this is the first thing a first run writes,
+	// ahead of the database. The chmod repairs a directory the user made
+	// themselves, since mkdir's mode applies only to one it actually creates.
+	const dir = dirname(path);
+	mkdirSync(dir, { recursive: true, mode: 0o700 });
+	chmodSync(dir, 0o700);
+
 	const temp = `${path}.tmp`;
 	try {
 		writeFileSync(temp, contents, { mode: 0o600 });

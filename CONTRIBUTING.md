@@ -34,7 +34,7 @@ source checkout has no compiled-in web UI, so build it once with
 | `bun run changeset` | Write the changeset your pull request needs |
 | `bun run changeset:status` | What the changeset gate will say |
 | `bun run changeset:version` | Fold pending changesets into `package.json` and `CHANGELOG.md` — normally `version.yml`'s job, not yours |
-| `bun run dev:web` | Vite with hot reload, proxying `/api` to a running `notam run` |
+| `bun run dev:web` | Vite with hot reload, proxying `/api` to a running `notam` |
 | `bun run start` | Run the CLI from source |
 
 ## Verifying your work

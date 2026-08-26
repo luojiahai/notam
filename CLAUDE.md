@@ -61,7 +61,7 @@ Nor should they have to open something else. Don't cite a spec section, a plan n
   NOTAM writes under `NOTAM_HOME`'s `.notam/`. It asks on `/dev/tty`, never
   stdin, and keeps the data whenever there is no terminal to ask on.
 - `notam update` only moves forward, and only on a compiled release binary. The release lookup is always anonymous: the configured token may belong to a GHES host and must never reach github.com.
-- The server binds `127.0.0.1` with no auth by design, and rejects foreign `Host` headers. `notam run` auto-increments from port 4317 unless `--port` is passed, which then fails hard.
+- The server binds `127.0.0.1` with no auth by design, and rejects foreign `Host` headers. `notam` auto-increments from port 4317 unless `--port` is passed, which then fails hard.
 - `install.sh` is POSIX sh, not bash — Ubuntu's `/bin/sh` is dash, which is what proves it in CI.
 
 ## Git

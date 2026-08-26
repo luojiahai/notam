@@ -5,28 +5,21 @@ import { ConfigError } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
 import { UpdateError } from "../core/update/index.ts";
 import { VERSION } from "../version.ts";
-import { runInit } from "./init.ts";
 import { runRun } from "./run.ts";
-import { runSync } from "./sync.ts";
 import { runUpdateCommand } from "./update.ts";
 
 const USAGE = `NOTAM — Notes On Team Agreements & Methods
 
 Usage:
-  notam run [--port <n>] [--no-open]  Start the local UI on 127.0.0.1:4317
-  notam init [--force]                Write a commented ~/.notam/config.yaml
-  notam sync [--repo <owner/repo>]    Sync merged pull requests, then exit
+  notam [--port <n>] [--no-open]      Start the local UI on 127.0.0.1:4317
   notam update [--version <tag>]      Replace this binary with a newer release
   notam version                       Print the version
 
 Options:
   --port <n>            Bind this exact port instead of the configured one
   --no-open             Do not open a browser
-  --repo <owner/repo>   Sync only this repository
-  --concurrency <n>     Repositories to sync at once (default 1)
   --version <tag>       Update to this release instead of the latest
-  --force               Overwrite an existing config (init), or reinstall the
-                        version already running (update)
+  --force               Reinstall the version already running (update)
   --help                Show this help
 
 Environment:
@@ -36,6 +29,19 @@ Environment:
   NOTAM_API_BASE        GitHub API base URL that notam update resolves releases on
   NOTAM_DOWNLOAD_BASE   Release download base URL that notam update fetches from
 `;
+
+/**
+ * Commands that used to exist, and what replaced them.
+ *
+ * A bare "Unknown command" would be a dead end for anyone with the old
+ * invocation in a script, a shell history, or their fingers. Naming the
+ * replacement is what turns a breaking change into its own migration note.
+ */
+const REMOVED: Record<string, string> = {
+	run: "`run` was removed — `notam` on its own starts the server.",
+	init: "`init` was removed — config is created on first run, and edited in the settings drawer or in ~/.notam/config.yaml.",
+	sync: "`sync` was removed — sync from the UI, or:\n  curl -X POST http://127.0.0.1:4317/api/repos/<id>/sync",
+};
 
 /** Tests point this at a temporary directory instead of the real home. */
 export function resolveHome(
@@ -54,7 +60,7 @@ function flagValue(argv: string[], flag: string): string | undefined {
 }
 
 /**
- * Runs `work` with a signal wired to Ctrl-C, so an interrupted sync stops the
+ * Runs `work` with a signal wired to Ctrl-C, so an interrupted update stops the
  * request it is waiting on rather than being killed mid-flight.
  *
  * The second press exits immediately, and must: an abort can itself hang on a
@@ -90,16 +96,24 @@ export async function main(
 ): Promise<number> {
 	const log = (line: string) => console.log(line);
 	const home = resolveHome(env);
-	const [command, ...rest] = argv;
 
-	if (command === undefined) {
-		log(USAGE);
-		return 1;
+	// Only argv[0] can be a command, so a leading flag means there is none and
+	// the server is what was asked for. Scanning further would take `--port`'s
+	// own value for a command.
+	const first = argv[0];
+	const command =
+		first === undefined || first.startsWith("-") ? undefined : first;
+	const rest = command === undefined ? argv : argv.slice(1);
+
+	// `--version` is the flag spelling of the command, but only in first
+	// position: `notam update --version v1.2.3` means something else entirely.
+	if (first === "--version") {
+		log(VERSION);
+		return 0;
 	}
 
 	// Checked before dispatch, and against the whole argv rather than just the
-	// command: `notam init --help` must never write a config, and `notam sync
-	// --help` must never attempt a sync.
+	// command, so `notam update --help` never attempts an update.
 	if (argv.includes("--help") || argv.includes("-h") || command === "help") {
 		log(USAGE);
 		return 0;
@@ -107,12 +121,7 @@ export async function main(
 
 	try {
 		switch (command) {
-			case "version":
-			case "--version":
-				log(VERSION);
-				return 0;
-
-			case "run": {
+			case undefined: {
 				const raw = flagValue(rest, "--port");
 				const port = raw === undefined ? undefined : Number(raw);
 				if (
@@ -132,6 +141,10 @@ export async function main(
 				});
 			}
 
+			case "version":
+				log(VERSION);
+				return 0;
+
 			case "update": {
 				const requested = flagValue(rest, "--version");
 				await withInterrupt(log, (signal) =>
@@ -146,31 +159,12 @@ export async function main(
 				return 0;
 			}
 
-			case "init":
-				await runInit({ home, force: rest.includes("--force"), log });
-				return 0;
-
-			case "sync": {
-				const concurrency = Number(flagValue(rest, "--concurrency") ?? 1);
-				if (!Number.isInteger(concurrency) || concurrency < 1) {
-					throw new ConfigError("--concurrency must be a positive integer");
-				}
-				const failed = await withInterrupt(log, (signal) =>
-					runSync({
-						home,
-						repoFilter: flagValue(rest, "--repo"),
-						concurrency,
-						log,
-						signal,
-					}),
-				);
-				return failed > 0 ? 1 : 0;
-			}
-
-			default:
-				console.error(`Unknown command "${command}"\n`);
-				console.error(USAGE);
+			default: {
+				const replacement = REMOVED[command];
+				console.error(replacement ?? `Unknown command "${command}"\n`);
+				if (replacement === undefined) console.error(USAGE);
 				return 1;
+			}
 		}
 	} catch (error) {
 		if (

@@ -2,8 +2,8 @@ import type { Database } from "bun:sqlite";
 import {
 	defaultConfigPath,
 	defaultDbPath,
+	ensureConfig,
 	loadConfig,
-	resolveToken,
 } from "../core/config/load.ts";
 import { refreshPromotions } from "../core/promotion/refresh.ts";
 import { createApp } from "../server/app.ts";
@@ -73,14 +73,41 @@ async function shutdownServer(
 	db.close();
 }
 
-function launchBrowser(url: string): void {
-	const command =
-		process.platform === "darwin" ? ["open", url] : ["xdg-open", url];
+/** The opener for this platform, or null where there is none to call. */
+function opener(): string | null {
+	const command = process.platform === "darwin" ? "open" : "xdg-open";
+	return Bun.which(command) === null ? null : command;
+}
+
+/**
+ * Whether launching a browser could possibly be what the user wanted.
+ *
+ * `notam` with no arguments is now the whole command, so this default applies
+ * to every start rather than to one subcommand somebody opted into. Over SSH or
+ * with output piped there is no browser to open on the machine that would open
+ * it, and on a headless box `xdg-open` is usually absent or fails into a void.
+ * The URL is printed either way, which is the part that actually matters.
+ */
+export function canOpenBrowser(
+	env: Record<string, string | undefined>,
+	isTTY: boolean,
+): boolean {
+	if (!isTTY) return false;
+	if (env.SSH_CONNECTION || env.SSH_TTY) return false;
+	return opener() !== null;
+}
+
+function launchBrowser(
+	url: string,
+	env: Record<string, string | undefined>,
+): void {
+	if (!canOpenBrowser(env, process.stdout.isTTY)) return;
+	const command = opener();
+	if (command === null) return;
 	try {
-		Bun.spawn(command, { stdout: "ignore", stderr: "ignore" });
+		Bun.spawn([command, url], { stdout: "ignore", stderr: "ignore" });
 	} catch {
-		// Headless machines and minimal containers have neither. The URL is
-		// already printed; that is enough.
+		// Nothing to report: the URL is already on stdout.
 	}
 }
 
@@ -88,21 +115,28 @@ function launchBrowser(url: string): void {
  * The whole boot sequence, separated from `runRun` so tests can start a real
  * server, drive it over HTTP, and stop it.
  *
- * Order matters. Config and tokens are validated before the database is
- * touched, so a typo cannot leave a half-migrated file behind; and both are
+ * Order matters. Config is created if absent and validated before the database
+ * is touched, so a typo cannot leave a half-migrated file behind, and it is
  * validated before the socket is bound, so a failure is a message on stderr
  * rather than a browser tab pointed at a broken server.
+ *
+ * Tokens are not part of that gate. A host whose `token_env` is unset becomes
+ * a warning and a 503 on the routes that need it, because the settings drawer
+ * is where a token_env is corrected and a server that refuses to boot cannot
+ * serve the page that corrects it.
  */
 export async function startServer(options: RunOptions): Promise<RunningServer> {
 	const env = options.env ?? process.env;
 	const configPath = defaultConfigPath(options.home);
 	const dbPath = defaultDbPath(options.home);
 
+	// Creates, never repairs: a file that exists but does not parse is left
+	// alone for loadConfig to report, because overwriting it would destroy
+	// whatever the user was in the middle of writing.
+	if (await ensureConfig(configPath)) {
+		options.log(`Wrote ${configPath}`);
+	}
 	const config = await loadConfig(configPath);
-	// Resolve every token up front: the promotion routes build their clients
-	// lazily, so without this a missing variable would first surface as an HTTP
-	// 500 mid-session instead of a named refusal to start.
-	for (const host of config.hosts) resolveToken(host, env);
 
 	const { db, applied, backup } = await migrateDatabase(dbPath);
 	// Everything from here on can throw with the database already open — a
@@ -171,7 +205,11 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 			);
 		});
 
-		if (options.open) (options.openBrowser ?? launchBrowser)(listener.url);
+		// An injected opener is a test saying it owns this decision, so the
+		// environment checks live inside the default one rather than here.
+		if (options.open) {
+			(options.openBrowser ?? ((url) => launchBrowser(url, env)))(listener.url);
+		}
 
 		const started = ctx;
 		const bound = listener;

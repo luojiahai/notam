@@ -33,7 +33,7 @@ async function waitForServer(url: string): Promise<void> {
 }
 
 /**
- * A real `notam run` over a real database, with the stub standing in for
+ * A real server over a real database, with the stub standing in for
  * GitHub and a fake `claude` first on PATH. Each call owns its own port, home
  * and child process, which is why the Playwright config runs one worker.
  */
