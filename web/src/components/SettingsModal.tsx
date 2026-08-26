@@ -22,7 +22,7 @@ import {
 	restoreRepo,
 } from "../lib/config.ts";
 import { useDismissOnEscape } from "../lib/dismiss.ts";
-import { useModalFocus } from "../lib/modal.ts";
+import { useBackdropDismiss, useModalFocus } from "../lib/modal.ts";
 import {
 	ArchivedPane,
 	costLabel,
@@ -267,11 +267,15 @@ export function SettingsForm({
  *
  * `Panel` is not reused: it scrolls its whole body, and this window's rail and
  * pane scroll independently beneath a head and a foot that do not. It is the
- * same surface and the same behaviour, laid out differently.
+ * same surface and the same behaviour, laid out differently — including the
+ * backdrop, which dismisses here exactly as it does everywhere else. A window
+ * that is the only one in the app not to close where the others do is a window
+ * the reader has to remember a rule about.
  *
- * The backdrop is the one in the app that does *not* dismiss. Everywhere else
- * a click beside a window can only mean "not this"; here it would throw away
- * a form holding unsaved edits, so Escape and Close are the only ways out.
+ * Nothing is lost by closing: this form stages the whole document and reaches
+ * the file only on Save, and the window reads the config fresh every time it
+ * opens. The press and the release both have to land outside, so dragging a
+ * selection out of a field does not count as leaving.
  */
 
 function SettingsWindow({
@@ -284,8 +288,9 @@ function SettingsWindow({
 	const surface = useRef<HTMLDivElement>(null);
 	useDismissOnEscape(onClose);
 	useModalFocus(surface);
+	const backdrop = useBackdropDismiss(onClose);
 	return (
-		<div className="overlay">
+		<div className="overlay" {...backdrop}>
 			<div
 				className="window settings-modal"
 				role="dialog"

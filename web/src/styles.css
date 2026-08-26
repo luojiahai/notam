@@ -1420,18 +1420,37 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	inset: 0;
 	z-index: 30;
 	background: var(--scrim);
-	display: grid;
-	place-items: center;
+	display: flex;
+	/*
+	 * Scrolls, and the window is centred by `margin: auto` rather than by
+	 * `align-items`/`place-items`. Centring alignment distributes an oversized
+	 * item's overflow to both sides, and the half that goes past the scroll
+	 * origin cannot be reached by any scrollbar — so a window taller or wider
+	 * than the viewport loses its own title bar. Auto margins centre the same
+	 * way while collapsing to zero on the overflowing side, which keeps the
+	 * whole surface reachable.
+	 */
+	overflow: auto;
 	padding: 1.5rem;
 	animation: fade-in 0.14s ease;
 }
 .window {
+	margin: auto;
 	background: var(--surface);
 	border: 1px solid var(--border-strong);
 	border-radius: var(--r);
 	box-shadow: var(--shadow-dialog);
 	width: min(48rem, 100%);
-	max-height: min(84dvh, 52rem);
+	/*
+	 * Both caps are hard. A flex column will otherwise grow past a set height
+	 * to fit children that cannot shrink, and a child with a long unbreakable
+	 * string will otherwise push the window past `width` — either of which
+	 * puts an edge of it outside the viewport, which is what a reader sees as
+	 * a window that failed to centre.
+	 */
+	max-width: 100%;
+	max-height: 100%;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
 	animation: dialog-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
@@ -1444,6 +1463,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	display: flex;
 	align-items: flex-start;
 	gap: 0.75rem;
+	min-width: 0;
 	padding: 0.625rem var(--gutter);
 	border-bottom: 1px solid var(--border-strong);
 	background: var(--bg-sunken);
@@ -1459,6 +1479,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 }
 .window-body {
 	flex: 1;
+	min-width: 0;
 	overflow-y: auto;
 	padding: 0.75rem var(--gutter) 1.5rem;
 	min-height: 0;
@@ -1480,6 +1501,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 .window-foot {
 	display: flex;
 	gap: 0.5rem;
+	flex-wrap: wrap;
 	justify-content: flex-end;
 	align-items: center;
 	padding: 0.625rem var(--gutter);
@@ -1788,7 +1810,27 @@ a.quote-author:hover {
 .settings-modal {
 	width: min(64rem, 100%);
 	height: min(88dvh, 46rem);
-	max-height: none;
+}
+
+/*
+ * The rail stops being a column when there is no room for one beside a pane of
+ * fields. Below this the two stack and the rail keeps a capped, scrollable
+ * height, because a 15rem track plus a readable measure cannot both fit and
+ * the grid would otherwise force the window wider than the viewport.
+ */
+.settings-split {
+	min-width: 0;
+}
+@media (max-width: 52rem) {
+	.settings-split {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+	.settings-rail {
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+		max-height: 9rem;
+	}
 }
 
 /*
