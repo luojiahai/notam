@@ -33,7 +33,8 @@ curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | s
 The installer detects your platform, downloads the matching binary **and**
 `SHA256SUMS`, verifies the checksum, and installs to `~/.local/bin/notam`. It
 tells you if that directory is not on your `PATH`, and if you are upgrading, it
-tells you which version it is replacing.
+names the version it is replacing — except when running as root, where it will
+not execute a file it found already in place, and so reports `unknown version`.
 
 ```sh
 # install somewhere else
@@ -42,6 +43,9 @@ curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | s
 # install a specific release, named by any tag on the releases page
 curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/install.sh | NOTAM_VERSION=vX.Y.Z sh
 ```
+
+`NOTAM_VERSION` takes the tag with or without its leading `v` — a bare `X.Y.Z`
+is resolved to `vX.Y.Z`.
 
 Supported platforms: `darwin-arm64`, `darwin-x64`, `linux-x64`, `linux-arm64`.
 
@@ -77,9 +81,12 @@ chmod +x notam-darwin-arm64 && mv notam-darwin-arm64 ~/.local/bin/notam
 curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/uninstall.sh | sh
 ```
 
-It removes the binary from `~/.local/bin` and then asks whether to delete your
-configuration and database in `~/.notam`. A bare Enter keeps them. Answer up
-front to skip the question, which is also what you want in a script:
+It asks first, before removing anything: whether to delete your configuration
+and database in `~/.notam`. A bare Enter keeps them. The data is dealt with
+next, and the binary in `~/.local/bin` goes last — so if removing a
+root-owned binary fails, that error arrives while you are still reading output
+about a directory already decided. Answer up front to skip the question, which
+is also what you want in a script:
 
 ```sh
 # remove everything, including the config and database
@@ -103,6 +110,9 @@ directory is kept with it.
 
 Only the binary at `--dir` is removed. Another `notam` elsewhere on your `PATH`
 is reported rather than deleted, since this script did not put it there.
+
+`--purge` and `--keep-data` contradict each other, so passing both is refused
+rather than resolved in either direction.
 
 ## Quick start
 
@@ -140,7 +150,8 @@ verification is a judgement you make.
 | `notam sync` | Sync every configured repository, print a summary, exit |
 | `notam init` | Write `~/.notam/config.yaml` and check for the `claude` CLI |
 | `notam update` | Replace this binary with a newer release |
-| `notam version` | Print the version |
+| `notam version` | Print the version. `notam --version` is the same thing |
+| `notam help` | Print the usage summary. `notam` on its own prints it too, and exits non-zero |
 
 | Flag | For | Meaning |
 | --- | --- | --- |
@@ -151,6 +162,7 @@ verification is a judgement you make.
 | `--version <tag>` | `update` | Install this release instead of the latest |
 | `--force` | `init` | Overwrite an existing config |
 | `--force` | `update` | Reinstall even if already on that version |
+| `--help`, `-h` | any | Print the usage summary and exit, wherever it appears in the arguments |
 
 `notam sync` is headless and exits non-zero if any repository failed, which
 makes it safe to put in `cron`:
@@ -217,12 +229,13 @@ server:
 | `analysis.model` | — | Passed through to `claude`; omitted uses its default |
 | `server.port` | `4317` | Auto-increments if taken, unless you passed `--port` |
 
-Environment variables NOTAM itself reads:
+Environment variables NOTAM and its install scripts read:
 
 | Variable | Meaning |
 | --- | --- |
 | *whatever `token_env` names* | The token for that host. Required |
-| `NOTAM_HOME` | Use this directory instead of `$HOME` when locating `.notam/` |
+| `NOTAM_HOME` | Use this directory instead of `$HOME` when locating `.notam/`. `uninstall.sh` reads it too, so it also decides which `.notam/` a purge would delete |
+| `NOTAM_DIR` | Where `install.sh` puts the binary and `uninstall.sh` looks for it — the env var behind the `--dir` flag. Defaults to `~/.local/bin` |
 | `NOTAM_WEB_DIST` | Serve the web UI from this directory instead of the copy compiled into the binary |
 | `NOTAM_VERSION` | Read by `src/version.ts` as the version string `notam version` prints when running from source (a compiled binary ignores it — its version is baked in at compile time). Also read by `install.sh`, unrelatedly, as the release tag to install — see [Install](#install) |
 | `NOTAM_REPO` | The `owner/repo` `notam update` installs from, and the one `install.sh` downloads from. Defaults to `luojiahai/notam` |
@@ -271,11 +284,18 @@ refuses, because there is nothing to replace but your Bun installation.
 | **Rule** | One atomic Do or Don't extracted from an entry. One entry yields zero or more |
 | **Promotion** | The pull request NOTAM opens to add rule files to a repository |
 
-**Sync** reads over GraphQL — one query per pull request retrieves the whole
-conversation and the changed paths together, which matters when the first
+**Sync** reads over GraphQL — close to one query per pull request, retrieving
+the conversation and the changed paths together, which matters when the first
 backfill covers several hundred PRs against an hourly rate limit. Pull requests
 that touch none of your `path_globs` are skipped and never stored. Re-syncing
 refreshes an entry's content but never resets its analysis state.
+
+A big enough pull request does not fit in that one query. Reviews, comments and
+review threads are each captured up to a fixed cap, and a long file list takes
+further queries to finish. Either way the entry is stored marked as truncated,
+and the ones whose file list was shortened are counted in the summary
+`notam sync` prints. Analysis still runs on a truncated entry — just on
+slightly less than the whole conversation.
 
 **Analysis** renders the stored conversation into a prompt document, pipes it to
 `claude -p` on stdin with the instruction in the argument, and validates the
@@ -321,124 +341,10 @@ have one.
 
 ## Development
 
-Requires [Bun](https://bun.sh) 1.3.14 or newer. No other toolchain, no native
-modules — `bun install` and you are ready.
-
-```sh
-git clone https://github.com/luojiahai/notam.git && cd notam
-bun install
-bun run test
-```
-
-| Script | What it runs |
-| --- | --- |
-| `bun run test` | Unit, integration, and installer tests |
-| `bun run test:web` | React component tests, under happy-dom |
-| `bun run test:e2e` | Playwright, end to end against a real server (needs `build:web` first) |
-| `bun run test:binary` | Compiles the host binary and drives it over HTTP |
-| `bun run typecheck` | `tsc --noEmit` |
-| `bun run lint` | Biome. `bun run format` writes the fixes |
-| `bun run build:web` | Build the SPA into `web/dist` |
-| `bun run dev:web` | Vite with hot reload, proxying `/api` to a running `notam run` |
-| `bun run start` | Run the CLI from source: `bun run start -- run --no-open` |
-
-### Layout
-
-```
-src/
-  cli/          run | sync | init | update | version — parse args, call core, exit
-  server/       Hono app: REST routes, SSE progress stream, the SPA assets
-  core/
-    config/     load and validate config.yaml, resolve tokens from the environment
-    github/     one client, GHES-aware base URLs; release lookups for updates
-    sync/       github → normalise → store
-    analysis/   prompt template → claude -p → parse and validate → rules
-    promotion/  rules → markdown files → tree/commit/branch/PR → status
-    rules/      the lifecycle state machine; legal transitions live only here
-    update/     verify a downloaded release and replace the running binary
-  store/        schema, migrations, typed queries
-  jobs/         queue table and bounded worker pool, resumable across restarts
-  shared/       types shared across boundaries: zod schemas the server and the
-                web app both use, and the platform table scripts/ and core/update/
-                must agree on
-web/            React + Vite SPA
-scripts/        the binary and checksum builds
-```
-
-### Three invariants
-
-They are what keep the tests cheap, and they are worth preserving:
-
-1. **`store/` is the only module that writes SQL.** No other file contains a SQL
-   string.
-2. **`github/` is the only module that touches the network.** No other file calls
-   `fetch` — including `core/update/`, which asks `github/releases.ts` for the
-   bytes and confines itself to verifying and installing them.
-3. **`analysis/` is the only module in `core/` that spawns a subprocess.**
-
-Everything else receives those as injected dependencies — which is why **no test
-touches the network and no test spawns the real `claude`**. The GitHub client is
-driven by recorded fixtures, the analyser by a fake `claude` first on `PATH`, and
-the Git Data API by a fake that asserts the exact blob → tree → commit → ref → PR
-call sequence.
-
-The server holds a fourth rule: it contains no business logic. A route resolves
-context, calls one function `core/` already exports, serialises the result, and
-returns. Any `if` deciding what should happen to a rule belongs in `core/rules/`.
-
-## Building a binary
-
-```sh
-bun run build:web
-bun run build:binary --version 0.1.0    # this platform, into dist/
-bun run build:binaries --version 0.1.0  # all four platforms
-bun run checksums                       # writes dist/SHA256SUMS
-```
-
-`scripts/build-binary.ts` scans `web/dist`, generates `build/entry.ts` with one
-`with { type: "file" }` import per asset, and compiles it with
-`bun build --compile`. The web UI therefore lives *inside* the executable — a
-released binary needs no `web/dist` beside it. Set `NOTAM_WEB_DIST` to make a
-binary serve a directory instead, which is how the development server and the
-end-to-end test work.
-
-The version comes from `--version` and is baked in at compile time; a binary
-built without one reports `dev`.
-
-## Releasing
-
-Releases are cut by [Changesets](https://github.com/changesets/changesets), and
-`package.json` holds the version everything else derives from.
-
-Every pull request carries a changeset: a file in `.changeset/` naming the bump
-and describing the change in the words a release reader needs.
-
-```sh
-bun run changeset          # write one
-bun run changeset --empty  # for a change no user could observe
-bun run changeset:status   # what CI will say
-```
-
-CI fails a pull request that has neither. NOTAM is below 1.0 and stays there
-deliberately, so **breaking changes are `minor`, everything else is `patch`**;
-`major` is reserved for the day 1.0 is cut on purpose.
-
-Merging a pull request that carries changesets makes `version.yml` open a
-"Version Packages" pull request, which folds them into `package.json` and
-`CHANGELOG.md`. Merging *that* is what ships: `release.yml` builds the SPA once,
-compiles all four targets from it, checks the binary reports the version
-`package.json` declares, generates `SHA256SUMS`, and publishes a GitHub release
-whose notes are that version's changelog section.
-
-Creating the release is what creates the `v*` tag, so a tag never exists without
-the five assets `install.sh` resolves through it. Pushing a `v*` tag by hand
-still releases the commit it points at — the escape hatch for re-cutting a
-release whose changesets are already spent — and fails loudly if the tag and
-`package.json` disagree.
-
-Every pull request runs the full gate first — typecheck, lint, the test suites,
-Playwright, the compiled-binary smoke test, and a build of all four targets — so
-packaging breakage is caught before a release depends on it.
+Requires [Bun](https://bun.sh) 1.3.14 or newer — no other toolchain and no
+native modules, so `git clone`, `bun install`, `bun run test` is the whole
+setup. [CONTRIBUTING.md](CONTRIBUTING.md) covers the layout, the invariants
+worth preserving, and how a release is cut.
 
 ## Troubleshooting
 
@@ -447,10 +353,15 @@ packaging breakage is caught before a release depends on it.
 | Startup fails naming an environment variable | A host's `token_env` is not exported in this shell |
 | Startup refuses with a path and a reason | `config.yaml` failed validation. The message names the exact key |
 | "The claude CLI was not found on PATH" | A warning, not a refusal. Sync and promotion work; analysis will fail until you install it |
-| A sync seems to pause | GitHub rate limiting. The job backs off and resumes on its own; it does not fail |
+| A sync seems to pause | GitHub rate limiting. The job backs off and resumes on its own, a bounded number of times — long enough for an ordinary reset, not indefinitely |
 | An entry is `failed` | Open it — the stored error is rendered inline, with an Analyse control. Malformed model output gets one repair attempt, a timeout or crash gets two retries, before it lands here |
 | "Create rules PR" failed | Every rule stayed `draft` and nothing was committed. GitHub's own message is shown verbatim — usually no write access, or a protected branch |
-| `notam run` came up on a different port | 4317 was taken, so it auto-incremented. Pass `--port` to insist on one |
+| `notam run` came up on a different port | 4317 was taken, so it auto-incremented — through a bounded range, after which it gives up rather than scan on. Pass `--port` to insist on one |
 | A rule's file already exists on the base branch | The confirmation dialog says so before you promote. Proceeding commits a suffixed second file; NOTAM never overwrites |
 | The UI says the web app is not built | You are running from a source checkout without `bun run build:web`. Released binaries embed it |
 | A promoted PR was closed unmerged | Its rules return to `draft` with the promotion link cleared, ready to propose again |
+
+## License
+
+MIT — see [LICENSE](LICENSE), which also names the third-party components the
+release binaries embed.
