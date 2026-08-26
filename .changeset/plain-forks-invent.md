@@ -37,8 +37,19 @@ it closes; previously focus sat on a button behind the scrim and the first
 Shift+Tab walked into the table. Clicking beside a window dismisses it, which
 is what everyone tries first — but only when both the press and the release
 land outside, so selecting text in a dialog and releasing past its edge no
-longer throws away what you were in the middle of. Settings is the deliberate
-exception: it holds unsaved edits, so Escape and Close are the only ways out.
+longer throws away what you were in the middle of. Settings dismisses that way
+too: the form stages the whole document and reaches `config.yaml` only on Save,
+and the window reads the file fresh every time it opens, so a reopen gives back
+everything closing it costs.
+
+A window larger than the space it has now scrolls to all of it. Centring with
+`place-items: center` splits an oversized item's overflow to both sides, and
+the half past the scroll origin is reachable by no scrollbar, so a window
+taller or wider than the viewport lost an edge off the top or the left —
+which reads as a window that failed to centre rather than one that is too big.
+`margin: auto` centres the same way while collapsing on the overflowing side.
+Each window is capped to the overlay's content box, and Settings stacks its
+rail above its pane below the width where the two cannot sit side by side.
 
 The tab strip is a real tablist rather than three buttons wearing the role. The
 run is one tab stop, the arrows move within it, Home and End reach its ends,

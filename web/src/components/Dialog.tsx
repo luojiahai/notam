@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { useRef } from "react";
-import { useDismissOnEscape } from "../lib/dismiss.ts";
-import { useBackdropDismiss, useModalFocus } from "../lib/modal.ts";
+import { useModalSurface } from "../lib/modal.ts";
 
 /**
  * A decision to take: the same window `Panel` renders, with a foot carrying
@@ -22,13 +20,10 @@ export function Dialog({
 	confirmDisabled?: boolean;
 	children: ReactNode;
 }) {
-	const surface = useRef<HTMLDivElement>(null);
-	useDismissOnEscape(onCancel);
-	useModalFocus(surface);
-	// Dismissal, not confirmation: a click that lands outside a window can only
-	// ever mean "not this", and a pre-flight that committed files to someone
-	// else's repository on a stray click would be indefensible.
-	const backdrop = useBackdropDismiss(onCancel);
+	// Cancel, not confirm: a click that lands outside a window can only ever
+	// mean "not this", and a pre-flight that committed files to someone else's
+	// repository on a stray click would be indefensible.
+	const { surface, backdrop } = useModalSurface(onCancel);
 	return (
 		<div className="overlay" {...backdrop}>
 			<div

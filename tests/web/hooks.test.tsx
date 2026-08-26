@@ -20,8 +20,8 @@ afterEach(() => {
 });
 
 /**
- * A detail query and a mutation, mounted together — the shape Task 15's rule
- * panel takes. The panel stays mounted across the mutation and
+ * A detail query and a mutation, mounted together — the shape the rule panel
+ * takes. The panel stays mounted across the mutation and
  * `refetchOnWindowFocus` is off, so an invalidation that misses the detail
  * family leaves stale text on screen forever.
  */

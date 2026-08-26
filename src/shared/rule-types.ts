@@ -86,7 +86,7 @@ export const RULE_TYPE_DEFINITIONS: Record<
 };
 
 /**
- * The prose form, for a heading in a promotion pull request and for a drawer
+ * The prose form, for a heading in a promotion pull request and for a panel
  * that has room for it. The table badge shows the slug instead: these do not
  * fit a column you scan down.
  */

@@ -44,7 +44,7 @@ test("unanalysed → analyse → review rules → create promotion PR", async ({
 		page.getByText(/Always add a regression test number/),
 	).toHaveCount(2);
 
-	// The drawer shows the file that would be committed.
+	// The panel shows the file that would be committed.
 	await page
 		.getByText(/Always add a regression test number/)
 		.first()

@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type {
 	ConfigDocument,
 	ConfigResponse,
@@ -21,8 +21,7 @@ import {
 	restoreHost,
 	restoreRepo,
 } from "../lib/config.ts";
-import { useDismissOnEscape } from "../lib/dismiss.ts";
-import { useBackdropDismiss, useModalFocus } from "../lib/modal.ts";
+import { useModalSurface } from "../lib/modal.ts";
 import {
 	ArchivedPane,
 	costLabel,
@@ -278,17 +277,14 @@ export function SettingsForm({
  * selection out of a field does not count as leaving.
  */
 
-function SettingsWindow({
+export function SettingsWindow({
 	onClose,
 	children,
 }: {
 	onClose: () => void;
 	children: React.ReactNode;
 }) {
-	const surface = useRef<HTMLDivElement>(null);
-	useDismissOnEscape(onClose);
-	useModalFocus(surface);
-	const backdrop = useBackdropDismiss(onClose);
+	const { surface, backdrop } = useModalSurface(onClose);
 	return (
 		<div className="overlay" {...backdrop}>
 			<div

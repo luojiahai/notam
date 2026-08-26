@@ -1,5 +1,6 @@
 import type { MouseEvent, PointerEvent, RefObject } from "react";
 import { useCallback, useEffect, useRef } from "react";
+import { useDismissOnEscape } from "./dismiss.ts";
 
 /**
  * What a modal surface owes the keyboard.
@@ -62,13 +63,6 @@ export function useModalFocus(container: RefObject<HTMLElement | null>): void {
 			const firstStop = stops[0];
 			const lastStop = stops[stops.length - 1];
 			if (!firstStop || !lastStop) return;
-			// Focus outside the surface entirely — a click on the backdrop, or a
-			// control that unmounted — is pulled back to the near end.
-			if (!element.contains(document.activeElement)) {
-				event.preventDefault();
-				(event.shiftKey ? lastStop : firstStop).focus();
-				return;
-			}
 			if (event.shiftKey && document.activeElement === firstStop) {
 				event.preventDefault();
 				lastStop.focus();
@@ -124,4 +118,25 @@ export function useBackdropDismiss(onDismiss: () => void): {
 		[onDismiss],
 	);
 	return { onPointerDown, onClick };
+}
+
+/**
+ * The whole of what a window owes, assembled once.
+ *
+ * Focus in on open and held inside, Escape out, a click beside it out — the
+ * three are one contract, not three choices a surface makes separately. A
+ * chassis that wired two of the three would look correct in the markup and be
+ * the one window in the app that behaves differently, which is precisely the
+ * failure `aria-modal` invites. Callers supply the ref to their own surface
+ * element and spread `backdrop` on the overlay that wraps it.
+ */
+export function useModalSurface(onDismiss: () => void): {
+	surface: RefObject<HTMLDivElement | null>;
+	backdrop: ReturnType<typeof useBackdropDismiss>;
+} {
+	const surface = useRef<HTMLDivElement>(null);
+	useDismissOnEscape(onDismiss);
+	useModalFocus(surface);
+	const backdrop = useBackdropDismiss(onDismiss);
+	return { surface, backdrop };
 }

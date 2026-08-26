@@ -1,5 +1,5 @@
 /** Below this a rule is worth reading before promoting rather than scanning past. */
-const SURE_ENOUGH = 0.75;
+const WEAK_BELOW = 0.75;
 
 /**
  * A rule's confidence as a bar beside the number, never instead of it.
@@ -21,7 +21,7 @@ export function Confidence({ value }: { value: number }) {
 			*/}
 			<span
 				className="confidence-meter"
-				data-weak={bounded < SURE_ENOUGH}
+				data-weak={bounded < WEAK_BELOW}
 				aria-hidden="true"
 			>
 				<span style={{ width: `${Math.round(bounded * 100)}%` }} />

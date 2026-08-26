@@ -3,13 +3,21 @@ import { useRef } from "react";
 export type Tab<Id extends string> = { id: Id; label: string };
 
 /**
+ * The id a tab button carries. Exported because the tabpanel names its tab
+ * with `aria-labelledby` from outside this file, and a tablist whose panel
+ * points at an id nothing renders is silent about what it holds.
+ */
+export function tabDomId(id: string): string {
+	return `tab-${id}`;
+}
+
+/**
  * A real tablist rather than a row of buttons wearing the role.
  *
  * The run is one tab stop, not one per tab: the arrows move within it, Home
  * and End reach its ends, and Tab leaves it for the panel below. A tablist
- * that leaves three separate stops in the sequence is worse than the plain
- * buttons it replaced, because a screen reader announces arrow keys that do
- * nothing.
+ * that leaves one stop per tab in the sequence is worse than plain buttons,
+ * because a screen reader announces arrow keys that do nothing.
  *
  * Selection follows focus, which is the right choice here because switching is
  * free — the panels are already mounted behind a cheap query cache, and
@@ -36,7 +44,9 @@ export function Tabs<Id extends string>({
 		onChange(next.id);
 		// The button is only rendered after the state lands, so focus follows on
 		// the element that is already there — the id is stable across renders.
-		list.current?.querySelector<HTMLButtonElement>(`#tab-${next.id}`)?.focus();
+		list.current
+			?.querySelector<HTMLButtonElement>(`#${tabDomId(next.id)}`)
+			?.focus();
 	}
 
 	function onKeyDown(event: React.KeyboardEvent): void {
@@ -54,7 +64,7 @@ export function Tabs<Id extends string>({
 			{tabs.map((tab) => (
 				<button
 					key={tab.id}
-					id={`tab-${tab.id}`}
+					id={tabDomId(tab.id)}
 					type="button"
 					role="tab"
 					aria-selected={tab.id === active}

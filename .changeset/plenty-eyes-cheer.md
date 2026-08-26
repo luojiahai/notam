@@ -23,8 +23,7 @@ That is what earns it the centred geometry a drawer pinned to one edge cannot
 give: a split wants width and height together. Save and Discard are pinned to
 the bottom edge, because the rail and the pane scroll independently and an
 action inside either could be scrolled away from a change made in the other.
-Escape closes the window; clicking beside it does not, so a stray click cannot
-throw away unsaved edits.
+Escape closes the window, and so does a click beside it.
 
 Analysis and Server merge into one Process pane, stating once that its knobs
 apply at the next start instead of once per heading. Restoring something

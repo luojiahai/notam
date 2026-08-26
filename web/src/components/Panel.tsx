@@ -1,8 +1,6 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useRef } from "react";
-import { useDismissOnEscape } from "../lib/dismiss.ts";
-import { useBackdropDismiss, useModalFocus } from "../lib/modal.ts";
+import { useModalSurface } from "../lib/modal.ts";
 
 /**
  * A record opened for reading: an entry, a rule.
@@ -22,10 +20,7 @@ export function Panel({
 	onClose: () => void;
 	children: ReactNode;
 }) {
-	const surface = useRef<HTMLDivElement>(null);
-	useDismissOnEscape(onClose);
-	useModalFocus(surface);
-	const backdrop = useBackdropDismiss(onClose);
+	const { surface, backdrop } = useModalSurface(onClose);
 	return (
 		<div className="overlay" {...backdrop}>
 			<div

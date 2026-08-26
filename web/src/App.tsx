@@ -23,7 +23,7 @@ import { RulesTab } from "./components/RulesTab.tsx";
 import { SettingsModal } from "./components/SettingsModal.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
-import { type Tab, Tabs } from "./components/Tabs.tsx";
+import { type Tab, Tabs, tabDomId } from "./components/Tabs.tsx";
 
 type WorkspaceTab = "entries" | "rules" | "promotions";
 
@@ -245,7 +245,7 @@ export function App() {
 				className="workspace"
 				id={WORKSPACE_PANEL_ID}
 				role="tabpanel"
-				aria-labelledby={`tab-${tab}`}
+				aria-labelledby={tabDomId(tab)}
 				// biome-ignore lint/a11y/noNoninteractiveTabindex: a tabpanel is this rule's documented exception. With no repository selected, or a query still in flight, this panel holds nothing focusable — and arrowing to a tab whose panel cannot then be reached is the failure the tabindex prevents.
 				tabIndex={0}
 			>
