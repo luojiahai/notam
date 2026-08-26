@@ -1,5 +1,101 @@
 # notam
 
+## 0.1.4
+
+### Patch Changes
+
+- [#28](https://github.com/luojiahai/notam/pull/28) [`59bef6c`](https://github.com/luojiahai/notam/commit/59bef6c50f4176e7ba5dd19f98e11dd92c1da973) Thanks [@luojiahai](https://github.com/luojiahai)! - The left sidebar can be resized by dragging its right edge, and remembers the
+  width you give it.
+  
+  It will not go narrower than `11rem` or wider than `30rem`, and never takes
+  more than 40% of the window, so a width chosen on a large monitor still leaves
+  room for the tables on a laptop. Narrowing the window squeezes the sidebar
+  without forgetting what you picked: widen it again and your width comes back.
+  
+  The handle takes the keyboard as well as the mouse. Tab to it and the arrow
+  keys nudge the edge, Shift jumps, and Home and End go straight to the narrowest
+  and widest. Escape abandons a drag part-way through, and double-clicking the
+  edge puts the sidebar back to its default width.
+  
+  On a narrow window the sidebar is a horizontal rail rather than a column, so
+  there is no edge to drag and the handle does not appear.
+
+- [#26](https://github.com/luojiahai/notam/pull/26) [`30a3f0f`](https://github.com/luojiahai/notam/commit/30a3f0f8b21eda9b3a7084158be6bd51692eaf19) Thanks [@luojiahai](https://github.com/luojiahai)! - `uninstall.sh` is the mirror of `install.sh`: it removes the binary the
+  installer placed, then asks whether to delete the configuration and database in
+  `~/.notam`. It makes no network calls.
+  
+  The question is asked on `/dev/tty` rather than stdin, because under
+  `curl -fsSL … | sh` stdin is the script itself and a plain `read` would swallow
+  the rest of it. Where there is no terminal to ask on — a CI job, or output
+  redirected to a file — it keeps `~/.notam` and says so, so data is never
+  deleted because nobody was there to say otherwise. A bare Enter keeps it too;
+  only a plain yes deletes. `--keep-data` and `--purge` answer up front, and
+  together they are refused rather than resolved.
+  
+  `--purge` removes only the files NOTAM writes — `config.yaml`, `notam.db` and
+  its `-wal`, `-shm` and `.bak` companions — then removes `~/.notam` itself if
+  that emptied it. A hand-written `~/.notam/prompts/` template is something NOTAM
+  only ever reads, so it survives, and the directory is kept with it. The data
+  directory is resolved through `NOTAM_HOME` exactly as the CLI resolves it, and
+  the resolved path appears in the question, so a `sudo -i` teardown pointing at
+  `/root/.notam` is visible before anything is removed.
+  
+  Only the binary at `--dir` (or `NOTAM_DIR`, default `~/.local/bin`) is removed,
+  and a symlink there is unlinked rather than followed. Another `notam` elsewhere
+  on your `PATH` is reported rather than deleted, since the installer did not put
+  it there. A binary that is already gone is not an error — half-uninstalled is
+  the state you rerun this from — and failures are collected rather than fatal,
+  so a binary that needs `sudo` to unlink does not abandon the purge.
+
+- [#27](https://github.com/luojiahai/notam/pull/27) [`a180049`](https://github.com/luojiahai/notam/commit/a180049e736f10d852dd1c0baf898670d5dec109) Thanks [@luojiahai](https://github.com/luojiahai)! - NOTAM is MIT licensed. A note below the license text records that the release
+  binaries are compiled with Bun and statically link the components Bun bundles —
+  JavaScriptCore among them, which is LGPL-2 — and points at Bun's own
+  `LICENSE.md` for the full list, rather than enumerating a set that will change
+  without us.
+  
+  The README is now only what someone running NOTAM needs. How it is built,
+  tested, and released has moved to `CONTRIBUTING.md`, which also writes down the
+  commit and branch conventions, the invariants worth preserving, and the two
+  ordering hazards in the test suites that fail confusingly when you trip them.
+  
+  Several documented behaviours were less true than they read, and now say what
+  NOTAM does. A rate-limited sync backs off a bounded number of times rather than
+  indefinitely. `notam run` scans a bounded range of ports before giving up. The
+  installer cannot name the version it replaces when running as root, because it
+  will not execute a file it found already in place. `NOTAM_VERSION` takes a tag
+  with or without its leading `v`. `NOTAM_DIR` is the environment variable behind
+  `--dir`, and `NOTAM_HOME` decides which `.notam` an uninstall would purge.
+  `uninstall.sh` asks about your data before it removes anything, and refuses
+  `--purge` and `--keep-data` together.
+  
+  Sync no longer claims one query retrieves the whole conversation. Long
+  conversations and long file lists are each captured up to a limit, and an entry
+  that reached one is stored marked as truncated — the word `notam sync` has
+  always printed in its summary, now with something to read about it. Analysis
+  still runs on such an entry, on slightly less than the whole conversation.
+
+- [#24](https://github.com/luojiahai/notam/pull/24) [`fd3f176`](https://github.com/luojiahai/notam/commit/fd3f17600f80f6d75c309087289b648736d4692c) Thanks [@luojiahai](https://github.com/luojiahai)! - `notam update` replaces the running binary with a newer release. It resolves the
+  release, downloads the binary for this platform along with `SHA256SUMS`, checks
+  the digest, and installs it with an atomic rename inside the directory it is
+  replacing — so a half-written binary is never visible, and replacing an
+  executable that is currently running is safe. A `notam` on your `PATH` that is a
+  symlink has the file behind it replaced rather than the link itself.
+  
+  `notam update --version 0.2.0` installs an exact release; `--force` reinstalls
+  the version already running. The lookup is anonymous: the token NOTAM holds
+  belongs to whichever host `token_env` names, which may be an enterprise
+  instance, and it is never sent to github.com.
+  
+  Updates only move forward. Migrations are forward-only, so an older build opens
+  a database a newer one has already migrated and may find a shape it cannot read;
+  `notam update` refuses a downgrade and names `install.sh` as the way to install
+  an older release deliberately. Running from source it refuses outright, since
+  the only executable there to replace is Bun itself.
+  
+  `NOTAM_REPO`, `NOTAM_API_BASE` and `NOTAM_DOWNLOAD_BASE` point the lookup
+  somewhere other than the public repository, with the same meanings they already
+  have in `install.sh`.
+
 ## 0.1.3
 
 ### Patch Changes
