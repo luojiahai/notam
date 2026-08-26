@@ -7,7 +7,7 @@ import { defineConfig } from "vite";
  * `index.html`. With it pinned, `outDir: "dist"` is `web/dist` — the directory
  * `src/server/static.ts` loads at boot.
  *
- * The dev proxy points at the default `notam run` port so `bun run dev:web`
+ * The dev proxy points at the default `notam` port so `bun run dev:web`
  * gives hot reload against a real server, SSE included.
  */
 export default defineConfig({

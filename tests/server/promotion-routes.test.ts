@@ -365,11 +365,12 @@ describe("promotion routes", () => {
 	});
 
 	/**
-	 * `applyConfig` is additive, so a host removed from config.yaml — or one
-	 * whose `token_env` was renamed — keeps its rows and its repositories keep
-	 * appearing. The clients resolve their tokens from those rows lazily, so
-	 * the ConfigError lands inside a request. It is a configuration problem,
-	 * not a bug: 503 with the variable named, not an anonymous 500.
+	 * A host whose `token_env` names a variable nobody exported keeps its rows
+	 * and its repositories keep appearing — the server warns rather than
+	 * refusing to start, because the settings drawer is where that is fixed.
+	 * The clients resolve their tokens from those rows lazily, so the
+	 * ConfigError lands inside a request. It is a configuration problem, not a
+	 * bug: 503 with the variable named, not an anonymous 500.
 	 */
 	test("a host whose token variable is unset answers 503 naming the variable", async () => {
 		const seeded = seedDatabase();
@@ -378,6 +379,7 @@ describe("promotion routes", () => {
 			config: TEST_CONFIG,
 			configPath: "/tmp/notam-test/config.yaml",
 			dbPath: ":memory:",
+			home: "/tmp/notam-test",
 			now: () => SEED_NOW,
 			version: "test",
 			claudeAvailable: true,

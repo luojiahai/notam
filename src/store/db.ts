@@ -7,9 +7,9 @@ import { dirname } from "node:path";
  * Creates `path`'s parent directory (and any missing ancestors) synchronously
  * at mode 0700, and repairs the mode when the directory already existed:
  * `mkdirSync`'s `mode` option only applies to a directory it actually creates,
- * so a `~/.notam` the user made themselves before `notam init` ever ran (a
- * fully supported path) would otherwise be left at whatever mode `mkdir`
- * defaulted to. A no-op for ":memory:".
+ * so a `~/.notam` the user made themselves (a fully supported path) would
+ * otherwise be left at whatever mode `mkdir` defaulted to. A no-op for
+ * ":memory:".
  */
 function ensureParentDirSync(path: string, mode = 0o700): void {
 	if (path === ":memory:") return;

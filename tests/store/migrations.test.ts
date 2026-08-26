@@ -179,7 +179,7 @@ describe("migration 002", () => {
 	});
 
 	test("is version 2 and leaves 001 untouched", () => {
-		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3, 4]);
+		expect(MIGRATIONS.map((m) => m.version)).toEqual([1, 2, 3, 4, 5]);
 		expect(MIGRATIONS[0]?.name).toBe("hosts_repos_entries_jobs");
 		expect(MIGRATIONS[1]?.name).toBe("rules_promotions");
 	});
@@ -192,11 +192,11 @@ describe("migration 002", () => {
 		db.exec(first.sql);
 		db.exec("PRAGMA user_version = 1");
 
-		expect(applyMigrations(db)).toBe(3);
+		expect(applyMigrations(db)).toBe(4);
 		expect(
 			db.query<{ user_version: number }, []>("PRAGMA user_version").get()
 				?.user_version,
-		).toBe(4);
+		).toBe(5);
 		db.close();
 	});
 
@@ -231,6 +231,48 @@ describe("migration 002", () => {
 	});
 });
 
+describe("migration 005", () => {
+	function columnsOf(db: Database, table: string): string[] {
+		return db
+			.query<{ name: string }, []>(`PRAGMA table_info(${table})`)
+			.all()
+			.map((row) => row.name);
+	}
+
+	test("is version 5 and leaves the migrations before it untouched", () => {
+		expect(MIGRATIONS[4]?.version).toBe(5);
+		expect(MIGRATIONS[4]?.name).toBe("host_repo_archived_at");
+	});
+
+	test("adds a nullable archived_at to hosts and repos", () => {
+		const db = openDatabase(":memory:");
+		applyMigrations(db);
+		expect(columnsOf(db, "hosts")).toContain("archived_at");
+		expect(columnsOf(db, "repos")).toContain("archived_at");
+		db.close();
+	});
+
+	test("leaves every existing row unarchived", () => {
+		const db = openDatabase(":memory:");
+		const first = MIGRATIONS[0];
+		if (!first) throw new Error("migration 001 is missing");
+		db.exec(first.sql);
+		db.exec("PRAGMA user_version = 1");
+		db.exec(
+			"INSERT INTO hosts (id,label,api_base,graphql,token_env) VALUES ('github','GitHub','a','b','T')",
+		);
+		applyMigrations(db);
+		expect(
+			db
+				.query<{ archived_at: string | null }, []>(
+					"SELECT archived_at FROM hosts WHERE id = 'github'",
+				)
+				.get()?.archived_at,
+		).toBeNull();
+		db.close();
+	});
+});
+
 describe("migration 003", () => {
 	function hostColumns(db: Database): string[] {
 		return db
@@ -254,6 +296,7 @@ describe("migration 003", () => {
 			"graphql",
 			"token_env",
 			"web_base",
+			"archived_at",
 		]);
 		db.close();
 	});

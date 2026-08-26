@@ -8,9 +8,10 @@ import {
 	type ClaudeRunner,
 	createClaudeRunner,
 } from "../core/analysis/runner.ts";
-import { resolveToken } from "../core/config/load.ts";
+import { missingTokenHosts, resolveToken } from "../core/config/load.ts";
 import type { Config } from "../core/config/schema.ts";
 import { GraphQLGitHubClient } from "../core/github/client.ts";
+import { checkToken, type TokenCheck } from "../core/github/identity.ts";
 import { RestGitHubClient } from "../core/github/rest.ts";
 import type { GitDataClient, GitHubClient } from "../core/github/types.ts";
 import type { PromotionDeps } from "../core/promotion/index.ts";
@@ -28,12 +29,16 @@ export type ContextOptions = {
 	config: Config;
 	configPath: string;
 	dbPath: string;
+	/** Where `.notam` lives, for resolving `~` in a repo's prompt_template. */
+	home: string;
 	now?: () => Date;
 	env?: Record<string, string | undefined>;
 	/** Injected by tests. Production builds a GraphQLGitHubClient per host. */
 	githubFor?: (host: HostRow) => GitHubClient;
 	/** Injected by tests. Production builds a RestGitHubClient per host. */
 	gitDataFor?: (host: HostRow) => GitDataClient;
+	/** Injected by tests, which never reach the network. */
+	checkToken?: (host: HostRow) => Promise<TokenCheck>;
 	claudeRunner?: ClaudeRunner;
 	/** Checked once at boot rather than per call. */
 	claudeAvailable?: boolean;
@@ -45,6 +50,8 @@ export type AppContext = {
 	config: Config;
 	configPath: string;
 	dbPath: string;
+	home: string;
+	env: Record<string, string | undefined>;
 	now: () => Date;
 	bus: EventBus;
 	queue: JobQueue;
@@ -60,6 +67,8 @@ export type AppContext = {
 	claudeAvailable: boolean;
 	warnings: string[];
 	version: string;
+	/** Asks a host whether the token its `token_env` names is accepted. */
+	testHost: (host: HostRow) => Promise<TokenCheck>;
 	shutdown: () => void;
 };
 
@@ -170,6 +179,14 @@ export function createContext(options: ContextOptions): AppContext {
 	if (!claudeAvailable) {
 		warnings.push(
 			"The claude CLI was not found on PATH. Sync works, but analysis will fail until you install it from https://claude.com/claude-code",
+		);
+	}
+	// A warning rather than a refusal to start: the settings drawer is where a
+	// host's token_env is fixed, and a server that will not boot without a token
+	// cannot serve the page that sets one.
+	for (const host of missingTokenHosts(config, env)) {
+		warnings.push(
+			`${host.token_env} is not set, so host "${host.id}" cannot be reached. Export it and restart.`,
 		);
 	}
 
@@ -323,11 +340,22 @@ export function createContext(options: ContextOptions): AppContext {
 
 	const promotionDeps: PromotionDeps = { db, clientFor: gitDataFor, now };
 
+	const testHost =
+		options.checkToken ??
+		((host: HostRow) =>
+			checkToken({
+				apiBase: host.api_base,
+				tokenEnv: host.token_env,
+				token: env[host.token_env],
+			}));
+
 	return {
 		db,
 		config,
 		configPath: options.configPath,
 		dbPath: options.dbPath,
+		home: options.home,
+		env,
 		now,
 		bus,
 		queue,
@@ -338,6 +366,7 @@ export function createContext(options: ContextOptions): AppContext {
 		claudeAvailable,
 		warnings,
 		version,
+		testHost,
 		shutdown: () => {
 			syncRunner.stop();
 			analyseRunner.stop();

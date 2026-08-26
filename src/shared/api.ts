@@ -274,6 +274,128 @@ export const MetaSchema = z.object({
 	}),
 });
 
+/**
+ * The config document as the browser sees and submits it.
+ *
+ * Deliberately its own schema rather than a re-export of the one core parses
+ * with: that one transforms, filling `label` and `web_base` from what was
+ * omitted, and a form has to render exactly the values that will be written
+ * back. Both agree on the field names because the server validates every
+ * submission with the core schema anyway.
+ */
+export const ConfigHostSchema = z.object({
+	id: z.string().min(1),
+	label: z.string().min(1),
+	api_base: z.string(),
+	graphql: z.string(),
+	web_base: z.string(),
+	token_env: z.string().min(1),
+});
+
+export const ConfigRepoSchema = z.object({
+	host: z.string().min(1),
+	name: z.string(),
+	path_globs: z.array(z.string()),
+	default_branch: z.string(),
+	window_days: z.number().int(),
+	prompt_template: z.string().optional(),
+});
+
+export const ConfigDocumentSchema = z.object({
+	hosts: z.array(ConfigHostSchema),
+	repos: z.array(ConfigRepoSchema),
+	analysis: z.object({
+		concurrency: z.number().int(),
+		timeout_seconds: z.number().int(),
+		model: z.string().optional(),
+	}),
+	server: z.object({ port: z.number().int() }),
+});
+
+/** An archived host or repo, carrying what it would take to add it back. */
+export const ArchivedRepoSchema = z.object({
+	id: z.string(),
+	host_id: z.string(),
+	name: z.string(),
+	path_globs: z.array(z.string()),
+	default_branch: z.string(),
+	window_days: z.number().int(),
+	prompt_template: z.string().nullable(),
+	archived_at: z.string(),
+	entries: count,
+	rules: count,
+	verified_rules: count,
+});
+
+export const ArchivedHostSchema = z.object({
+	id: z.string(),
+	label: z.string(),
+	api_base: z.string(),
+	graphql: z.string(),
+	web_base: z.string(),
+	token_env: z.string(),
+	archived_at: z.string(),
+});
+
+/**
+ * What a removal would cost. The settings drawer says these numbers out loud
+ * before archiving anything, because a count is what stops the mistake rather
+ * than merely making it reversible.
+ */
+export const RepoCostSchema = z.object({
+	entries: count,
+	rules: count,
+	verified_rules: count,
+});
+
+/**
+ * Ties each configured repository to its row.
+ *
+ * The document holds `(host, name)` and the lifecycle routes take an id, so
+ * without this the drawer could render a repository it has no way to rename or
+ * delete.
+ */
+export const ConfigRepoStatusSchema = RepoCostSchema.extend({
+	id: z.string(),
+	host: z.string(),
+	name: z.string(),
+});
+
+/**
+ * Derived state alongside the document: whether each host's token variable is
+ * set, what is archived, and what a removal would cost. None of it is
+ * writable, which is why PUT takes the document alone.
+ *
+ * `token_present` is a boolean and never the token — the value stays in the
+ * environment and never crosses the wire.
+ */
+export const ConfigStatusSchema = z.object({
+	hosts: z.array(
+		z.object({
+			id: z.string(),
+			token_env: z.string(),
+			token_present: z.boolean(),
+		}),
+	),
+	repos: z.array(ConfigRepoStatusSchema),
+	archived_hosts: z.array(ArchivedHostSchema),
+	archived_repos: z.array(ArchivedRepoSchema),
+});
+
+export const ConfigResponseSchema = z.object({
+	config: ConfigDocumentSchema,
+	/** Identifies the bytes on disk; every write sends back the one it read. */
+	hash: z.string(),
+	path: z.string(),
+	status: ConfigStatusSchema,
+});
+
+export const HostTestResultSchema = z.object({
+	ok: z.boolean(),
+	login: z.string().nullable(),
+	message: z.string().nullable(),
+});
+
 export const QueueResultSchema = z.object({
 	queued: z.array(z.string()),
 	skipped: z.array(z.string()),
@@ -346,6 +468,16 @@ export const PromotionRequestSchema = z.object({
 	title: z.string().min(1).optional(),
 });
 
+export const ConfigUpdateRequestSchema = z.object({
+	config: ConfigDocumentSchema,
+	hash: z.string().min(1),
+});
+
+export const RenameRequestSchema = z.object({
+	name: z.string().min(1),
+	hash: z.string().min(1),
+});
+
 export const RefreshRequestSchema = z.object({
 	repo_id: z.string().min(1).optional(),
 });
@@ -410,3 +542,11 @@ export type SyncOutcome = z.infer<typeof SyncOutcomeSchema>;
 export type EntriesResponse = z.infer<typeof EntriesResponseSchema>;
 export type RulesResponse = z.infer<typeof RulesResponseSchema>;
 export type ServerEvent = z.infer<typeof ServerEventSchema>;
+export type ConfigDocument = z.infer<typeof ConfigDocumentSchema>;
+export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
+export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
+export type ArchivedRepo = z.infer<typeof ArchivedRepoSchema>;
+export type ArchivedHost = z.infer<typeof ArchivedHostSchema>;
+export type RepoCost = z.infer<typeof RepoCostSchema>;
+export type ConfigRepoStatus = z.infer<typeof ConfigRepoStatusSchema>;
+export type HostTestResult = z.infer<typeof HostTestResultSchema>;

@@ -9,6 +9,7 @@ const REPOSITORY_URL = "https://github.com/luojiahai/notam";
 export type ShellProps = {
 	version: string;
 	warnings: string[];
+	onOpenSettings: () => void;
 	sidebar: ReactNode;
 	children: ReactNode;
 };
@@ -19,7 +20,13 @@ export type ShellProps = {
  * repository belongs in `RepoBar`, above the tabs; in this header a
  * one-repository action reads as a global one.
  */
-export function Shell({ version, warnings, sidebar, children }: ShellProps) {
+export function Shell({
+	version,
+	warnings,
+	onOpenSettings,
+	sidebar,
+	children,
+}: ShellProps) {
 	return (
 		<div className="shell">
 			<header className="header">
@@ -28,6 +35,13 @@ export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 					Notes On Team Agreements &amp; Methods
 				</span>
 				<span className="spacer" />
+				{/*
+					App-wide, like everything else in this header: it edits the one
+					config file, not the selected repository.
+				*/}
+				<button type="button" className="btn-plain" onClick={onOpenSettings}>
+					Settings
+				</button>
 				<ThemeToggle />
 				<span className="version">{version}</span>
 				{/*

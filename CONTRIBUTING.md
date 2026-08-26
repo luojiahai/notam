@@ -11,7 +11,7 @@ bun install
 bun run test
 ```
 
-To run the CLI from a source checkout, `bun run start -- run --no-open`. A
+To run the CLI from a source checkout, `bun run start -- --no-open`. A
 source checkout has no compiled-in web UI, so build it once with
 `bun run build:web`, or point `NOTAM_WEB_DIST` at a directory you are serving.
 
@@ -34,7 +34,7 @@ source checkout has no compiled-in web UI, so build it once with
 | `bun run changeset` | Write the changeset your pull request needs |
 | `bun run changeset:status` | What the changeset gate will say |
 | `bun run changeset:version` | Fold pending changesets into `package.json` and `CHANGELOG.md` — normally `version.yml`'s job, not yours |
-| `bun run dev:web` | Vite with hot reload, proxying `/api` to a running `notam run` |
+| `bun run dev:web` | Vite with hot reload, proxying `/api` to a running `notam` |
 | `bun run start` | Run the CLI from source |
 
 ## Verifying your work
@@ -86,10 +86,10 @@ bunx playwright test tests/e2e/promote.spec.ts -g "name"
 
 ```
 src/
-  cli/          run | sync | init | update | version — parse args, call core, exit
+  cli/          the server | update | version — parse args, call core, exit
   server/       Hono app: REST routes, SSE progress stream, the SPA assets
   core/
-    config/     load and validate config.yaml, resolve tokens from the environment
+    config/     read, validate, and write config.yaml; resolve tokens from the environment
     github/     one client, GHES-aware base URLs; release lookups for updates
     sync/       github → normalise → store
     analysis/   prompt template → claude -p → parse and validate → rules

@@ -196,4 +196,4 @@ if [ -n "$resolved" ] && [ "$resolved" != "$TARGET" ]; then
 	printf '\nNote: another notam earlier on your PATH will win: %s\n' "$resolved"
 fi
 
-printf '\nNext: run `notam init`\n'
+printf '\nNext: run `notam`\n'

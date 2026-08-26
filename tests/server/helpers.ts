@@ -1,11 +1,16 @@
 import type { Database } from "bun:sqlite";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Hono } from "hono";
 import type {
 	RunnerRequest,
 	RunnerResult,
 } from "../../src/core/analysis/runner.ts";
 import type { Config } from "../../src/core/config/schema.ts";
+import { renderConfig } from "../../src/core/config/write.ts";
 import { GitHubError } from "../../src/core/github/client.ts";
+import type { TokenCheck } from "../../src/core/github/identity.ts";
 import type {
 	CreatePRRequest,
 	CreatePRResult,
@@ -136,6 +141,8 @@ export type TestHarness = {
 	ctx: AppContext;
 	app: Hono;
 	db: Database;
+	home: string;
+	configPath: string;
 	repoId: string;
 	entryId: string;
 	gitData: FakeGitDataClient;
@@ -151,6 +158,12 @@ export type HarnessOptions = {
 	 */
 	claude?: (request: RunnerRequest) => RunnerResult | Promise<RunnerResult>;
 	claudeAvailable?: boolean;
+	/** Seeds the config file the settings routes read and write. Defaults to TEST_CONFIG. */
+	config?: Config;
+	/** What the environment holds. Defaults to the one token TEST_CONFIG names. */
+	env?: Record<string, string | undefined>;
+	/** Stands in for the network call a connection test would make. */
+	tokenCheck?: () => Promise<TokenCheck>;
 };
 
 export const DEFAULT_ANALYSER_STDOUT = JSON.stringify({
@@ -164,16 +177,27 @@ export function testContext(options: HarnessOptions = {}): TestHarness {
 	const gitData = new FakeGitDataClient();
 	const github = new FakeGitHubClient();
 	const runnerCalls: RunnerRequest[] = [];
+	// A real file on disk, because the settings routes read config through it on
+	// every request and write it back on every save.
+	const config = options.config ?? TEST_CONFIG;
+	const home = mkdtempSync(join(tmpdir(), "notam-harness-"));
+	const configPath = join(home, "config.yaml");
+	writeFileSync(configPath, renderConfig(config), { mode: 0o600 });
 	const ctx = createContext({
 		db: seeded.db,
-		config: TEST_CONFIG,
-		configPath: "/tmp/notam-test/config.yaml",
+		config,
+		configPath,
 		dbPath: ":memory:",
+		home,
+		env: options.env ?? { NOTAM_TEST_TOKEN: "t" },
 		now: () => SEED_NOW,
 		version: "test",
 		claudeAvailable: options.claudeAvailable ?? true,
 		githubFor: () => github,
 		gitDataFor: () => gitData,
+		...(options.tokenCheck === undefined
+			? {}
+			: { checkToken: options.tokenCheck }),
 		claudeRunner: async (request) => {
 			runnerCalls.push(request);
 			return (
@@ -188,6 +212,8 @@ export function testContext(options: HarnessOptions = {}): TestHarness {
 		ctx,
 		app: createApp(ctx),
 		db: seeded.db,
+		home,
+		configPath,
 		repoId: seeded.repo.id,
 		entryId: seeded.entry.id,
 		gitData,

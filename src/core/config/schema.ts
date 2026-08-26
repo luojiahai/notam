@@ -34,7 +34,9 @@ const ServerSchema = z.object({
 export const ConfigSchema = z
 	.object({
 		hosts: z.array(HostSchema).min(1),
-		repos: z.array(RepoSchema).min(1),
+		// No minimum: a config with no repositories yet is the state NOTAM starts
+		// life in, and the settings UI is where the first one is added.
+		repos: z.array(RepoSchema),
 		analysis: AnalysisSchema.prefault({}),
 		server: ServerSchema.prefault({}),
 	})

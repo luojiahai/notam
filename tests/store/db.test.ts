@@ -20,8 +20,8 @@ function modeOf(path: string): number {
 
 describe("openDatabase", () => {
 	test("repairs a pre-existing 0755 ~/.notam directory to 0700", () => {
-		// Simulates `mkdir ~/.notam && vim config.yaml && notam sync` — a fully
-		// supported path, since `notam init` is not required. mkdirSync's `mode`
+		// Simulates `mkdir ~/.notam && vim config.yaml` before a first run — a
+		// fully supported path. mkdirSync's `mode`
 		// option is a no-op on a directory that already exists, which is exactly
 		// the bug: only an explicit chmod on every open fixes it.
 		mkdirSync(dir, { recursive: true });

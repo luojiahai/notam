@@ -1,13 +1,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runInit } from "../../src/cli/init.ts";
-import { startServer } from "../../src/cli/run.ts";
+import { canOpenBrowser, startServer } from "../../src/cli/run.ts";
 import {
 	ConfigError,
 	defaultConfigPath,
 	defaultDbPath,
+	notamDir,
 } from "../../src/core/config/load.ts";
 import { JobQueue } from "../../src/jobs/queue.ts";
 import { MetaSchema, RepoSummarySchema } from "../../src/shared/api.ts";
@@ -43,11 +43,10 @@ server:
   port: 4317
 `;
 
-async function tempHome(config: string = CONFIG): Promise<string> {
+async function tempHome(config: string | null = CONFIG): Promise<string> {
 	const home = await mkdtemp(join(tmpdir(), "notam-run-"));
 	homes.push(home);
-	await runInit({ home, force: true, log: () => {} });
-	await Bun.write(defaultConfigPath(home), config);
+	if (config !== null) await Bun.write(defaultConfigPath(home), config);
 	return home;
 }
 
@@ -125,22 +124,24 @@ describe("startServer", () => {
 		}
 	});
 
-	test("refuses to start when a token environment variable is missing", async () => {
+	test("starts with a warning when a token environment variable is missing", async () => {
 		const home = await tempHome();
-		// A fixed port, not an ephemeral one: the point of the test is that the
-		// refusal happens *before* anything is bound or written, and port 0 could
-		// not tell that apart from a refusal issued after a successful bind.
-		const promise = startServer({
+		const server = await startServer({
 			home,
-			port: 4399,
+			port: 0,
 			open: false,
 			env: { ...process.env, NOTAM_RUN_TEST_TOKEN: undefined },
 			log: () => {},
 			openBrowser: () => {},
 		});
-		await expect(promise).rejects.toThrow("NOTAM_RUN_TEST_TOKEN");
-		await expect(fetch("http://127.0.0.1:4399/api/meta")).rejects.toThrow();
-		expect(await Bun.file(defaultDbPath(home)).exists()).toBe(false);
+		try {
+			// A refusal here would be unrecoverable: the settings drawer is where a
+			// token_env is fixed, and it is served by this process.
+			expect(server.ctx.warnings.join("\n")).toContain("NOTAM_RUN_TEST_TOKEN");
+			expect((await fetch(`${server.url}/api/meta`)).status).toBe(200);
+		} finally {
+			await server.stop();
+		}
 	});
 
 	test("refuses to start on an invalid config, naming the offending path", async () => {
@@ -387,4 +388,74 @@ describe("startServer", () => {
 			await first.stop();
 		}
 	});
+});
+
+describe("first run", () => {
+	test("writes a config when there is none, and starts on it", async () => {
+		const home = await tempHome(null);
+		const lines: string[] = [];
+		const server = await startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: (line) => lines.push(line),
+			openBrowser: () => {},
+		});
+		try {
+			expect(lines.join("\n")).toContain(defaultConfigPath(home));
+			expect((await fetch(`${server.url}/api/meta`)).status).toBe(200);
+			// No repositories: the settings drawer is where the first one is added.
+			expect(await (await fetch(`${server.url}/api/repos`)).json()).toEqual([]);
+		} finally {
+			await server.stop();
+		}
+	});
+
+	test("the config it writes, and the directory holding it, stay private", async () => {
+		const home = await tempHome(null);
+		const server = await startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: () => {},
+			openBrowser: () => {},
+		});
+		await server.stop();
+		expect((await stat(defaultConfigPath(home))).mode & 0o777).toBe(0o600);
+		expect((await stat(notamDir(home))).mode & 0o777).toBe(0o700);
+	});
+
+	test("leaves a malformed config alone rather than replacing it", async () => {
+		const home = await tempHome("hosts: [\n");
+		const promise = startServer({
+			home,
+			port: 0,
+			open: false,
+			env,
+			log: () => {},
+			openBrowser: () => {},
+		});
+
+		await expect(promise).rejects.toBeInstanceOf(ConfigError);
+		expect(await Bun.file(defaultConfigPath(home)).text()).toBe("hosts: [\n");
+	});
+});
+
+describe("canOpenBrowser", () => {
+	test("opens on an interactive terminal", () => {
+		expect(canOpenBrowser({}, true)).toBe(true);
+	});
+
+	test("does not when output is piped", () => {
+		expect(canOpenBrowser({}, false)).toBe(false);
+	});
+
+	test.each(["SSH_CONNECTION", "SSH_TTY"])(
+		"does not over SSH, seen through %s",
+		(name) => {
+			expect(canOpenBrowser({ [name]: "set" }, true)).toBe(false);
+		},
+	);
 });

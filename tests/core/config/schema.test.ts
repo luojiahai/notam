@@ -133,6 +133,13 @@ repos:
 		expect(formatConfigError(result.error)).toContain("hosts[0].api_base:");
 	});
 
+	test("accepts an empty repos list", () => {
+		const result = parse(MINIMAL.replace(/repos:[\s\S]*$/, "repos: []\n"));
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		expect(result.data.repos).toEqual([]);
+	});
+
 	test("rejects an empty hosts list", () => {
 		const result = parse(
 			MINIMAL.replace(/hosts:[\s\S]*?repos:/, "hosts: []\nrepos:"),

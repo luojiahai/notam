@@ -20,6 +20,7 @@ import { PromotionsTab } from "./components/PromotionsTab.tsx";
 import { RepoBar } from "./components/RepoBar.tsx";
 import { RuleDrawer } from "./components/RuleDrawer.tsx";
 import { RulesTab } from "./components/RulesTab.tsx";
+import { SettingsDrawer } from "./components/SettingsDrawer.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
@@ -119,6 +120,7 @@ export function App() {
 	const [repoId, setRepoId] = useState<string | null>(null);
 	const [tab, setTab] = useState<"entries" | "rules" | "promotions">("entries");
 	const [drawer, setDrawer] = useState<DrawerTarget>(null);
+	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [progress, setProgress] = useState<Record<string, SyncProgress>>({});
 
 	// Select the first repository as soon as one is known, and never fight the
@@ -193,6 +195,7 @@ export function App() {
 		<Shell
 			version={meta.data?.version ?? ""}
 			warnings={warnings}
+			onOpenSettings={() => setSettingsOpen(true)}
 			sidebar={
 				<Sidebar
 					repos={repos.data ?? []}
@@ -243,13 +246,35 @@ export function App() {
 			</div>
 			{repoId === null ? (
 				<div className="table-wrap">
-					<div className="state">
-						<p className="state-title">No repository selected</p>
-						<p className="state-hint">
-							Pick one from the sidebar to see its entries, rules, and
-							promotions.
-						</p>
-					</div>
+					{/*
+						Two different nothings. With no repositories configured at all
+						there is nothing to pick, and the answer is the settings
+						drawer — which is what replaces a separate first-run wizard.
+					*/}
+					{repos.data?.length === 0 ? (
+						<div className="state">
+							<p className="state-title">No repositories yet</p>
+							<p className="state-hint">
+								Add one in Settings, then sync it to collect the agreements
+								buried in its merged pull requests.
+							</p>
+							<button
+								type="button"
+								className="btn-primary"
+								onClick={() => setSettingsOpen(true)}
+							>
+								Open settings
+							</button>
+						</div>
+					) : (
+						<div className="state">
+							<p className="state-title">No repository selected</p>
+							<p className="state-hint">
+								Pick one from the sidebar to see its entries, rules, and
+								promotions.
+							</p>
+						</div>
+					)}
 				</div>
 			) : tab === "entries" ? (
 				// Keyed on the repository: without it React keeps the tab's state
@@ -287,6 +312,9 @@ export function App() {
 			)}
 			{drawer?.kind === "rule" && (
 				<RuleDrawer ruleId={drawer.id} onClose={() => setDrawer(null)} />
+			)}
+			{settingsOpen && (
+				<SettingsDrawer onClose={() => setSettingsOpen(false)} />
 			)}
 		</Shell>
 	);

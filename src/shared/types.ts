@@ -16,6 +16,8 @@ export type HostRow = {
 	graphql: string;
 	web_base: string;
 	token_env: string;
+	/** Set when the host left config.yaml. Archived rows keep everything below them. */
+	archived_at: string | null;
 };
 
 export type RepoRow = {
@@ -28,6 +30,8 @@ export type RepoRow = {
 	prompt_template: string | null;
 	sync_watermark: string | null;
 	created_at: string;
+	/** Set when the repo left config.yaml. Archived rows keep their entries and rules. */
+	archived_at: string | null;
 };
 
 export type PayloadComment = {

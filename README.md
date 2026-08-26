@@ -117,15 +117,18 @@ rather than resolved in either direction.
 ## Quick start
 
 ```sh
-notam init                     # writes a commented ~/.notam/config.yaml
-$EDITOR ~/.notam/config.yaml   # add your hosts and the repositories you own
-export NOTAM_GITHUB_TOKEN=...  # the variable your config names
-notam run                      # serves http://127.0.0.1:4317 and opens a browser
+export NOTAM_GITHUB_TOKEN=...  # a token for the host you will add
+notam                          # serves http://127.0.0.1:4317 and opens a browser
 ```
+
+There is nothing to set up first. The first run writes `~/.notam/config.yaml`
+with the github.com host filled in and no repositories, so the page opens on
+an empty state offering the settings drawer.
 
 Then, in the browser:
 
-1. Pick a repository in the sidebar and press **Sync**. NOTAM pulls the merged
+1. Add a repository in **Settings**, then pick it in the sidebar and press
+   **Sync**. NOTAM pulls the merged
    pull requests from the last 180 days that touch your paths.
 2. On the **Entries** tab, filter to *Unanalysed*, select some rows, and press
    **Analyse selected**. Progress streams back live; a few entries at a time run
@@ -146,36 +149,49 @@ verification is a judgement you make.
 
 | Command | What it does |
 | --- | --- |
-| `notam run` | Migrate the database, serve the UI on `127.0.0.1:4317`, open a browser |
-| `notam sync` | Sync every configured repository, print a summary, exit |
-| `notam init` | Write `~/.notam/config.yaml` and check for the `claude` CLI |
+| `notam` | Create the config if there is none, migrate the database, serve the UI on `127.0.0.1:4317`, open a browser |
 | `notam update` | Replace this binary with a newer release |
 | `notam version` | Print the version. `notam --version` is the same thing |
-| `notam help` | Print the usage summary. `notam` on its own prints it too, and exits non-zero |
+| `notam help` | Print the usage summary |
 
 | Flag | For | Meaning |
 | --- | --- | --- |
-| `--port <n>` | `run` | Bind this exact port. Unlike the default, it does not auto-increment — if it is taken, the command fails |
-| `--no-open` | `run` | Do not launch a browser |
-| `--repo <owner/repo>` | `sync` | Sync only this repository |
-| `--concurrency <n>` | `sync` | Repositories to sync at once (default 1) |
+| `--port <n>` | `notam` | Bind this exact port. Unlike the default, it does not auto-increment — if it is taken, the command fails |
+| `--no-open` | `notam` | Do not launch a browser |
 | `--version <tag>` | `update` | Install this release instead of the latest |
-| `--force` | `init` | Overwrite an existing config |
 | `--force` | `update` | Reinstall even if already on that version |
 | `--help`, `-h` | any | Print the usage summary and exit, wherever it appears in the arguments |
 
-`notam sync` is headless and exits non-zero if any repository failed, which
-makes it safe to put in `cron`:
+A browser is only launched on an interactive terminal that is not an SSH
+session and that has an opener installed. The URL is printed either way.
+
+### Syncing on a schedule
+
+The server binds loopback with no authentication, so a scheduled sync is an
+HTTP call. `GET /api/repos` lists the ids.
 
 ```
-0 7 * * 1  NOTAM_GITHUB_TOKEN=... /Users/you/.local/bin/notam sync
+0 7 * * 1  curl -fsS -X POST http://127.0.0.1:4317/api/repos/<id>/sync
 ```
 
 ## Configuration
 
-`~/.notam/config.yaml`, created by `notam init` with mode `0600`. It is
-validated at startup: an invalid file stops the process and names the offending
-path and reason, rather than failing later in the middle of a sync.
+`~/.notam/config.yaml`, created on first run with mode `0600`. It is validated
+at startup: an invalid file stops the process and names the offending path and
+reason, rather than failing later in the middle of a sync. A malformed file is
+never replaced — NOTAM creates a config, it does not repair one.
+
+Edit it in the settings drawer or in a text editor; both write the same file,
+and NOTAM re-reads it on every request, so a hand-edit shows up without a
+restart. Saving from the drawer rewrites the file whole, which replaces any
+comments you added. A save built on a version of the file that has since
+changed on disk is refused rather than applied.
+
+Removing a repository archives it. Its entries, rules, and promotion history
+are kept, and adding it back restores them; deleting it permanently is a
+separate action in the settings drawer. Renaming in the drawer carries that
+history across — renaming by hand in the file does not, because a repository's
+identity there is its `host` and `name`.
 
 ```yaml
 hosts:
@@ -294,7 +310,7 @@ A big enough pull request does not fit in that one query. Reviews, comments and
 review threads are each captured up to a fixed cap, and a long file list takes
 further queries to finish. Either way the entry is stored marked as truncated,
 and the ones whose file list was shortened are counted in the summary
-`notam sync` prints. Analysis still runs on a truncated entry — just on
+a sync reports. Analysis still runs on a truncated entry — just on
 slightly less than the whole conversation.
 
 **Analysis** renders the stored conversation into a prompt document, pipes it to
@@ -356,7 +372,7 @@ worth preserving, and how a release is cut.
 | A sync seems to pause | GitHub rate limiting. The job backs off and resumes on its own, a bounded number of times — long enough for an ordinary reset, not indefinitely |
 | An entry is `failed` | Open it — the stored error is rendered inline, with an Analyse control. Malformed model output gets one repair attempt, a timeout or crash gets two retries, before it lands here |
 | "Create rules PR" failed | Every rule stayed `draft` and nothing was committed. GitHub's own message is shown verbatim — usually no write access, or a protected branch |
-| `notam run` came up on a different port | 4317 was taken, so it auto-incremented — through a bounded range, after which it gives up rather than scan on. Pass `--port` to insist on one |
+| `notam` came up on a different port | 4317 was taken, so it auto-incremented — through a bounded range, after which it gives up rather than scan on. Pass `--port` to insist on one |
 | A rule's file already exists on the base branch | The confirmation dialog says so before you promote. Proceeding commits a suffixed second file; NOTAM never overwrites |
 | The UI says the web app is not built | You are running from a source checkout without `bun run build:web`. Released binaries embed it |
 | A promoted PR was closed unmerged | Its rules return to `draft` with the promotion link cleared, ready to propose again |

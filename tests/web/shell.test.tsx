@@ -60,7 +60,12 @@ function wrap(ui: ReactElement) {
 describe("Shell", () => {
 	test("renders the expansion beside the wordmark, outside the heading", () => {
 		wrap(
-			<Shell version="1.0.0" warnings={[]} sidebar={null}>
+			<Shell
+				version="1.0.0"
+				warnings={[]}
+				onOpenSettings={() => {}}
+				sidebar={null}
+			>
 				{null}
 			</Shell>,
 		);
@@ -75,7 +80,12 @@ describe("Shell", () => {
 
 	test("links to NOTAM's own repository", () => {
 		wrap(
-			<Shell version="1.0.0" warnings={[]} sidebar={null}>
+			<Shell
+				version="1.0.0"
+				warnings={[]}
+				onOpenSettings={() => {}}
+				sidebar={null}
+			>
 				{null}
 			</Shell>,
 		);
@@ -197,6 +207,7 @@ describe("SidebarResizer", () => {
 			<Shell
 				version="1.0.0"
 				warnings={[]}
+				onOpenSettings={() => {}}
 				sidebar={
 					<Sidebar
 						repos={[repo]}

@@ -21,7 +21,7 @@ export type JobRunnerOptions = {
  * A long-lived wrapper around `runPool`.
  *
  * `runPool` is a one-shot: its workers exit as soon as the queue is empty,
- * which is exactly right for `notam sync` and exactly wrong for a server, where
+ * which is exactly right for a one-shot batch and exactly wrong for a server, where
  * work arrives whenever a button is pressed. `kick()` closes that gap without
  * polling: if no drain is running it starts one, and if one is already running
  * it sets a flag so the drain loops once more when the pool returns. That
