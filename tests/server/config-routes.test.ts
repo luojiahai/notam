@@ -81,11 +81,16 @@ describe("GET /api/config", () => {
 
 		const body = await readConfigRoute(h);
 
-		expect(body.status.costs[h.repoId]).toEqual({
-			entries: 1,
-			rules: 0,
-			verified_rules: 0,
-		});
+		expect(body.status.repos).toEqual([
+			{
+				id: h.repoId,
+				host: "github",
+				name: "acme/mono",
+				entries: 1,
+				rules: 0,
+				verified_rules: 0,
+			},
+		]);
 	});
 
 	test("lists archived repositories with what it would take to add them back", async () => {
@@ -208,7 +213,7 @@ describe("repository lifecycle routes", () => {
 		const after = (await response.json()) as ConfigResponse;
 		expect(after.config.repos[0]?.name).toBe("acme/monorepo");
 		expect(listRepos(h.db).map((r) => r.id)).toEqual([h.repoId]);
-		expect(after.status.costs[h.repoId]?.entries).toBe(1);
+		expect(after.status.repos[0]?.entries).toBe(1);
 	});
 
 	test("deleting refuses a repository still named in the file", async () => {

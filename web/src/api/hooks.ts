@@ -9,10 +9,15 @@ import {
 	type AnalysisState,
 	type CancelResult,
 	CancelResultSchema,
+	type ConfigDocument,
+	type ConfigResponse,
+	ConfigResponseSchema,
 	type EntriesResponse,
 	EntriesResponseSchema,
 	type EntryDetail,
 	EntryDetailSchema,
+	type HostTestResult,
+	HostTestResultSchema,
 	type Meta,
 	MetaSchema,
 	PromotionPlanSchema,
@@ -51,6 +56,7 @@ export const queryKeys = {
 		["rules", repoId, status, q] as const,
 	rule: (ruleId: string) => ["rule", ruleId] as const,
 	promotions: (repoId: string) => ["promotions", repoId] as const,
+	config: ["config"] as const,
 };
 
 function query(params: Record<string, string>): string {
@@ -288,5 +294,87 @@ export function useRefreshPromotions() {
 			void client.invalidateQueries({ queryKey: ["rule"] });
 			void client.invalidateQueries({ queryKey: queryKeys.repos });
 		},
+	});
+}
+
+/**
+ * Reads config from disk on every fetch, so a file edited in a text editor
+ * shows up here.
+ *
+ * `staleTime: 0` for the same reason, and the drawer refetches on mount: the
+ * hash in this response is the precondition every write carries, and a stale
+ * one is a 409 the user did nothing to deserve.
+ */
+export function useConfig(enabled: boolean): UseQueryResult<ConfigResponse> {
+	return useQuery({
+		enabled,
+		queryKey: queryKeys.config,
+		queryFn: () => request(ConfigResponseSchema, "/api/config"),
+		staleTime: 0,
+	});
+}
+
+/**
+ * Every settings write returns the whole config afresh, so each of these seeds
+ * the cache from its own response rather than invalidating and refetching. A
+ * refetch would leave a window in which the drawer holds the hash it just
+ * superseded.
+ *
+ * `repos` is invalidated alongside, because adding, removing, or renaming a
+ * repository changes the sidebar.
+ */
+function useConfigMutation<V>(send: (variables: V) => Promise<ConfigResponse>) {
+	const client = useQueryClient();
+	return useMutation<ConfigResponse, Error, V>({
+		mutationFn: send,
+		onSuccess: (response) => {
+			client.setQueryData(queryKeys.config, response);
+			void client.invalidateQueries({ queryKey: queryKeys.repos });
+		},
+	});
+}
+
+export function useSaveConfig() {
+	return useConfigMutation<{ config: ConfigDocument; hash: string }>((body) =>
+		request(ConfigResponseSchema, "/api/config", {
+			method: "PUT",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify(body),
+		}),
+	);
+}
+
+export function useRenameRepo() {
+	return useConfigMutation<{ repoId: string; name: string; hash: string }>(
+		({ repoId, name, hash }) =>
+			post(ConfigResponseSchema, `/api/repos/${repoId}/rename`, { name, hash }),
+	);
+}
+
+export function useRenameHost() {
+	return useConfigMutation<{ hostId: string; name: string; hash: string }>(
+		({ hostId, name, hash }) =>
+			post(ConfigResponseSchema, `/api/hosts/${hostId}/rename`, { name, hash }),
+	);
+}
+
+/** Permanent, and only ever offered for something already archived. */
+export function useDeleteRepo() {
+	return useConfigMutation<string>((repoId) =>
+		request(ConfigResponseSchema, `/api/repos/${repoId}`, { method: "DELETE" }),
+	);
+}
+
+export function useDeleteHost() {
+	return useConfigMutation<string>((hostId) =>
+		request(ConfigResponseSchema, `/api/hosts/${hostId}`, { method: "DELETE" }),
+	);
+}
+
+/** A rejected token is a result, not a failed request, so this has no error path of its own. */
+export function useTestHost() {
+	return useMutation<HostTestResult, Error, string>({
+		mutationFn: (hostId) =>
+			post(HostTestResultSchema, `/api/hosts/${hostId}/test`, {}),
 	});
 }

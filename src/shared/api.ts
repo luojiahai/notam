@@ -338,14 +338,27 @@ export const ArchivedHostSchema = z.object({
 });
 
 /**
- * What a removal would cost, keyed by repo id. The settings drawer says these
- * numbers out loud before archiving anything, because a count is what stops
- * the mistake rather than merely making it reversible.
+ * What a removal would cost. The settings drawer says these numbers out loud
+ * before archiving anything, because a count is what stops the mistake rather
+ * than merely making it reversible.
  */
 export const RepoCostSchema = z.object({
 	entries: count,
 	rules: count,
 	verified_rules: count,
+});
+
+/**
+ * Ties each configured repository to its row.
+ *
+ * The document holds `(host, name)` and the lifecycle routes take an id, so
+ * without this the drawer could render a repository it has no way to rename or
+ * delete.
+ */
+export const ConfigRepoStatusSchema = RepoCostSchema.extend({
+	id: z.string(),
+	host: z.string(),
+	name: z.string(),
 });
 
 /**
@@ -364,9 +377,9 @@ export const ConfigStatusSchema = z.object({
 			token_present: z.boolean(),
 		}),
 	),
+	repos: z.array(ConfigRepoStatusSchema),
 	archived_hosts: z.array(ArchivedHostSchema),
 	archived_repos: z.array(ArchivedRepoSchema),
-	costs: z.record(z.string(), RepoCostSchema),
 });
 
 export const ConfigResponseSchema = z.object({
@@ -535,4 +548,5 @@ export type ConfigStatus = z.infer<typeof ConfigStatusSchema>;
 export type ArchivedRepo = z.infer<typeof ArchivedRepoSchema>;
 export type ArchivedHost = z.infer<typeof ArchivedHostSchema>;
 export type RepoCost = z.infer<typeof RepoCostSchema>;
+export type ConfigRepoStatus = z.infer<typeof ConfigRepoStatusSchema>;
 export type HostTestResult = z.infer<typeof HostTestResultSchema>;

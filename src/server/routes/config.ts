@@ -45,12 +45,15 @@ async function buildConfigResponse(ctx: AppContext): Promise<ConfigResponse> {
 				// The name and whether it is set, never the value.
 				token_present: Boolean(ctx.env[host.token_env]),
 			})),
+			repos: listRepos(ctx.db).map((repo) => ({
+				id: repo.id,
+				host: repo.host_id,
+				name: repo.name,
+				...repoCost(ctx.db, repo.id),
+			})),
 			archived_hosts: listArchivedHosts(ctx.db).map(toArchivedHost),
 			archived_repos: listArchivedRepos(ctx.db).map((repo) =>
 				toArchivedRepo(ctx.db, repo),
-			),
-			costs: Object.fromEntries(
-				listRepos(ctx.db).map((repo) => [repo.id, repoCost(ctx.db, repo.id)]),
 			),
 		},
 	};

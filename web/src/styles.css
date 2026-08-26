@@ -1634,3 +1634,111 @@ a.quote-author:hover {
 	align-items: center;
 	white-space: nowrap;
 }
+
+/* ------------------------------------------------------ settings forms -- */
+
+/*
+ * A stack, not a grid: every field is full width in a drawer this narrow, and
+ * a two-column form would put a label and its input on different reading lines
+ * the moment either of them wraps.
+ */
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem;
+	margin-bottom: 0.75rem;
+}
+
+.field-label {
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+
+.field-hint {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+}
+
+.field-error {
+	font-size: 0.75rem;
+	color: var(--alert);
+}
+
+/*
+ * Overrides the shared input min-width, which is sized for the search box in a
+ * full-width toolbar and would push these past the drawer's edge.
+ */
+.field input[type="text"],
+.field select,
+.field textarea {
+	width: 100%;
+	min-width: 0;
+}
+
+.field select,
+.field textarea {
+	font: inherit;
+	color: var(--text);
+	background: var(--surface-raised);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--r);
+	padding: 0.375rem 0.5rem;
+	transition: border-color 0.12s ease;
+}
+
+.field select {
+	min-height: var(--h-control);
+	padding: 0 0.5rem;
+}
+
+.field textarea {
+	font-family: var(--font-mono);
+	font-size: 0.8125rem;
+	resize: vertical;
+}
+
+.field select:hover,
+.field textarea:hover {
+	border-color: var(--text-faint);
+}
+
+.card {
+	border: 1px solid var(--border);
+	border-radius: var(--r);
+	padding: 0.75rem;
+	margin-bottom: 0.75rem;
+}
+
+/* Wraps: the title is a repository name of unbounded length, beside buttons. */
+.card-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin-bottom: 0.75rem;
+}
+
+.card-title {
+	font-weight: 600;
+	margin-right: auto;
+	overflow-wrap: anywhere;
+}
+
+.card-foot {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0;
+}
+
+.rename {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.25rem;
+}
+
+.rename input[type="text"] {
+	min-width: 12rem;
+}
