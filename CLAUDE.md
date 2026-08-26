@@ -29,8 +29,13 @@ These are load-bearing. Violating one is a design error, not a style nit.
 2. `src/core/github/` is the only module that touches the network. Nothing else calls `fetch`.
 3. `src/core/analysis/` is the only module in `core/` that spawns a subprocess.
 4. `src/server/` holds no business logic. A route resolves context, calls one function `core/` already exports, serialises, returns. Any `if` deciding what happens to a rule belongs in `core/rules/`.
+5. `config.yaml` is the source of truth for hosts, repos, and the process knobs, and NOTAM owns the file: it is regenerated whole on every write, so a save destroys any comment the writer did not emit. The database is derived from it — `applyConfig` re-seeds at every boot and at every save.
 
 Rule lifecycle is a state machine: `draft → proposed → verified`, `proposed → draft` when a PR closes unmerged, any → `abandoned`. Re-analysis discards only `draft` rules — `proposed`/`verified`/`abandoned` are never rewritten.
+
+Removal is archival, everywhere. A host or repo absent from `config.yaml` is stamped `archived_at`, never deleted, and re-adding it clears the stamp on the same row. `entries`, `rules`, and `promotions` all cascade from `repos`, and `repos.host_id` cascades from `hosts`, so a `DELETE` driven by a text edit could destroy months of verified rules with no dialog and no undo. Permanent deletion is its own explicit action on something already archived.
+
+Identity is the name. A host's id is its primary key; a repository's is `(host_id, name)`. Changing either in the file therefore reads as one thing leaving and an empty one arriving, stranding the sync watermark, the entries, and the rules on an archived row. The rename endpoints exist so the UI path moves the rows instead; the file path cannot, and the docs say so.
 
 ## Code style
 
@@ -62,6 +67,7 @@ Nor should they have to open something else. Don't cite a spec section, a plan n
   stdin, and keeps the data whenever there is no terminal to ask on.
 - `notam update` only moves forward, and only on a compiled release binary. The release lookup is always anonymous: the configured token may belong to a GHES host and must never reach github.com.
 - The server binds `127.0.0.1` with no auth by design, and rejects foreign `Host` headers. `notam` auto-increments from port 4317 unless `--port` is passed, which then fails hard.
+- Mutating the configuration over that unauthenticated API is in scope for the same trust model, deliberately. The `Host` check closes the drive-by-browser vector, which is the only realistic one; anyone who can reach the loopback socket can already read `.notam/` directly, so a handshake token would buy nothing it does not already have. Note this is a weaker footing than the API once had — "no auth" was first justified by its being read-mostly — so a new mutating route is a decision to take on purpose, not a detail.
 - `install.sh` is POSIX sh, not bash — Ubuntu's `/bin/sh` is dash, which is what proves it in CI.
 
 ## Git
