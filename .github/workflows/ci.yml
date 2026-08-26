@@ -60,9 +60,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      # install.sh is POSIX sh, not bash: tests/install/install.test.ts spawns
-      # `sh`, and ubuntu-latest's /bin/sh is dash, so this is what actually
-      # proves install.sh runs under dash and not just under bash-as-sh.
+      # install.sh and uninstall.sh are POSIX sh, not bash: the suites under
+      # tests/install spawn `sh`, and ubuntu-latest's /bin/sh is dash, so this
+      # is what actually proves both run under dash and not just bash-as-sh.
       - name: Unit, integration, and installer tests
         run: bun run test
 

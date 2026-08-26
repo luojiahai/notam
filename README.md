@@ -71,6 +71,39 @@ chmod +x notam-darwin-arm64 && mv notam-darwin-arm64 ~/.local/bin/notam
   The token is never written to disk by NOTAM. Your config names the
   *environment variable* that holds it, and nothing else.
 
+### Uninstall
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/uninstall.sh | sh
+```
+
+It removes the binary from `~/.local/bin` and then asks whether to delete your
+configuration and database in `~/.notam`. A bare Enter keeps them. Answer up
+front to skip the question, which is also what you want in a script:
+
+```sh
+# remove everything, including the config and database
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/uninstall.sh | sh -s -- --purge
+
+# remove only the binary
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/uninstall.sh | sh -s -- --keep-data
+
+# uninstall from somewhere other than ~/.local/bin
+curl -fsSL https://raw.githubusercontent.com/luojiahai/notam/main/uninstall.sh | sh -s -- --dir /usr/local/bin
+```
+
+With no terminal to ask on — a CI job, or output redirected to a file — it
+keeps `~/.notam` and says so. Deleting your data is never something that
+happens because nobody was there to say otherwise.
+
+`--purge` removes only the files NOTAM writes: `config.yaml`, `notam.db` with
+its `-wal`, `-shm` and `.bak` companions, and then `~/.notam` itself if that
+emptied it. A prompt template you wrote at `~/.notam/prompts/` stays, and the
+directory is kept with it.
+
+Only the binary at `--dir` is removed. Another `notam` elsewhere on your `PATH`
+is reported rather than deleted, since this script did not put it there.
+
 ## Quick start
 
 ```sh

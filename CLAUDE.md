@@ -57,6 +57,9 @@ Nor should they have to open something else. Don't cite a spec section, a plan n
 - `NOTAM_WEB_DIST` serves the SPA from a directory instead of the copy embedded in the compiled binary.
 - `NOTAM_VERSION` has two unrelated meanings: `src/version.ts` reads it (replaced at compile time via `bun build --define`), and `install.sh` reads it as the release tag to install.
 - `NOTAM_REPO`, `NOTAM_API_BASE`, `NOTAM_DOWNLOAD_BASE` point release lookups somewhere other than the public repository. Both `install.sh` and `notam update` read them, with the same meanings — that is how `tests/binary/update.test.ts` watches a real binary replace itself without touching the network.
+- `uninstall.sh` removes `$NOTAM_DIR/notam` and, only when told to, the files
+  NOTAM writes under `NOTAM_HOME`'s `.notam/`. It asks on `/dev/tty`, never
+  stdin, and keeps the data whenever there is no terminal to ask on.
 - `notam update` only moves forward, and only on a compiled release binary. The release lookup is always anonymous: the configured token may belong to a GHES host and must never reach github.com.
 - The server binds `127.0.0.1` with no auth by design, and rejects foreign `Host` headers. `notam run` auto-increments from port 4317 unless `--port` is passed, which then fails hard.
 - `install.sh` is POSIX sh, not bash — Ubuntu's `/bin/sh` is dash, which is what proves it in CI.
