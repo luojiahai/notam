@@ -1,3 +1,4 @@
+import { Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { GithubMark } from "./GithubMark.tsx";
 import { SidebarResizer } from "./SidebarResizer.tsx";
@@ -35,15 +36,27 @@ export function Shell({
 					Notes On Team Agreements &amp; Methods
 				</span>
 				<span className="spacer" />
+				<ThemeToggle />
+				<span className="version">{version}</span>
 				{/*
 					App-wide, like everything else in this header: it edits the one
 					config file, not the selected repository.
+
+					Icon-only, which is the rule this header follows: a control that
+					takes you somewhere or toggles chrome carries a glyph and an
+					accessible name, and a control that acts on what you are looking
+					at keeps its label. The theme control above is neither — it
+					displays which of three modes is live, so it keeps its text.
 				*/}
-				<button type="button" className="btn-plain" onClick={onOpenSettings}>
-					Settings
+				<button
+					type="button"
+					className="btn-icon"
+					onClick={onOpenSettings}
+					aria-label="Settings"
+					title="Settings"
+				>
+					<Settings className="icon" aria-hidden="true" />
 				</button>
-				<ThemeToggle />
-				<span className="version">{version}</span>
 				{/*
 					Beside the version rather than the wordmark: both answer
 					"which NOTAM is this", and the heading's accessible name is

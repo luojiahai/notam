@@ -135,7 +135,7 @@ describe("startServer", () => {
 			openBrowser: () => {},
 		});
 		try {
-			// A refusal here would be unrecoverable: the settings drawer is where a
+			// A refusal here would be unrecoverable: the settings window is where a
 			// token_env is fixed, and it is served by this process.
 			expect(server.ctx.warnings.join("\n")).toContain("NOTAM_RUN_TEST_TOKEN");
 			expect((await fetch(`${server.url}/api/meta`)).status).toBe(200);
@@ -405,7 +405,7 @@ describe("first run", () => {
 		try {
 			expect(lines.join("\n")).toContain(defaultConfigPath(home));
 			expect((await fetch(`${server.url}/api/meta`)).status).toBe(200);
-			// No repositories: the settings drawer is where the first one is added.
+			// No repositories: the settings window is where the first one is added.
 			expect(await (await fetch(`${server.url}/api/repos`)).json()).toEqual([]);
 		} finally {
 			await server.stop();

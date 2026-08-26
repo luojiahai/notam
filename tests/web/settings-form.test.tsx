@@ -1,10 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import type { ConfigDocument, ConfigResponse } from "../../src/shared/api.ts";
 import {
 	SettingsForm,
 	type SettingsFormProps,
-} from "../../web/src/components/SettingsDrawer.tsx";
+} from "../../web/src/components/SettingsModal.tsx";
 
 const DOC: ConfigDocument = {
 	hosts: [
@@ -78,6 +79,32 @@ function props(overrides: Partial<SettingsFormProps> = {}): SettingsFormProps {
 	};
 }
 
+/**
+ * Opens a pane. One entity is on screen at a time, so a test that asserts on a
+ * host's fields has to say which host, the same way a reader does.
+ */
+function select(name: string): void {
+	fireEvent.click(screen.getByRole("button", { name }));
+}
+
+/**
+ * Holds its own draft, so an edit changes what is on screen. The tests that
+ * assert on what a removal leaves behind need the form to re-render against
+ * the document the removal produced.
+ */
+function Stateful({
+	initial,
+	overrides = {},
+}: {
+	initial: ConfigDocument;
+	overrides?: Partial<SettingsFormProps>;
+}) {
+	const [draft, setDraft] = useState(initial);
+	return (
+		<SettingsForm {...props({ draft, onChange: setDraft, ...overrides })} />
+	);
+}
+
 /** Replaces window.confirm for one call, and reports whether it was asked. */
 function withConfirm<T>(
 	answer: boolean,
@@ -106,6 +133,7 @@ describe("SettingsForm", () => {
 
 	test("offers the token variable's name, and never a box for the token", () => {
 		render(<SettingsForm {...props()} />);
+		select("github");
 		expect(screen.getByDisplayValue("NOTAM_GITHUB_TOKEN")).toBeDefined();
 		expect(screen.queryAllByRole("textbox", { name: /^token$/i })).toHaveLength(
 			0,
@@ -115,6 +143,7 @@ describe("SettingsForm", () => {
 
 	test("reports a token variable that is set", () => {
 		render(<SettingsForm {...props()} />);
+		select("github");
 		expect(screen.getByText("NOTAM_GITHUB_TOKEN is set.")).toBeDefined();
 	});
 
@@ -138,6 +167,7 @@ describe("SettingsForm", () => {
 				})}
 			/>,
 		);
+		select("github");
 		expect(
 			screen.getByText(/is not set\. Export it and restart\./),
 		).toBeDefined();
@@ -153,6 +183,7 @@ describe("SettingsForm", () => {
 				})}
 			/>,
 		);
+		select("github");
 		expect(screen.getByText("Connected as dana.")).toBeDefined();
 	});
 
@@ -170,6 +201,7 @@ describe("SettingsForm", () => {
 				})}
 			/>,
 		);
+		select("github");
 		expect(
 			screen.getByText("https://api.github.com answered 401 Unauthorized"),
 		).toBeDefined();
@@ -251,14 +283,20 @@ describe("SettingsForm", () => {
 				})}
 			/>,
 		);
-		const hosts = screen.getAllByLabelText("Host") as HTMLSelectElement[];
-		expect(hosts.map((select) => select.disabled)).toEqual([true, false]);
+		expect((screen.getByLabelText("Host") as HTMLSelectElement).disabled).toBe(
+			true,
+		);
+		select("New repository");
+		expect((screen.getByLabelText("Host") as HTMLSelectElement).disabled).toBe(
+			false,
+		);
 	});
 
 	test("says what removing a host takes with it, repositories included", () => {
 		let next: ConfigDocument | null = null;
 		const { asked } = withConfirm(false, () => {
 			render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
+			select("github");
 			fireEvent.click(
 				screen.getByRole("button", { name: "Remove host github" }),
 			);
@@ -324,9 +362,14 @@ describe("SettingsForm", () => {
 
 	test("says the process knobs need a restart, rather than implying they are live", () => {
 		render(<SettingsForm {...props()} />);
+		select("Process");
+		// One note over the group, not one per heading: they are the same kind of
+		// knob and the caveat is a property of all of them.
 		expect(
 			screen.getAllByText("Applied the next time NOTAM starts."),
-		).toHaveLength(2);
+		).toHaveLength(1);
+		expect(screen.getByLabelText("Concurrency")).toBeDefined();
+		expect(screen.getByLabelText("Port")).toBeDefined();
 	});
 
 	test("offers no archive section when nothing is archived", () => {
@@ -365,6 +408,7 @@ describe("SettingsForm", () => {
 			/>,
 		);
 		expect(screen.getByText("Archived")).toBeDefined();
+		select("acme/website");
 		fireEvent.click(
 			screen.getByRole("button", { name: "Restore acme/website" }),
 		);
@@ -372,6 +416,68 @@ describe("SettingsForm", () => {
 		expect(
 			(next as unknown as ConfigDocument).repos.map((r) => r.name),
 		).toEqual(["acme/mono", "acme/website"]);
+	});
+
+	test("lists a repository under the host that owns it", () => {
+		render(<SettingsForm {...props()} />);
+		// The rail is where the host-repository relationship is stated. In the
+		// document it is a foreign key; on screen it has to be visible without
+		// opening anything.
+		const buttons = screen.getAllByRole("button");
+		const host = screen.getByRole("button", { name: "github" });
+		const repo = screen.getByRole("button", { name: "acme/mono" });
+		expect(buttons.indexOf(repo)).toBe(buttons.indexOf(host) + 1);
+	});
+
+	test("falls back to a pane that still exists when the selected one goes", () => {
+		withConfirm(true, () => {
+			render(<Stateful initial={DOC} />);
+			fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
+		});
+		// Nothing is selected any more, so the form picks again rather than
+		// rendering an empty pane against an index that no longer resolves.
+		expect(
+			screen.queryByRole("button", { name: "Rename acme/mono" }),
+		).toBeNull();
+		expect(screen.getByLabelText("API base")).toBeDefined();
+	});
+
+	test("stops calling a repository archived once the draft names it again", () => {
+		const archived = {
+			id: "r_2",
+			host_id: "github",
+			name: "acme/website",
+			path_globs: ["site/**"],
+			default_branch: "main",
+			window_days: 180,
+			prompt_template: null,
+			archived_at: "2026-08-23T09:00:00.000Z",
+			entries: 5,
+			rules: 1,
+			verified_rules: 0,
+		};
+		render(
+			<Stateful
+				initial={DOC}
+				overrides={{
+					response: {
+						...RESPONSE,
+						status: { ...RESPONSE.status, archived_repos: [archived] },
+					},
+				}}
+			/>,
+		);
+		select("acme/website");
+		fireEvent.click(
+			screen.getByRole("button", { name: "Restore acme/website" }),
+		);
+		// Restoring puts it in the document before the save that clears the
+		// stamp. Listed in both places it would be two rail items under one
+		// name, and the name is how anything reaches it.
+		expect(screen.queryByText("Archived")).toBeNull();
+		expect(
+			screen.getAllByRole("button", { name: "acme/website" }),
+		).toHaveLength(1);
 	});
 
 	test("confirms before destroying an archived repository for good", () => {
@@ -405,6 +511,7 @@ describe("SettingsForm", () => {
 					})}
 				/>,
 			);
+			select("acme/website");
 			fireEvent.click(
 				screen.getByRole("button", {
 					name: "Delete acme/website permanently",

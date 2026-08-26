@@ -551,7 +551,7 @@ input[type="search"]::-webkit-search-cancel-button {
 	white-space: nowrap;
 }
 
-/* Segmented theme control: text labels, so it needs no icon dependency. */
+/* Segmented theme control: text labels, because it shows a state, not an action. */
 .segmented {
 	display: inline-flex;
 	background: var(--bg-sunken);
@@ -1635,11 +1635,270 @@ a.quote-author:hover {
 	white-space: nowrap;
 }
 
-/* ------------------------------------------------------ settings forms -- */
+/* ---------------------------------------------------------- settings -- */
 
 /*
- * A stack, not a grid: every field is full width in a drawer this narrow, and
- * a two-column form would put a label and its input on different reading lines
+ * Settings is a centred window over the app.
+ *
+ * It borrows `.dialog-backdrop` and `.dialog` for the backdrop, surface, and
+ * shadow, and overrides the size: a rail beside a pane wants width and height
+ * in equal measure, which a surface pinned to one edge cannot give. The height
+ * is fixed rather than fitted to the content, because the rail and the pane
+ * scroll independently — a window that grew with the config would put the
+ * rail's own scrollbar out of reach.
+ */
+.settings-modal {
+	width: min(62rem, 100%);
+	height: min(88dvh, 46rem);
+	max-height: none;
+}
+
+.settings-head {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0.75rem var(--gutter) 0.625rem;
+	border-bottom: 1px solid var(--border);
+	flex: none;
+}
+.settings-head h2 {
+	margin: 0;
+	flex: 1;
+	font-size: 0.9375rem;
+}
+
+/*
+ * True of the whole window rather than of any one pane: whichever entity is
+ * selected, Save rewrites this one file.
+ */
+.settings-note {
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	padding: 0.5rem var(--gutter);
+	border-bottom: 1px solid var(--border);
+	background: var(--bg-sunken);
+	flex: none;
+}
+
+.settings-error {
+	padding: 0.5rem var(--gutter);
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in srgb, var(--alert) var(--tint-banner), var(--bg));
+	flex: none;
+}
+.settings-error .state-title {
+	color: var(--alert);
+}
+.settings-error .state-hint {
+	margin: 0;
+}
+
+/* Loading, unreadable config, and first run: one pane, no rail to navigate. */
+.settings-empty {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0.75rem var(--gutter);
+	min-height: 0;
+}
+
+/*
+ * Fixed rail beside a flexible pane, so the pane's fields keep one readable
+ * measure however wide the window gets.
+ */
+.settings-split {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: 15rem minmax(0, 1fr);
+}
+
+.settings-rail {
+	overflow-y: auto;
+	border-right: 1px solid var(--border);
+	background: var(--bg-sunken);
+	padding: 0.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-height: 0;
+}
+
+.rail-group {
+	font-family: var(--font-mono);
+	font-size: 0.625rem;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	margin: 0.5rem 0 0.25rem;
+	padding: 0 0.375rem;
+}
+.settings-rail > .rail-group:first-child {
+	margin-top: 0;
+}
+
+/*
+ * Chromeless until it is the one selected: a column of bordered controls reads
+ * as a form to fill in rather than a list to pick from.
+ */
+.rail-item {
+	display: flex;
+	align-items: center;
+	gap: 0.375rem;
+	width: 100%;
+	min-height: 1.625rem;
+	padding: 0 0.375rem;
+	justify-content: flex-start;
+	text-align: left;
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--text);
+	background: none;
+	border: 0;
+	border-radius: var(--r-sm);
+}
+.rail-item:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--text) var(--tint-row), transparent);
+	border: 0;
+}
+.rail-item:active:not(:disabled) {
+	transform: none;
+}
+.rail-item:disabled {
+	background: none;
+	color: var(--text-faint);
+}
+.rail-item .mono {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* Indented under the host that owns it, which is half its identity. */
+.rail-child {
+	padding-left: 1.25rem;
+	color: var(--text-muted);
+}
+
+.rail-item[aria-current="true"] {
+	background: color-mix(in srgb, var(--accent) var(--tint), transparent);
+	color: var(--text);
+	font-weight: 600;
+}
+
+.rail-count {
+	margin-left: auto;
+	color: var(--text-faint);
+	font-size: 0.6875rem;
+	font-variant-numeric: tabular-nums;
+}
+
+/* Adds rather than selects, so it does not wear the selected treatment. */
+.rail-add {
+	color: var(--text-muted);
+	margin-top: 0.125rem;
+}
+
+/* The one pane that is not a thing you added, so it sits apart from them. */
+.rail-standalone {
+	margin-top: auto;
+	border-top: 1px solid var(--border);
+	border-radius: 0;
+	padding-top: 0.5rem;
+	min-height: 2rem;
+}
+.rail-standalone:hover:not(:disabled) {
+	border: 0;
+	border-top: 1px solid var(--border);
+}
+
+.settings-pane {
+	overflow-y: auto;
+	padding: 0.75rem var(--gutter) 1rem;
+	min-width: 0;
+	min-height: 0;
+}
+
+.pane-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	padding-bottom: 0.5rem;
+	margin-bottom: 0.75rem;
+	border-bottom: 1px solid var(--border);
+}
+
+/* A heading, so it takes the size of the text around it rather than the UA's. */
+.pane-title {
+	font-size: inherit;
+	font-weight: 600;
+	margin: 0 auto 0 0;
+	overflow-wrap: anywhere;
+}
+
+/*
+ * A single measure for the fields, so a wide window gives the rail and the
+ * prose more room without stretching a one-line input across the screen.
+ */
+.pane-fields {
+	max-width: 33rem;
+}
+
+.pane-note {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin: 0;
+}
+
+.pane-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+}
+
+/* State that is a property of the row rather than an action on it. */
+.chip {
+	font-family: var(--font-mono);
+	font-size: 0.625rem;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	padding: 0.05rem 0.35rem;
+	border-radius: var(--r-sm);
+	color: var(--text-muted);
+	background: color-mix(in srgb, var(--text) var(--tint-row), transparent);
+	border: 1px solid var(--border);
+	white-space: nowrap;
+}
+
+/*
+ * Pinned. The rail and the pane scroll independently, so an action inside
+ * either one could be scrolled away from a change made in the other.
+ */
+.settings-foot {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.625rem var(--gutter);
+	border-top: 1px solid var(--border);
+	background: var(--bg-sunken);
+	border-radius: 0 0 var(--r-lg) var(--r-lg);
+	flex: none;
+}
+
+.settings-dirty {
+	margin-left: auto;
+}
+
+/* ------------------------------------------------------------ fields -- */
+
+/*
+ * A stack, not a grid: every field is full width at this measure, and a
+ * two-column form would put a label and its input on different reading lines
  * the moment either of them wraps.
  */
 .field,
@@ -1670,7 +1929,7 @@ a.quote-author:hover {
 
 /*
  * Overrides the shared input min-width, which is sized for the search box in a
- * full-width toolbar and would push these past the drawer's edge.
+ * full-width toolbar and would push these past the pane's edge.
  */
 .field input[type="text"],
 .field select,
@@ -1706,36 +1965,6 @@ a.quote-author:hover {
 	border-color: var(--text-faint);
 }
 
-.card {
-	border: 1px solid var(--border);
-	border-radius: var(--r);
-	padding: 0.75rem;
-	margin-bottom: 0.75rem;
-}
-
-/* Wraps: the title is a repository name of unbounded length, beside buttons. */
-.card-head {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.5rem;
-	margin-bottom: 0.75rem;
-}
-
-.card-title {
-	font-weight: 600;
-	margin-right: auto;
-	overflow-wrap: anywhere;
-}
-
-.card-foot {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 0.5rem;
-	margin: 0;
-}
-
 .rename {
 	display: flex;
 	flex-wrap: wrap;
@@ -1745,4 +1974,27 @@ a.quote-author:hover {
 
 .rename input[type="text"] {
 	min-width: 12rem;
+}
+
+/*
+ * Narrow enough that the rail and the pane cannot both fit: the rail goes back
+ * to a full-width list above the pane, and the window fills the viewport.
+ */
+@media (max-width: 40rem) {
+	.settings-modal {
+		width: 100%;
+		height: 100%;
+	}
+	.settings-split {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+	.settings-rail {
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+		max-height: 11rem;
+	}
+	.rail-standalone {
+		margin-top: 0.25rem;
+	}
 }

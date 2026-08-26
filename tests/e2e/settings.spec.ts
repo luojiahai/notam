@@ -22,7 +22,7 @@ test("a first run configures a repository entirely from the browser", async ({
 	await page.goto(harness.baseUrl);
 
 	await expect(page.getByText("No repositories yet")).toBeVisible();
-	await page.getByRole("button", { name: "Open settings" }).click();
+	await page.getByRole("button", { name: "Configure a repository" }).click();
 
 	// The default host is github.com. Point it at the stub, and at the variable
 	// this harness actually exports.
@@ -41,6 +41,10 @@ test("a first run configures a repository entirely from the browser", async ({
 	await expect(
 		sidebar.getByRole("button", { name: /acme\/mono/ }),
 	).toBeVisible();
+
+	// The token belongs to the host, and the host is a pane of its own: proving
+	// the variable reached the server means going back to it.
+	await page.getByRole("button", { name: "github", exact: true }).click();
 	await expect(page.getByText("NOTAM_E2E_TOKEN is set.")).toBeVisible();
 });
 
@@ -51,6 +55,8 @@ test("removing it archives rather than deletes, and adding it back restores it",
 	// Scoped to the sidebar: the archive section names the same repository on
 	// its own Restore and Delete buttons.
 	const sidebar = page.getByRole("navigation", { name: "Repositories" });
+	// The header control carries no label, so its accessible name is the only
+	// handle on it — which is the point of asserting through it here.
 	await page.getByRole("button", { name: "Settings" }).click();
 
 	page.once("dialog", (dialog) => dialog.accept());
@@ -62,6 +68,10 @@ test("removing it archives rather than deletes, and adding it back restores it",
 		0,
 	);
 
+	// One entity is on screen at a time, so reaching an archived repository's
+	// actions means selecting it first. Exact, because every one of those
+	// actions names the repository too.
+	await page.getByRole("button", { name: "acme/mono", exact: true }).click();
 	await page.getByRole("button", { name: "Restore acme/mono" }).click();
 	await page.getByRole("button", { name: "Save" }).click();
 

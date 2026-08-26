@@ -31,8 +31,8 @@ export type ConfigResult = { config: Config; hash: string };
 /**
  * Refuses a write built on a version of the file that is no longer there.
  *
- * config.yaml is editable by hand and by the settings drawer at the same time,
- * and the drawer's document is a snapshot. Without this, saving a form would
+ * config.yaml is editable by hand and by the settings window at the same time,
+ * and that window's document is a snapshot. Without this, saving a form would
  * silently paste over whatever someone had just typed into the file.
  */
 async function assertUnchanged(path: string, expected: string): Promise<void> {

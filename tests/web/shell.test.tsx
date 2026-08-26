@@ -78,6 +78,29 @@ describe("Shell", () => {
 		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("NOTAM");
 	});
 
+	test("names the settings control, which carries no visible label", () => {
+		let opened = 0;
+		wrap(
+			<Shell
+				version="1.0.0"
+				warnings={[]}
+				onOpenSettings={() => {
+					opened += 1;
+				}}
+				sidebar={null}
+			>
+				{null}
+			</Shell>,
+		);
+		// A glyph with no text is only reachable by its accessible name, and a
+		// tooltip is the sighted half of the same thing.
+		const settings = screen.getByRole("button", { name: "Settings" });
+		expect(settings.getAttribute("title")).toBe("Settings");
+		expect(settings.textContent).toBe("");
+		fireEvent.click(settings);
+		expect(opened).toBe(1);
+	});
+
 	test("links to NOTAM's own repository", () => {
 		wrap(
 			<Shell

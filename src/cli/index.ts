@@ -40,7 +40,7 @@ Environment:
  */
 const RESERVED: Record<string, string> = {
 	run: "`notam` on its own starts the server.",
-	init: "There is nothing to initialise: config is created on first run, and edited in the settings drawer or in ~/.notam/config.yaml.",
+	init: "There is nothing to initialise: config is created on first run, and edited in the settings window or in ~/.notam/config.yaml.",
 	sync: "Sync from the UI, or:\n  curl -X POST http://127.0.0.1:4317/api/repos/<id>/sync",
 };
 

@@ -131,7 +131,7 @@ export function resolveToken(
  * Whether the variable a host names holds anything.
  *
  * The one place that question is answered, so the boot warning and the
- * settings drawer's per-host indicator cannot disagree about it. An empty
+ * settings window's per-host indicator cannot disagree about it. An empty
  * string counts as absent, matching resolveToken.
  */
 export function hasToken(

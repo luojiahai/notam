@@ -123,7 +123,7 @@ notam                          # serves http://127.0.0.1:4317 and opens a browse
 
 There is nothing to set up first. The first run writes `~/.notam/config.yaml`
 with the github.com host filled in and no repositories, so the page opens on
-an empty state offering the settings drawer.
+an empty state offering the settings window.
 
 Then, in the browser:
 
@@ -181,15 +181,15 @@ at startup: an invalid file stops the process and names the offending path and
 reason, rather than failing later in the middle of a sync. A malformed file is
 never replaced — NOTAM creates a config, it does not repair one.
 
-Edit it in the settings drawer or in a text editor; both write the same file,
+Edit it in the settings window or in a text editor; both write the same file,
 and NOTAM re-reads it on every request, so a hand-edit shows up without a
-restart. Saving from the drawer rewrites the file whole, which replaces any
+restart. Saving from that window rewrites the file whole, which replaces any
 comments you added. A save built on a version of the file that has since
 changed on disk is refused rather than applied.
 
 Removing a repository archives it. Its entries, rules, and promotion history
 are kept, and adding it back restores them; deleting it permanently is a
-separate action in the settings drawer. Renaming in the drawer carries that
+separate action in the settings window. Renaming there carries that
 history across — renaming by hand in the file does not, because a repository's
 identity there is its `host` and `name`.
 
