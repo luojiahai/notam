@@ -31,34 +31,40 @@ export function Sidebar({ repos, selectedRepoId, onSelectRepo }: SidebarProps) {
 					>
 						<div className="repo-name">{repo.name}</div>
 						{/*
+							Three figures in pipeline order — what came in, what is
+							waiting on a decision, what is in flight — so the rail reads
+							as a column of the same three numbers rather than as a
+							sentence whose shape changes per row.
+
+							Every figure is present at zero, including the promotions
+							one. A pair that appears and disappears moves the two beside
+							it, and a column you scan down cannot afford figures that
+							shift position between rows.
+						*/}
+						<div className="repo-meta">
+							<span className="repo-stat">
+								<b>{repo.entries.total}</b> sources
+							</span>
+							<span className="repo-stat" data-live={repo.rules.draft > 0}>
+								<b>{repo.rules.draft}</b> draft
+							</span>
+							<span className="repo-stat" data-live={repo.open_promotions > 0}>
+								<b>{repo.open_promotions}</b> open
+							</span>
+						</div>
+						{/*
 							A repository can be syncing while the user is looking at a
 							different one — two run at once by design — so the row says
 							so. Without it a background sync is invisible until its
 							counts move.
 						*/}
-						<div className="repo-meta">
-							{repo.entries.total} entries · {repo.rules.draft} drafts
-							{/*
-								Omitted at zero rather than shown as "0 open promotions":
-								a repository nobody has promoted from is the quiet case,
-								and the row is read by scanning down a column.
-							*/}
-							{repo.open_promotions > 0 && (
-								<>
-									{" · "}
-									{repo.open_promotions} open promotion
-									{repo.open_promotions === 1 ? "" : "s"}
-								</>
-							)}
-							{repo.sync.state !== "idle" && (
-								<>
-									{" · "}
-									<span className="repo-syncing">
-										{repo.sync.state === "running" ? "syncing" : "queued"}
-									</span>
-								</>
-							)}
-						</div>
+						{repo.sync.state !== "idle" && (
+							<div className="repo-meta">
+								<span className="repo-syncing">
+									{repo.sync.state === "running" ? "syncing" : "queued"}
+								</span>
+							</div>
+						)}
 					</button>
 				))
 			)}

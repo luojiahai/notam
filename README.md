@@ -127,19 +127,26 @@ an empty state offering the settings window.
 
 Then, in the browser:
 
+The workspace is a pipeline, and the bar across the top is both the map and
+the navigation: **Sources → Draft → In review → Adopted**, each carrying the
+count of what is waiting in it. **Set aside** sits off the end of the run, for
+the rules you decided against.
+
 1. Add a repository in **Settings**, then pick it in the sidebar and press
    **Sync**. NOTAM pulls the merged
    pull requests from the last 180 days that touch your paths.
-2. On the **Entries** tab, filter to *Unanalysed*, select some rows, and press
+2. On **Sources**, filter to *Unanalysed*, select some rows, and press
    **Analyse selected**. Progress streams back live; a few entries at a time run
    in parallel.
-3. On the **Rules** tab, read the drafts. Each one links back to the review
-   comments it came from, and shows the exact `.claude/rules/<slug>.md` that
-   would be committed.
+3. On **Draft**, read what the analysis found. Each rule links back to the
+   review comments it came from, and shows the exact `.claude/rules/<slug>.md`
+   that would be committed.
 4. Select the ones you want and press **Create rules PR**. NOTAM opens a pull
    request in that repository adding one Markdown file per rule, with a body
-   linking each rule to its source PR.
-5. When your team merges it, mark those rules **verified**. If they close it
+   linking each rule to its source PR — and moves you to **In review**, where
+   the pull request is shown with the rules riding in it.
+5. When your team merges it, mark those rules **verified** and they join
+   **Adopted**, the standing brief your coding agents read. If they close it
    unmerged, the rules return to draft, ready to be re-proposed.
 
 Nothing is automatic. Analysis is asked for, promotion is asked for, and
