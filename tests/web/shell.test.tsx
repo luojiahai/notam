@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import type {
@@ -19,6 +19,11 @@ import { App, applyServerEvent, invalidationsFor } from "../../web/src/App.tsx";
 import { useEntry, useRule } from "../../web/src/api/hooks.ts";
 import { Shell } from "../../web/src/components/Shell.tsx";
 import { Sidebar } from "../../web/src/components/Sidebar.tsx";
+import {
+	SIDEBAR_WIDTH_FALLBACK_MAX,
+	SIDEBAR_WIDTH_FALLBACK_MIN,
+	SIDEBAR_WIDTH_STORAGE_KEY,
+} from "../../web/src/lib/sidebar-width.ts";
 
 const repo: RepoSummary = {
 	id: "r_1",
@@ -170,6 +175,164 @@ describe("Sidebar", () => {
 			/>,
 		);
 		expect(screen.getByText("queued")).toBeDefined();
+	});
+});
+
+/*
+ * happy-dom loads no stylesheet and lays nothing out, so the handle's own
+ * bounds tokens never resolve and every width below is measured against the
+ * built-in fallbacks. What is asserted here is therefore the contract a screen
+ * reader and a keyboard see, which needs no layout at all. Where the box
+ * actually ends up is a question only a real browser can answer, and it is
+ * asked of one, under tests/e2e.
+ */
+describe("SidebarResizer", () => {
+	afterEach(() => {
+		localStorage.clear();
+		document.documentElement.style.removeProperty("--sidebar-w");
+	});
+
+	function renderShell() {
+		wrap(
+			<Shell
+				version="1.0.0"
+				warnings={[]}
+				sidebar={
+					<Sidebar
+						repos={[repo]}
+						selectedRepoId="r_1"
+						onSelectRepo={() => {}}
+					/>
+				}
+			>
+				{null}
+			</Shell>,
+		);
+		return screen.getByRole("separator", { name: "Resize sidebar" });
+	}
+
+	test("is focusable and announces its range with a unit", () => {
+		const handle = renderShell();
+		expect(handle.getAttribute("tabindex")).toBe("0");
+		expect(handle.getAttribute("aria-orientation")).toBe("vertical");
+		expect(handle.getAttribute("aria-valuemin")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN),
+		);
+		expect(handle.getAttribute("aria-valuemax")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MAX),
+		);
+		expect(handle.getAttribute("aria-valuetext")).toBe(
+			`${SIDEBAR_WIDTH_FALLBACK_MIN} pixels`,
+		);
+	});
+
+	test("sits immediately after the sidebar, which is what it resizes", () => {
+		const handle = renderShell();
+		expect(handle.previousElementSibling?.tagName).toBe("NAV");
+		expect(handle.previousElementSibling?.getAttribute("aria-label")).toBe(
+			"Repositories",
+		);
+	});
+
+	test("arrow keys nudge, and Shift jumps", () => {
+		const handle = renderShell();
+		fireEvent.keyDown(handle, { key: "ArrowRight" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN + 16),
+		);
+		fireEvent.keyDown(handle, { key: "ArrowRight", shiftKey: true });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN + 80),
+		);
+		fireEvent.keyDown(handle, { key: "ArrowLeft" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN + 64),
+		);
+	});
+
+	test("End and Home go to the bounds, and neither can be passed", () => {
+		const handle = renderShell();
+		fireEvent.keyDown(handle, { key: "End" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MAX),
+		);
+		fireEvent.keyDown(handle, { key: "ArrowRight" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MAX),
+		);
+		fireEvent.keyDown(handle, { key: "Home" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN),
+		);
+		fireEvent.keyDown(handle, { key: "ArrowLeft" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN),
+		);
+	});
+
+	test("ignores keys that are not its own", () => {
+		const handle = renderShell();
+		fireEvent.keyDown(handle, { key: "ArrowUp" });
+		fireEvent.keyDown(handle, { key: "a" });
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MIN),
+		);
+	});
+
+	test("applies the width immediately but persists once, on release", () => {
+		const handle = renderShell();
+		const width = `${SIDEBAR_WIDTH_FALLBACK_MIN + 16}`;
+
+		fireEvent.keyDown(handle, { key: "ArrowRight" });
+		// The layout has already moved: a held key must not lag behind the finger.
+		expect(document.documentElement.style.getPropertyValue("--sidebar-w")).toBe(
+			`${width}px`,
+		);
+		// But nothing is stored yet, so key repeat costs no writes.
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+
+		fireEvent.keyUp(handle, { key: "ArrowRight" });
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBe(width);
+	});
+
+	test("a release that follows no change writes nothing", () => {
+		const handle = renderShell();
+		fireEvent.keyUp(handle, { key: "Shift" });
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+	});
+
+	test("double-click clears the preference rather than storing the default", () => {
+		const handle = renderShell();
+		fireEvent.keyDown(handle, { key: "ArrowRight" });
+		fireEvent.keyUp(handle, { key: "ArrowRight" });
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).not.toBeNull();
+
+		fireEvent.dblClick(handle);
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+		// The override is gone too, so the stylesheet's own default applies.
+		expect(document.documentElement.style.getPropertyValue("--sidebar-w")).toBe(
+			"",
+		);
+	});
+
+	test("adopts a width stored before it mounted", () => {
+		localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, "300");
+		const handle = renderShell();
+		expect(document.documentElement.style.getPropertyValue("--sidebar-w")).toBe(
+			"300px",
+		);
+		expect(handle.getAttribute("aria-valuenow")).toBe("300");
+	});
+
+	test("clamps a stored width that the current bounds no longer allow", () => {
+		localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, "9000");
+		const handle = renderShell();
+		expect(handle.getAttribute("aria-valuenow")).toBe(
+			String(SIDEBAR_WIDTH_FALLBACK_MAX),
+		);
+		// The stored preference is left alone: it is what the reader asked for,
+		// and a window they widen again should give it back to them.
+		expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBe("9000");
 	});
 });
 

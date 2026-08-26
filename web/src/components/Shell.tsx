@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { GithubMark } from "./GithubMark.tsx";
+import { SidebarResizer } from "./SidebarResizer.tsx";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 
 /** NOTAM's own repository, not a configured host's — a fact of the build. */
@@ -62,6 +63,12 @@ export function Shell({ version, warnings, sidebar, children }: ShellProps) {
 
 			<div className="body">
 				{sidebar}
+				{/*
+					Immediately after the sidebar and outside it: the handle finds
+					the element it resizes as its previous sibling, and the sidebar
+					scrolls, which would carry a handle placed inside it away.
+				*/}
+				<SidebarResizer />
 				<main className="main">{children}</main>
 			</div>
 		</div>
