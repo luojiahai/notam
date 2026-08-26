@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { useDismissOnEscape } from "../lib/dismiss.ts";
 
@@ -30,7 +31,7 @@ export function Drawer({
 						onClick={onClose}
 						aria-label="Close"
 					>
-						×
+						<X className="icon" aria-hidden="true" />
 					</button>
 				</div>
 				<div className="drawer-body">{children}</div>

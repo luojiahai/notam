@@ -121,7 +121,7 @@ function launchBrowser(
  * rather than a browser tab pointed at a broken server.
  *
  * Tokens are not part of that gate. A host whose `token_env` is unset becomes
- * a warning and a 503 on the routes that need it, because the settings drawer
+ * a warning and a 503 on the routes that need it, because the settings window
  * is where a token_env is corrected and a server that refuses to boot cannot
  * serve the page that corrects it.
  */

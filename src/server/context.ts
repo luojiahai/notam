@@ -181,7 +181,7 @@ export function createContext(options: ContextOptions): AppContext {
 			"The claude CLI was not found on PATH. Sync works, but analysis will fail until you install it from https://claude.com/claude-code",
 		);
 	}
-	// A warning rather than a refusal to start: the settings drawer is where a
+	// A warning rather than a refusal to start: the settings window is where a
 	// host's token_env is fixed, and a server that will not boot without a token
 	// cannot serve the page that sets one.
 	for (const host of missingTokenHosts(config, env)) {

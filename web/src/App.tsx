@@ -20,7 +20,7 @@ import { PromotionsTab } from "./components/PromotionsTab.tsx";
 import { RepoBar } from "./components/RepoBar.tsx";
 import { RuleDrawer } from "./components/RuleDrawer.tsx";
 import { RulesTab } from "./components/RulesTab.tsx";
-import { SettingsDrawer } from "./components/SettingsDrawer.tsx";
+import { SettingsModal } from "./components/SettingsModal.tsx";
 import { Shell } from "./components/Shell.tsx";
 import { Sidebar } from "./components/Sidebar.tsx";
 
@@ -249,7 +249,7 @@ export function App() {
 					{/*
 						Two different nothings. With no repositories configured at all
 						there is nothing to pick, and the answer is the settings
-						drawer — which is what replaces a separate first-run wizard.
+						window — which is what replaces a separate first-run wizard.
 					*/}
 					{repos.data?.length === 0 ? (
 						<div className="state">
@@ -258,12 +258,20 @@ export function App() {
 								Add one in Settings, then sync it to collect the agreements
 								buried in its merged pull requests.
 							</p>
+							{/*
+								Named for the job rather than the destination: this is the
+								first-run path, and "settings" undersells what it does. It
+								also keeps this button's accessible name clear of the
+								header's own control, which is named "Settings" and nothing
+								else — two controls whose names contain one another are two
+								controls a screen reader cannot tell apart.
+							*/}
 							<button
 								type="button"
 								className="btn-primary"
 								onClick={() => setSettingsOpen(true)}
 							>
-								Open settings
+								Configure a repository
 							</button>
 						</div>
 					) : (
@@ -313,9 +321,7 @@ export function App() {
 			{drawer?.kind === "rule" && (
 				<RuleDrawer ruleId={drawer.id} onClose={() => setDrawer(null)} />
 			)}
-			{settingsOpen && (
-				<SettingsDrawer onClose={() => setSettingsOpen(false)} />
-			)}
+			{settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
 		</Shell>
 	);
 }

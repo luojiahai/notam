@@ -15,7 +15,7 @@ import type { Config } from "./schema.ts";
  */
 const HEADER = `# NOTAM configuration — ~/.notam/config.yaml
 #
-# NOTAM owns this file. Saving from the settings drawer rewrites it whole, so
+# NOTAM owns this file. Saving from the settings window rewrites it whole, so
 # comments you add here do not survive. Editing it by hand works and is
 # supported: NOTAM re-reads it on every request, and refuses to overwrite a
 # change it has not seen.
@@ -31,7 +31,7 @@ const HEADER = `# NOTAM configuration — ~/.notam/config.yaml
  * The github.com host is filled in because every value in it is a constant —
  * making a first-time user type an API base and a GraphQL endpoint by hand
  * would be asking them to guess. There is no default repository: the settings
- * drawer is where the first one is added, and a placeholder that parses while
+ * window is where the first one is added, and a placeholder that parses while
  * pointing at nothing is worse than an honest absence.
  */
 export const DEFAULT_CONFIG = {
@@ -54,7 +54,7 @@ export const DEFAULT_CONFIG = {
  * The exact document, and the only definition of it.
  *
  * What is written to the file and what the browser edits are the same shape by
- * design — the drawer edits the file — so one function produces both. Two
+ * design — the settings window edits the file — so one function produces both. Two
  * would be two things that must never drift, one of them the wire contract.
  *
  * Built key by key rather than handed the parsed config directly, for two

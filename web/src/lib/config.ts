@@ -8,10 +8,10 @@ type Host = ConfigDocument["hosts"][number];
 type Repo = ConfigDocument["repos"][number];
 
 /**
- * Every edit the settings drawer makes to the document, as pure functions over
+ * Every edit the settings window makes to the document, as pure functions over
  * it.
  *
- * The drawer holds one draft and saves it whole, so each of these returns a new
+ * The window holds one draft and saves it whole, so each of these returns a new
  * document rather than mutating: what is on screen is what will be written, and
  * nothing reaches the file until Save.
  */

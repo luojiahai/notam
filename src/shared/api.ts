@@ -338,7 +338,7 @@ export const ArchivedHostSchema = z.object({
 });
 
 /**
- * What a removal would cost. The settings drawer says these numbers out loud
+ * What a removal would cost. The settings window says these numbers out loud
  * before archiving anything, because a count is what stops the mistake rather
  * than merely making it reversible.
  */
@@ -352,7 +352,7 @@ export const RepoCostSchema = z.object({
  * Ties each configured repository to its row.
  *
  * The document holds `(host, name)` and the lifecycle routes take an id, so
- * without this the drawer could render a repository it has no way to rename or
+ * without this the window could render a repository it has no way to rename or
  * delete.
  */
 export const ConfigRepoStatusSchema = RepoCostSchema.extend({

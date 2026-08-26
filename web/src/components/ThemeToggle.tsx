@@ -8,8 +8,11 @@ const OPTIONS: { value: Theme; label: string }[] = [
 ];
 
 /**
- * Text labels rather than a sun/moon glyph: the app carries no icon dependency,
- * and a hand-drawn one would be the only illustration in the whole interface.
+ * Text labels rather than a sun/moon glyph, and the one control in the header
+ * that keeps them. The icons beside it are actions and destinations, which a
+ * glyph names as well as a word does; this displays which of three modes is
+ * live, and a single cycling glyph could not.
+ *
  * Three explicit states also beat a two-way switch, which cannot express "let
  * the machine decide" — the state most people actually want.
  */
