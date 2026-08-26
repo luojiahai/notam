@@ -341,6 +341,7 @@ describe("syncRepo", () => {
 			prompt_template: null,
 			sync_watermark: null,
 			created_at: NOW.toISOString(),
+			archived_at: null,
 		};
 		await expect(syncRepo(deps(fakeClient([])), orphan)).rejects.toThrow(
 			/unknown host/,

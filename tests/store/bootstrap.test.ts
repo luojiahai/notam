@@ -3,11 +3,21 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import { ConfigSchema } from "../../src/core/config/schema.ts";
 import { applyConfig } from "../../src/store/bootstrap.ts";
 import { openDatabase } from "../../src/store/db.ts";
-import { getHost, listHosts } from "../../src/store/hosts.ts";
+import {
+	getHost,
+	listArchivedHosts,
+	listHosts,
+} from "../../src/store/hosts.ts";
 import { applyMigrations } from "../../src/store/migrations.ts";
-import { listRepos, setWatermark } from "../../src/store/repos.ts";
+import {
+	getRepo,
+	listArchivedRepos,
+	listRepos,
+	setWatermark,
+} from "../../src/store/repos.ts";
 
 const NOW = new Date("2026-08-23T09:00:00.000Z");
+const LATER = new Date("2026-09-01T12:00:00.000Z");
 
 function config(yaml: string) {
 	const parsed = ConfigSchema.safeParse(Bun.YAML.parse(yaml));
@@ -54,6 +64,44 @@ repos:
   - host: ghe
     name: acme/internal
     window_days: 90
+`;
+
+const ONE_REPO_DROPPED = `
+hosts:
+  - id: github
+    api_base: https://api.github.com
+    graphql: https://api.github.com/graphql
+    token_env: NOTAM_GITHUB_TOKEN
+  - id: ghe
+    label: Acme GHES
+    api_base: https://ghe.acme.net/api/v3
+    graphql: https://ghe.acme.net/api/graphql
+    token_env: NOTAM_GHE_TOKEN
+repos:
+  - host: github
+    name: acme/monolith
+    path_globs: ["services/payments/**"]
+`;
+
+const GITHUB_ONLY = `
+hosts:
+  - id: github
+    api_base: https://api.github.com
+    graphql: https://api.github.com/graphql
+    token_env: NOTAM_GITHUB_TOKEN
+repos:
+  - host: github
+    name: acme/monolith
+    path_globs: ["services/payments/**"]
+`;
+
+const NO_REPOS = `
+hosts:
+  - id: github
+    api_base: https://api.github.com
+    graphql: https://api.github.com/graphql
+    token_env: NOTAM_GITHUB_TOKEN
+repos: []
 `;
 
 let db: Database;
@@ -139,13 +187,48 @@ describe("applyConfig", () => {
 		expect(monoAfter?.path_globs).toEqual(["services/payments/**"]);
 	});
 
-	test("leaves rows for repos dropped from config in place", () => {
+	test("archives a repo dropped from config instead of deleting it", () => {
+		const { repos } = applyConfig(db, config(TWO_HOSTS), NOW);
+		const internal = repos.find((r) => r.name === "acme/internal");
+		if (!internal) throw new Error("missing repo");
+
+		applyConfig(db, config(ONE_REPO_DROPPED), LATER);
+
+		expect(listRepos(db).map((r) => r.name)).toEqual(["acme/monolith"]);
+		expect(listArchivedRepos(db).map((r) => r.name)).toEqual(["acme/internal"]);
+		expect(getRepo(db, internal.id)?.archived_at).toBe(LATER.toISOString());
+	});
+
+	test("restores an archived repo when it returns to config, id intact", () => {
+		const { repos } = applyConfig(db, config(TWO_HOSTS), NOW);
+		const internal = repos.find((r) => r.name === "acme/internal");
+		if (!internal) throw new Error("missing repo");
+		applyConfig(db, config(ONE_REPO_DROPPED), LATER);
+
+		applyConfig(db, config(TWO_HOSTS), LATER);
+
+		expect(listArchivedRepos(db)).toHaveLength(0);
+		const back = getRepo(db, internal.id);
+		expect(back?.archived_at).toBeNull();
+		expect(back?.name).toBe("acme/internal");
+	});
+
+	test("archives a host dropped from config, and the repos beneath it", () => {
 		applyConfig(db, config(TWO_HOSTS), NOW);
-		const trimmed = TWO_HOSTS.replace(
-			/ {2}- host: ghe\n {4}name: acme\/internal\n {4}window_days: 90\n/,
-			"",
-		);
-		applyConfig(db, config(trimmed), NOW);
-		expect(listRepos(db)).toHaveLength(2);
+
+		applyConfig(db, config(GITHUB_ONLY), LATER);
+
+		expect(listHosts(db).map((h) => h.id)).toEqual(["github"]);
+		expect(listArchivedHosts(db).map((h) => h.id)).toEqual(["ghe"]);
+		expect(listArchivedRepos(db).map((r) => r.name)).toEqual(["acme/internal"]);
+	});
+
+	test("archives every repo when config declares none", () => {
+		applyConfig(db, config(TWO_HOSTS), NOW);
+
+		applyConfig(db, config(NO_REPOS), LATER);
+
+		expect(listRepos(db)).toHaveLength(0);
+		expect(listArchivedRepos(db)).toHaveLength(2);
 	});
 });

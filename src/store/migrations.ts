@@ -136,6 +136,18 @@ ALTER TABLE rules ADD COLUMN type TEXT NOT NULL DEFAULT 'other';
 ALTER TABLE rules DROP COLUMN kind;
 `,
 	},
+	{
+		version: 5,
+		name: "host_repo_archived_at",
+		sql: `
+-- Removal is archival, never deletion. A host or repo absent from config.yaml
+-- is stamped here rather than dropped, because its entries, rules, and
+-- promotions cascade from these rows and are user data: destroying them must
+-- be an explicit act, not the consequence of editing a text file.
+ALTER TABLE hosts ADD COLUMN archived_at TEXT;
+ALTER TABLE repos ADD COLUMN archived_at TEXT;
+`,
+	},
 ];
 
 function currentVersion(db: Database): number {
