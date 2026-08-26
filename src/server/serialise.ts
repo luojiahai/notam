@@ -1,16 +1,21 @@
 import type { Database } from "bun:sqlite";
+import type { Config } from "../core/config/schema.ts";
 import { repoWebUrl } from "../core/github/urls.ts";
 import type { PromotionPlan } from "../core/promotion/index.ts";
 import { renderRuleFile, rulePath } from "../core/promotion/markdown.ts";
 import type { RefreshSummary } from "../core/promotion/refresh.ts";
 import { matchedPrefix } from "../core/sync/globs.ts";
 import type {
+	ArchivedHost,
+	ArchivedRepo,
+	ConfigDocument,
 	EntryCounts,
 	EntryDetail,
 	EntrySummary,
 	PromotionPlanView,
 	PromotionSummary,
 	RefreshSummaryView,
+	RepoCost,
 	RepoSummary,
 	RepoSync,
 	RuleCounts,
@@ -26,7 +31,11 @@ import type {
 	RepoRow,
 	RuleRow,
 } from "../shared/types.ts";
-import { countEntriesByState, listEntriesByIds } from "../store/entries.ts";
+import {
+	countEntries,
+	countEntriesByState,
+	listEntriesByIds,
+} from "../store/entries.ts";
 import type { JobStatus } from "../store/jobs.ts";
 import { listPromotions } from "../store/promotions.ts";
 import { countRulesByStatus } from "../store/rules.ts";
@@ -284,5 +293,80 @@ export function toRefreshSummaryView(
 			promotion_id: error.promotionId,
 			message: error.message,
 		})),
+	};
+}
+
+/**
+ * The config document exactly as it will be written back.
+ *
+ * Taken from the parsed config rather than the file's bytes, so what a form
+ * renders is what the schema resolved — `label` and `web_base` included, both
+ * of which may have been derived rather than typed.
+ */
+export function toConfigDocument(config: Config): ConfigDocument {
+	return {
+		hosts: config.hosts.map((host) => ({
+			id: host.id,
+			label: host.label,
+			api_base: host.api_base,
+			graphql: host.graphql,
+			web_base: host.web_base,
+			token_env: host.token_env,
+		})),
+		repos: config.repos.map((repo) => ({
+			host: repo.host,
+			name: repo.name,
+			path_globs: repo.path_globs,
+			default_branch: repo.default_branch,
+			window_days: repo.window_days,
+			...(repo.prompt_template === undefined
+				? {}
+				: { prompt_template: repo.prompt_template }),
+		})),
+		analysis: {
+			concurrency: config.analysis.concurrency,
+			timeout_seconds: config.analysis.timeout_seconds,
+			...(config.analysis.model === undefined
+				? {}
+				: { model: config.analysis.model }),
+		},
+		server: { port: config.server.port },
+	};
+}
+
+/** What archiving a repository would take with it, said out loud before it happens. */
+export function repoCost(db: Database, repoId: string): RepoCost {
+	const rules = countRulesByStatus(db, repoId);
+	return {
+		entries: countEntries(db, repoId),
+		rules: rules.draft + rules.proposed + rules.verified + rules.abandoned,
+		verified_rules: rules.verified,
+	};
+}
+
+export function toArchivedRepo(db: Database, repo: RepoRow): ArchivedRepo {
+	return {
+		id: repo.id,
+		host_id: repo.host_id,
+		name: repo.name,
+		path_globs: repo.path_globs,
+		default_branch: repo.default_branch,
+		window_days: repo.window_days,
+		prompt_template: repo.prompt_template,
+		// Non-null by construction: this is only ever called with an archived row.
+		archived_at: repo.archived_at ?? "",
+		...repoCost(db, repo.id),
+	};
+}
+
+export function toArchivedHost(host: HostRow): ArchivedHost {
+	return {
+		id: host.id,
+		label: host.label,
+		api_base: host.api_base,
+		graphql: host.graphql,
+		web_base: host.web_base,
+		token_env: host.token_env,
+		archived_at: host.archived_at ?? "",
 	};
 }

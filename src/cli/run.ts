@@ -122,7 +122,15 @@ export async function startServer(options: RunOptions): Promise<RunningServer> {
 		const now = () => new Date();
 		applyConfig(db, config, now());
 
-		ctx = createContext({ db, config, configPath, dbPath, now, env });
+		ctx = createContext({
+			db,
+			config,
+			configPath,
+			dbPath,
+			home: options.home,
+			now,
+			env,
+		});
 		for (const warning of ctx.warnings) options.log(`Warning: ${warning}`);
 
 		// Anything left `running` belongs to a process that died. Reclaiming

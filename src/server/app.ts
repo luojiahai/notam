@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppContext } from "./context.ts";
 import { errorResponse, HttpError, statusFor } from "./errors.ts";
+import { configRoutes } from "./routes/config.ts";
 import { entryRoutes } from "./routes/entries.ts";
 import { eventRoutes } from "./routes/events.ts";
 import { metaRoutes } from "./routes/meta.ts";
@@ -44,7 +45,7 @@ export function isLoopbackHost(host: string | undefined): boolean {
  * handler answers everything else.
  *
  * There is no business logic in this tree. A route resolves the context, calls
- * a function plans 1 and 2 exported, serialises, and returns.
+ * one function core/ already exports, serialises, and returns.
  */
 export function createApp(
 	ctx: AppContext,
@@ -52,6 +53,7 @@ export function createApp(
 ): Hono {
 	const api = new Hono();
 	api.route("/", metaRoutes(ctx));
+	api.route("/", configRoutes(ctx));
 	api.route("/", repoRoutes(ctx));
 	api.route("/", entryRoutes(ctx));
 	api.route("/", ruleRoutes(ctx));
