@@ -51,12 +51,19 @@ function Field({
 	children: React.ReactNode;
 }) {
 	return (
-		// biome-ignore lint/a11y/noLabelWithoutControl: the control is `children` — always an input, select, or textarea nested inside this label, which is the association. The rule cannot see through a generic child.
-		<label className="field">
-			<span className="field-label">{label}</span>
-			{children}
+		<div className="field">
+			{/*
+				The hint sits outside the label deliberately. Inside, it is read as
+				part of the control's accessible name, and every field would announce
+				itself as its label followed by a sentence of prose.
+			*/}
+			{/* biome-ignore lint/a11y/noLabelWithoutControl: the control is `children` — always an input, select, or textarea nested inside this label, which is the association. The rule cannot see through a generic child. */}
+			<label className="field-control">
+				<span className="field-label">{label}</span>
+				{children}
+			</label>
 			{hint !== undefined && <span className="field-hint">{hint}</span>}
-		</label>
+		</div>
 	);
 }
 

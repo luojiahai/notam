@@ -113,23 +113,20 @@ describe("the compiled binary", () => {
 
 	test("serves the embedded single-page app with no web/dist in sight", async () => {
 		const port = await freePort();
-		const child = Bun.spawn(
-			[binary, "run", "--port", String(port), "--no-open"],
-			{
-				// A curated environment. NOTAM_WEB_DIST is deliberately absent and the
-				// working directory is not the repository, so a pass here can only mean
-				// the assets came out of the binary itself.
-				cwd: home,
-				env: {
-					PATH: process.env.PATH ?? "",
-					HOME: home,
-					NOTAM_HOME: home,
-					NOTAM_BINARY_TEST_TOKEN: "t0ken",
-				},
-				stdout: "inherit",
-				stderr: "inherit",
+		const child = Bun.spawn([binary, "--port", String(port), "--no-open"], {
+			// A curated environment. NOTAM_WEB_DIST is deliberately absent and the
+			// working directory is not the repository, so a pass here can only mean
+			// the assets came out of the binary itself.
+			cwd: home,
+			env: {
+				PATH: process.env.PATH ?? "",
+				HOME: home,
+				NOTAM_HOME: home,
+				NOTAM_BINARY_TEST_TOKEN: "t0ken",
 			},
-		);
+			stdout: "inherit",
+			stderr: "inherit",
+		});
 		children.push(child);
 
 		const baseUrl = `http://127.0.0.1:${port}`;
@@ -171,21 +168,18 @@ describe("the compiled binary", () => {
 			await Bun.write(join(webDist, "index.html"), marker);
 
 			const port = await freePort();
-			const child = Bun.spawn(
-				[binary, "run", "--port", String(port), "--no-open"],
-				{
-					cwd: home,
-					env: {
-						PATH: process.env.PATH ?? "",
-						HOME: home,
-						NOTAM_HOME: home,
-						NOTAM_BINARY_TEST_TOKEN: "t0ken",
-						NOTAM_WEB_DIST: webDist,
-					},
-					stdout: "inherit",
-					stderr: "inherit",
+			const child = Bun.spawn([binary, "--port", String(port), "--no-open"], {
+				cwd: home,
+				env: {
+					PATH: process.env.PATH ?? "",
+					HOME: home,
+					NOTAM_HOME: home,
+					NOTAM_BINARY_TEST_TOKEN: "t0ken",
+					NOTAM_WEB_DIST: webDist,
 				},
-			);
+				stdout: "inherit",
+				stderr: "inherit",
+			});
 			children.push(child);
 
 			const baseUrl = `http://127.0.0.1:${port}`;

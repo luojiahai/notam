@@ -1642,10 +1642,14 @@ a.quote-author:hover {
  * a two-column form would put a label and its input on different reading lines
  * the moment either of them wraps.
  */
-.field {
+.field,
+.field-control {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem;
+}
+
+.field {
 	margin-bottom: 0.75rem;
 }
 

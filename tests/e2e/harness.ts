@@ -38,15 +38,19 @@ async function waitForServer(url: string): Promise<void> {
  * and child process, which is why the Playwright config runs one worker.
  */
 export async function startHarness(
-	options: { hangingAnalyser?: boolean } = {},
+	options: { hangingAnalyser?: boolean; bare?: boolean } = {},
 ): Promise<Harness> {
 	const stub = await startGitHubStub();
 	const home = mkdtempSync(join(tmpdir(), "notam-e2e-"));
 
-	execFileSync("bun", ["run", "tests/e2e/seed.ts", home, stub.url], {
-		cwd: root,
-		stdio: "inherit",
-	});
+	// `bare` leaves the home empty so the server writes its own config, which is
+	// the state a first run actually starts from.
+	if (options.bare !== true) {
+		execFileSync("bun", ["run", "tests/e2e/seed.ts", home, stub.url], {
+			cwd: root,
+			stdio: "inherit",
+		});
+	}
 
 	// A bin directory holding only our fake `claude`, placed first on PATH.
 	const bin = join(home, "bin");
@@ -61,7 +65,7 @@ export async function startHarness(
 	const baseUrl = `http://127.0.0.1:${port}`;
 	let child: ChildProcess | undefined = spawn(
 		"bun",
-		["run", "src/cli/index.ts", "run", "--port", String(port), "--no-open"],
+		["run", "src/cli/index.ts", "--port", String(port), "--no-open"],
 		{
 			cwd: root,
 			stdio: "inherit",
