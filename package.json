@@ -1,6 +1,6 @@
 {
 	"name": "notam",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"description": "Notes On Team Agreements & Methods — collect the agreements buried in merged pull request reviews and promote them into rules your coding agents read",
 	"license": "MIT",
 	"repository": {
