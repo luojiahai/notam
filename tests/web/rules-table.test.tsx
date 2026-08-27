@@ -237,7 +237,7 @@ describe("RulesTable", () => {
 		expect(screen.getByText("draft cannot become verified")).toBeDefined();
 	});
 
-	test("clicking the directive opens the drawer", async () => {
+	test("clicking the directive opens the panel", async () => {
 		const calls = draw();
 		await userEvent.click(
 			screen.getByRole("button", {

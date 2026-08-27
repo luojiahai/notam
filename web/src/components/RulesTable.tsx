@@ -6,6 +6,7 @@ import type {
 } from "../../../src/shared/api.ts";
 import { useSelection } from "../state/selection.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
+import { Confidence } from "./Confidence.tsx";
 import { type Chip, FilterChips } from "./FilterChips.tsx";
 import { TableEmpty, TableSkeleton } from "./TableState.tsx";
 
@@ -135,7 +136,7 @@ export function RulesTable(props: RulesTableProps) {
 				</div>
 			</div>
 
-			<div className="table-wrap">
+			<div className="table-wrap" aria-busy={props.loading}>
 				{props.loading ? (
 					<TableSkeleton />
 				) : props.rules.length === 0 ? (
@@ -200,7 +201,9 @@ export function RulesTable(props: RulesTableProps) {
 											? "whole repository"
 											: rule.scope_globs.join(", ")}
 									</td>
-									<td className="num">{rule.confidence.toFixed(2)}</td>
+									<td className="num">
+										<Confidence value={rule.confidence} />
+									</td>
 									<td className="mono">
 										<a href={rule.source_url} target="_blank" rel="noreferrer">
 											#{rule.source_number}

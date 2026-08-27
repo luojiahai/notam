@@ -21,7 +21,7 @@ import {
 	restoreHost,
 	restoreRepo,
 } from "../lib/config.ts";
-import { useDismissOnEscape } from "../lib/dismiss.ts";
+import { useModalSurface } from "../lib/modal.ts";
 import {
 	ArchivedPane,
 	costLabel,
@@ -264,30 +264,38 @@ export function SettingsForm({
 /**
  * The window itself.
  *
- * `Dialog` is not reused: it is a confirmation, with a Cancel and a Confirm
- * that name one decision, and this is an editor with Save and Discard and no
- * decision to name. It borrows that dialog's backdrop and surface and nothing
- * else. Escape closes it; the backdrop does not, because a stray click beside
- * a form holding unsaved edits should not be able to throw them away.
+ * `Panel` is not reused: it scrolls its whole body, and this window's rail and
+ * pane scroll independently beneath a head and a foot that do not. It is the
+ * same surface and the same behaviour, laid out differently — including the
+ * backdrop, which dismisses here exactly as it does everywhere else. A window
+ * that is the only one in the app not to close where the others do is a window
+ * the reader has to remember a rule about.
+ *
+ * Nothing is lost by closing: this form stages the whole document and reaches
+ * the file only on Save, and the window reads the config fresh every time it
+ * opens. The press and the release both have to land outside, so dragging a
+ * selection out of a field does not count as leaving.
  */
 
-function SettingsWindow({
+export function SettingsWindow({
 	onClose,
 	children,
 }: {
 	onClose: () => void;
 	children: React.ReactNode;
 }) {
-	useDismissOnEscape(onClose);
+	const { surface, backdrop } = useModalSurface(onClose);
 	return (
-		<div className="dialog-backdrop">
+		<div className="overlay" {...backdrop}>
 			<div
-				className="dialog settings-modal"
+				className="window settings-modal"
 				role="dialog"
 				aria-modal="true"
 				aria-label="Settings"
+				ref={surface}
+				tabIndex={-1}
 			>
-				<div className="settings-head">
+				<div className="window-head">
 					<h2>Settings</h2>
 					<button
 						type="button"

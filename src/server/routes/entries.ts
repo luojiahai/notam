@@ -62,7 +62,7 @@ export function entryRoutes(ctx: AppContext): Hono {
 	});
 
 	/**
-	 * The row action, the drawer action, and the multi-select bulk action are
+	 * The row action, the panel action, and the multi-select bulk action are
 	 * all this one call: all three enqueue one job per entry, and giving them
 	 * one endpoint is what keeps that true.
 	 */

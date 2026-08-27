@@ -3,150 +3,180 @@
  *
  * Hand-authored CSS, no framework. This app ships inside the `notam` binary,
  * so every kilobyte of stylesheet and every dependency is weight a user has to
- * download to run a local tool. A token layer plus one plain
- * stylesheet buys the same discipline a utility framework would, without the
- * dependency.
+ * download to run a local tool. A token layer plus one plain stylesheet buys
+ * the same discipline a utility framework would, without the dependency.
  *
- * The design is dense on purpose: this is a triage surface. You scan hundreds
- * of pull requests and rules, so rows are separated by hairlines rather than
- * boxed into cards, numbers are tabular monospace so columns compare by eye,
- * and colour is reserved for meaning — do/don't, status, failure — never for
- * decoration. The only chrome that carries an accent is the thing you can act
+ * The interface is a console. It is a local tool, driven from a terminal, that
+ * reads and writes files a terminal shows you — so it is set in one monospaced
+ * family end to end, on a visible grid, with square corners and micro-labels
+ * in tracked capitals. The density that follows is the point: this is a triage
+ * surface, and you scan hundreds of pull requests and rules on it.
+ *
+ * Colour is reserved for meaning — do/don't, status, failure — never for
+ * decoration. The only chrome that carries the accent is the thing you can act
  * on: a link, a focus ring, a selected filter, the primary button.
  */
 
 /* ---------------------------------------------------------------- tokens -- */
 
 /*
- * Light is the base, and the two dark blocks below restate the same token
- * names. `:root:not([data-theme="light"])` under the media query lets the OS
- * preference win by default while an explicit choice still overrides it; the
- * `[data-theme="dark"]` block lets the toggle force dark on a light OS. Every
- * pair below was checked against WCAG: body text clears AAA in both modes,
- * every muted, accent, and semantic ink clears AA on every surface it lands on.
+ * Dark is where this design was drawn and light is its considered second, but
+ * the machine still decides: light is the base below, and the two dark blocks
+ * restate the same token names. `:root:not([data-theme="light"])` under the
+ * media query lets the OS preference win by default while an explicit choice
+ * still overrides it; the `[data-theme="dark"]` block lets the toggle force
+ * dark on a light OS. Every pair below was checked against WCAG: body text
+ * clears AAA in both modes, every muted, accent, and semantic ink clears AA on
+ * every surface it lands on.
  */
 :root {
 	color-scheme: light;
 
-	--bg: #fbfbfc;
-	--bg-sunken: #f2f2f5;
-	--surface: #fdfdfe;
+	/* Paper rather than white: a screen of hairlines needs a ground to sit on. */
+	--bg: #edede9;
+	--bg-sunken: #e3e3de;
+	--surface: #f6f6f3;
 	--surface-raised: #ffffff;
 
-	--border: #e3e3e8;
-	--border-strong: #cfcfd8;
+	--border: #d2d2cc;
+	--border-strong: #a9a9a2;
 
-	--text: #17171c;
-	--text-muted: #5c5c68;
-	--text-faint: #7d7d8a;
+	--text: #101215;
+	--text-muted: #4b5157;
+	--text-faint: #63696f;
 
 	/*
-	 * Teal, deliberately cyan-leaning. `--ok` is green (hue ~146) and carries
-	 * the verified pill, which sits in the same row as an accent-tinted one, so
-	 * a conventional teal would blur the distinction the status column exists to
-	 * make. These sit roughly 40 degrees away from it in both modes.
+	 * Amber. `--ok` is green (hue ~145) and `--alert` red (~0), which is the
+	 * separation the status column exists to make.
 	 */
-	--accent: #065f6d;
+	--accent: #8a4f06;
 
-	--ok: #0e7038;
-	--alert: #b81e1e;
-	--warn: #8a5300;
+	--ok: #0e6b38;
+	--alert: #b02020;
+	/*
+	 * The accent's own hue, deliberately. Attention and interaction are one
+	 * signal level in this app, and every surface that takes `--warn` is a
+	 * bordered notice, a banner, or a glyph with its sentence beside it —
+	 * never a bare tint sharing a column with something accented, which is
+	 * the only place the two could be confused.
+	 */
+	--warn: #8a4f06;
 
-	--ink-fill: #1c1c22;
-	--ink-fill-hover: #2e2e38;
-	--ink-fill-ink: #fbfbfc;
+	--ink-fill: #101215;
+	--ink-fill-hover: #262a30;
+	--ink-fill-ink: #edede9;
+
+	/*
+	 * The header band and the status line, which are never data. They hold the
+	 * dark ink in both themes, so the boundary between the tool and what the
+	 * tool is showing you needs no rule to be legible.
+	 */
+	--chrome-bg: #101215;
+	--chrome-text: #e6e8ea;
+	--chrome-muted: #969ea6;
+	--chrome-border: #2b3037;
 
 	/* Tint strength for semantic chip fills; dark needs more to read at all. */
 	--tint: 12%;
-	--tint-row: 5%;
+	--tint-row: 6%;
 	--tint-banner: 10%;
 
-	--shadow-drawer: -1px 0 0 var(--border), -16px 0 40px rgb(20 20 30 / 0.1);
-	--shadow-dialog: 0 1px 0 var(--border), 0 24px 60px rgb(20 20 30 / 0.18);
-	--shadow-pop: 0 8px 24px rgb(20 20 30 / 0.14);
-	--scrim: rgb(20 20 30 / 0.32);
+	--shadow-dialog:
+		0 0 0 1px var(--border-strong), 0 24px 60px rgb(16 18 21 / 0.28);
+	--shadow-pop: 0 0 0 1px var(--border-strong), 0 8px 24px rgb(16 18 21 / 0.2);
+	--scrim: rgb(16 18 21 / 0.42);
 }
 
 @media (prefers-color-scheme: dark) {
 	:root:not([data-theme="light"]) {
 		color-scheme: dark;
 
-		--bg: #101114;
-		--bg-sunken: #0a0b0d;
-		--surface: #191a1f;
-		--surface-raised: #20222a;
+		--bg: #0c0d0f;
+		--bg-sunken: #08090a;
+		--surface: #131519;
+		--surface-raised: #1a1d22;
 
-		--border: #282a32;
-		--border-strong: #3c3e49;
+		--border: #22262c;
+		--border-strong: #383d45;
 
-		--text: #e9e9ef;
-		--text-muted: #9d9daa;
-		--text-faint: #7b7b88;
+		--text: #dfe3e7;
+		--text-muted: #98a1a9;
+		--text-faint: #7d858d;
 
-		--accent: #54cbdd;
+		--accent: #e09a45;
 
-		--ok: #4fc98b;
-		--alert: #ff8080;
-		--warn: #e0a33c;
+		--ok: #5cbd82;
+		--alert: #ec7878;
+		--warn: #e09a45;
 
-		--ink-fill: #e9e9ef;
-		--ink-fill-hover: #ffffff;
-		--ink-fill-ink: #101114;
+		/* The one filled control on a screen takes the accent, not the ink. */
+		--ink-fill: #e09a45;
+		--ink-fill-hover: #eeab5c;
+		--ink-fill-ink: #14100a;
 
-		--tint: 16%;
-		--tint-row: 7%;
-		--tint-banner: 14%;
+		--chrome-bg: #08090a;
+		--chrome-text: #dfe3e7;
+		--chrome-muted: #8b939a;
+		--chrome-border: #22262c;
 
-		--shadow-drawer: -1px 0 0 var(--border), -16px 0 40px rgb(0 0 0 / 0.5);
-		--shadow-dialog: 0 0 0 1px var(--border), 0 24px 60px rgb(0 0 0 / 0.6);
-		--shadow-pop: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.5);
-		--scrim: rgb(0 0 0 / 0.6);
+		--tint: 18%;
+		--tint-row: 8%;
+		--tint-banner: 15%;
+
+		--shadow-dialog:
+			0 0 0 1px var(--border-strong), 0 24px 60px rgb(0 0 0 / 0.7);
+		--shadow-pop: 0 0 0 1px var(--border-strong), 0 8px 24px rgb(0 0 0 / 0.6);
+		--scrim: rgb(0 0 0 / 0.66);
 	}
 }
 
 :root[data-theme="dark"] {
 	color-scheme: dark;
 
-	--bg: #101114;
-	--bg-sunken: #0a0b0d;
-	--surface: #191a1f;
-	--surface-raised: #20222a;
+	--bg: #0c0d0f;
+	--bg-sunken: #08090a;
+	--surface: #131519;
+	--surface-raised: #1a1d22;
 
-	--border: #282a32;
-	--border-strong: #3c3e49;
+	--border: #22262c;
+	--border-strong: #383d45;
 
-	--text: #e9e9ef;
-	--text-muted: #9d9daa;
-	--text-faint: #7b7b88;
+	--text: #dfe3e7;
+	--text-muted: #98a1a9;
+	--text-faint: #7d858d;
 
-	--accent: #54cbdd;
+	--accent: #e09a45;
 
-	--ok: #4fc98b;
-	--alert: #ff8080;
-	--warn: #e0a33c;
+	--ok: #5cbd82;
+	--alert: #ec7878;
+	--warn: #e09a45;
 
-	--ink-fill: #e9e9ef;
-	--ink-fill-hover: #ffffff;
-	--ink-fill-ink: #101114;
+	--ink-fill: #e09a45;
+	--ink-fill-hover: #eeab5c;
+	--ink-fill-ink: #14100a;
 
-	--tint: 16%;
-	--tint-row: 7%;
-	--tint-banner: 14%;
+	--chrome-bg: #08090a;
+	--chrome-text: #dfe3e7;
+	--chrome-muted: #8b939a;
+	--chrome-border: #22262c;
 
-	--shadow-drawer: -1px 0 0 var(--border), -16px 0 40px rgb(0 0 0 / 0.5);
-	--shadow-dialog: 0 0 0 1px var(--border), 0 24px 60px rgb(0 0 0 / 0.6);
-	--shadow-pop: 0 0 0 1px var(--border), 0 8px 24px rgb(0 0 0 / 0.5);
-	--scrim: rgb(0 0 0 / 0.6);
+	--tint: 18%;
+	--tint-row: 8%;
+	--tint-banner: 15%;
+
+	--shadow-dialog: 0 0 0 1px var(--border-strong), 0 24px 60px rgb(0 0 0 / 0.7);
+	--shadow-pop: 0 0 0 1px var(--border-strong), 0 8px 24px rgb(0 0 0 / 0.6);
+	--scrim: rgb(0 0 0 / 0.66);
 }
 
 :root {
 	/*
-	 * One radius scale, applied by role and never mixed within a role:
-	 * 4px for inline marks, 6px for controls, 10px for floating surfaces.
+	 * No radius, anywhere, on anything rectangular. A console has corners. The
+	 * token exists so the rule is stated once rather than as a zero repeated
+	 * through the file; the pills that are genuinely round say `999px` at the
+	 * point of use, because their shape is what distinguishes them from a tag.
 	 */
-	--r-sm: 4px;
-	--r: 6px;
-	--r-lg: 10px;
+	--r: 0px;
 
 	--h-control: 1.75rem;
 	--gutter: 0.875rem;
@@ -172,14 +202,13 @@
 	);
 
 	/*
-	 * System fonts, deliberately. A webfont would have to be embedded in the
-	 * binary and would block first paint on a tool whose whole point is that it
-	 * starts instantly and works offline.
+	 * One family, and it is the system's own monospace. A webfont would have to
+	 * be embedded in the binary and would block first paint on a tool whose
+	 * whole point is that it starts instantly and works offline — and the face
+	 * a reader already reads code in is the right one for a screen of paths,
+	 * globs, identifiers and counts.
 	 */
 	--font:
-		ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-		"Helvetica Neue", Arial, sans-serif;
-	--font-mono:
 		ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
 		monospace;
 }
@@ -227,6 +256,11 @@ body {
 	margin: 0;
 	background: var(--bg);
 	color: var(--text);
+	/*
+	 * Set once and inherited everywhere. There is no second family to switch
+	 * to: `code`, a path, a count and a heading are all the same face here, so
+	 * the rules below carry size, weight and tracking and nothing else.
+	 */
 	font-family: var(--font);
 	font-size: 0.8125rem;
 	line-height: 1.5;
@@ -236,9 +270,9 @@ body {
 h1,
 h2,
 h3 {
-	font-weight: 600;
+	font-weight: 700;
 	line-height: 1.3;
-	letter-spacing: -0.01em;
+	letter-spacing: 0;
 }
 
 p {
@@ -255,16 +289,14 @@ a:hover {
 }
 
 code {
-	font-family: var(--font-mono);
 	font-size: 0.92em;
 	background: var(--bg-sunken);
 	border: 1px solid var(--border);
-	border-radius: var(--r-sm);
+	border-radius: var(--r);
 	padding: 0.05em 0.3em;
 }
 
 pre {
-	font-family: var(--font-mono);
 	font-size: 0.75rem;
 	line-height: 1.55;
 	background: var(--bg-sunken);
@@ -285,7 +317,7 @@ pre code {
 :focus-visible {
 	outline: 2px solid var(--accent);
 	outline-offset: 2px;
-	border-radius: var(--r-sm);
+	border-radius: var(--r);
 }
 
 ::selection {
@@ -315,6 +347,7 @@ input[type="checkbox"] {
 button {
 	font: inherit;
 	font-weight: 500;
+	letter-spacing: 0.02em;
 	/* Flex so a Lucide icon and its label sit on one baseline. A label-only
 	   button has one anonymous flex item, so the gap costs it nothing. */
 	display: inline-flex;
@@ -384,7 +417,7 @@ button:disabled {
 	justify-content: flex-start;
 	background: none;
 	border: 0;
-	border-radius: var(--r-sm);
+	border-radius: var(--r);
 	padding: 0;
 	min-height: 0;
 	color: inherit;
@@ -439,6 +472,7 @@ button:disabled {
 	min-height: 0;
 	padding: 0;
 	color: var(--text-muted);
+	border-radius: 0;
 }
 /* Smaller than the `em`-derived default: this button has no label to match. */
 .btn-icon .icon {
@@ -460,6 +494,21 @@ a.btn-icon {
 }
 .btn-icon:hover:not(:disabled) {
 	color: var(--text);
+}
+
+/* The pair in the header band sit on chrome ink, not on the workspace's. */
+.header .btn-icon {
+	color: var(--chrome-muted);
+	background: none;
+	border-color: transparent;
+}
+.header .btn-icon:hover:not(:disabled) {
+	color: var(--chrome-text);
+	background: color-mix(in srgb, var(--chrome-text) 12%, transparent);
+	border-color: transparent;
+}
+.header .btn-icon:focus-visible {
+	outline-color: var(--chrome-text);
 }
 /* A refresh that gives no sign of running reads as a button that did nothing. */
 button[data-busy="true"] .icon {
@@ -502,40 +551,44 @@ input[type="search"]::-webkit-search-cancel-button {
 
 .shell {
 	display: grid;
-	grid-template-rows: auto auto 1fr;
+	/* Header, banners, body, status line. */
+	grid-template-rows: auto auto 1fr auto;
 	height: 100dvh;
 	overflow: hidden;
 }
 
+/*
+ * The header band and the status line below bracket the app in chrome ink,
+ * which is the same in both themes. Everything between them is data, and the
+ * two bands are what say so without a caption.
+ */
 .header {
 	display: flex;
 	align-items: center;
 	gap: 0.75rem;
-	height: 3rem;
+	height: 2.5rem;
 	padding: 0 var(--gutter);
-	background: var(--bg);
-	border-bottom: 1px solid var(--border);
+	background: var(--chrome-bg);
+	color: var(--chrome-text);
+	border-bottom: 1px solid var(--chrome-border);
 }
 
 .brand {
-	font-family: var(--font-mono);
 	font-size: 0.75rem;
 	font-weight: 700;
-	letter-spacing: 0.14em;
+	letter-spacing: 0.3em;
 	margin: 0;
-	color: var(--text);
+	color: var(--chrome-text);
 }
 
 /*
- * The wordmark spelled out. It sits below the brand and above the version in
- * the header's three-level hierarchy, so it takes `--text-muted` rather than
- * the `--text-faint` the version string owns. No letter-spacing: 0.14em over
- * thirty-four characters costs width the row does not have.
+ * The wordmark spelled out, in lower case: the mark above it is the one thing
+ * on this band shouting, and repeating the capitals would flatten the two into
+ * a single run of them.
  */
 .brand-expansion {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
-	color: var(--text-muted);
+	color: var(--chrome-muted);
 	white-space: nowrap;
 }
 
@@ -544,46 +597,82 @@ input[type="search"]::-webkit-search-cancel-button {
 	min-width: 0;
 }
 
-.version {
-	font-family: var(--font-mono);
+/*
+ * Where this process is and which build it is. Both answer "which NOTAM am I
+ * talking to", which is the question you ask when two are open.
+ */
+.statusline {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.1875rem var(--gutter);
+	background: var(--chrome-bg);
+	color: var(--chrome-muted);
+	border-top: 1px solid var(--chrome-border);
 	font-size: 0.6875rem;
-	color: var(--text-faint);
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 	white-space: nowrap;
+	overflow: hidden;
+}
+.statusline-addr {
+	color: var(--chrome-text);
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+.statusline-warn {
+	color: var(--warn);
+}
+
+/*
+ * Off-screen but in the accessibility tree. Used where a glyph carries meaning
+ * a tooltip alone would keep from a screen reader or a touch device.
+ */
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+	border: 0;
 }
 
 /* Segmented theme control: text labels, because it shows a state, not an action. */
 .segmented {
 	display: inline-flex;
-	background: var(--bg-sunken);
-	border: 1px solid var(--border);
+	border: 1px solid var(--chrome-border);
 	border-radius: var(--r);
-	padding: 2px;
-	gap: 2px;
 }
 .segmented button {
 	min-height: 1.375rem;
 	padding: 0 0.5rem;
-	font-size: 0.6875rem;
+	font-size: 0.625rem;
 	font-weight: 500;
-	color: var(--text-muted);
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--chrome-muted);
 	background: none;
 	border: 0;
-	border-radius: 4px;
+	border-radius: 0;
 }
 .segmented button:hover:not(:disabled) {
 	background: none;
-	color: var(--text);
+	color: var(--chrome-text);
 	border: 0;
 }
 .segmented button[aria-pressed="true"] {
-	color: var(--text);
-	background: var(--surface-raised);
-	box-shadow: 0 1px 2px rgb(20 20 30 / 0.12);
-	font-weight: 600;
+	color: var(--chrome-bg);
+	background: var(--chrome-text);
+	font-weight: 700;
 }
-:root[data-theme="dark"] .segmented button[aria-pressed="true"],
-.segmented button[aria-pressed="true"] {
-	transition: none;
+.segmented button:active:not(:disabled) {
+	transform: none;
+}
+.segmented button:focus-visible {
+	outline-offset: -2px;
 }
 
 /* --------------------------------------------------------------- banners -- */
@@ -608,7 +697,6 @@ input[type="search"]::-webkit-search-cancel-button {
 	background: color-mix(in srgb, var(--warn) var(--tint-banner), var(--bg));
 }
 .banner-label {
-	font-family: var(--font-mono);
 	font-size: 0.625rem;
 	font-weight: 700;
 	letter-spacing: 0.1em;
@@ -697,7 +785,6 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .repo-bar-meta {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
 	color: var(--text-muted);
 	white-space: nowrap;
@@ -773,10 +860,9 @@ input[type="search"]::-webkit-search-cancel-button {
 	content: "";
 	position: absolute;
 	left: 0;
-	top: 0.375rem;
-	bottom: 0.375rem;
-	width: 2px;
-	border-radius: 2px;
+	top: 0;
+	bottom: 0;
+	width: 3px;
 	background: var(--accent);
 }
 .repo-name {
@@ -794,7 +880,6 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 .repo-meta {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
 	font-variant-numeric: tabular-nums;
 	color: var(--text-muted);
@@ -875,40 +960,70 @@ input[type="search"]::-webkit-search-cancel-button {
 	background: var(--bg);
 }
 
-/* Underline tabs: one line of chrome instead of a folder-tab background. */
+/*
+ * Folder tabs, drawn as a console draws them: the live one is a raised surface
+ * with the run's rule broken under it, so the panel below reads as the inside
+ * of that tab rather than a region that happens to follow it.
+ */
 .tabs {
 	display: flex;
-	gap: 0.25rem;
+	gap: 0;
 	padding: 0 var(--gutter);
-	border-bottom: 1px solid var(--border);
+	border-bottom: 1px solid var(--border-strong);
 	flex: none;
 }
 .tabs button {
 	background: none;
-	border: 0;
+	border: 1px solid transparent;
+	border-bottom: 0;
 	border-radius: 0;
-	min-height: 2.25rem;
-	padding: 0 0.5rem;
+	min-height: 2rem;
+	/* Sits over the run's own rule, which the live tab then paints out. */
+	margin-bottom: -1px;
+	padding: 0 0.75rem;
 	color: var(--text-muted);
-	font-weight: 500;
-	box-shadow: inset 0 -2px 0 transparent;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
 }
 .tabs button:hover:not(:disabled) {
 	background: none;
-	border: 0;
+	border-color: transparent;
+	border-bottom: 0;
 	color: var(--text);
 }
 .tabs button:active:not(:disabled) {
 	transform: none;
 }
 .tabs button[aria-selected="true"] {
-	color: var(--text);
-	font-weight: 600;
-	box-shadow: inset 0 -2px 0 var(--accent);
+	color: var(--accent);
+	background: var(--surface);
+	border-color: var(--border-strong);
+	border-bottom: 1px solid var(--surface);
+	/* The tab's own top edge. In dark the surface and the ground sit close
+	   enough that the box alone does not carry which one is live. */
+	box-shadow: inset 0 2px 0 var(--accent);
 }
 .tabs button:focus-visible {
 	outline-offset: -2px;
-	border-radius: var(--r-sm);
+}
+
+/*
+ * The panel the run controls. It owns the column layout the tab contents lay
+ * themselves out in — a toolbar that does not scroll over a table that does.
+ */
+.workspace {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+	background: var(--surface);
+}
+.workspace:focus-visible {
+	outline-offset: -2px;
 }
 
 .toolbar {
@@ -927,13 +1042,16 @@ input[type="search"]::-webkit-search-cancel-button {
 	flex-wrap: wrap;
 }
 .chips button {
-	border-radius: 999px;
+	border-radius: 0;
 	background: none;
-	border: 1px solid var(--border-strong);
+	border: 1px solid var(--border);
 	color: var(--text-muted);
 	min-height: var(--h-control);
-	padding: 0 0.625rem;
+	padding: 0 0.5rem;
+	font-size: 0.6875rem;
 	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
 .chips button:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--text) 6%, transparent);
@@ -944,10 +1062,9 @@ input[type="search"]::-webkit-search-cancel-button {
 	color: var(--accent);
 	border-color: var(--accent);
 	background: color-mix(in srgb, var(--accent) var(--tint), var(--bg));
-	font-weight: 600;
+	font-weight: 700;
 }
 .chip-count {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
 	font-variant-numeric: tabular-nums;
 	opacity: 0.75;
@@ -1009,7 +1126,6 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 /* Numeric and identifier columns share one treatment so they scan as a block. */
 .num,
 .mono {
-	font-family: var(--font-mono);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
@@ -1040,93 +1156,145 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 }
 
 .truncated {
+	display: inline-flex;
+	align-items: center;
 	color: var(--warn);
 	cursor: help;
+	margin-left: 0.25rem;
+	vertical-align: -0.15em;
+}
+
+/*
+ * The bar sits before the digits and the whole cell stays right-aligned, so a
+ * column of them reads as one ruler with the numbers stacked at its end.
+ */
+.confidence {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+}
+.confidence-meter {
+	display: block;
+	width: 2.75rem;
+	height: 3px;
+	background: color-mix(in srgb, var(--text) 14%, transparent);
+	flex: none;
+}
+.confidence-meter > span {
+	display: block;
+	height: 100%;
+	background: var(--accent);
+}
+.confidence-meter[data-weak="true"] > span {
+	background: var(--text-faint);
+}
+.meta-confidence {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
 }
 
 /* ---------------------------------------------------------------- badges -- */
 
+/*
+ * A rule's type: a bracketed tag in tracked capitals, outlined rather than
+ * filled. In a table of a hundred rules the type column is scanned down, not
+ * read, and one treatment serves every value on purpose — a tint per type
+ * would turn that column into confetti and would eat the hue separation the
+ * accent depends on.
+ */
 .badge {
 	display: inline-block;
-	border-radius: var(--r-sm);
+	border: 1px solid var(--border-strong);
+	border-radius: 0;
 	padding: 0 0.3125rem;
-	font-family: var(--font-mono);
 	font-size: 0.625rem;
-	font-weight: 700;
-	letter-spacing: 0.04em;
-	line-height: 1.4rem;
-	white-space: nowrap;
-	color: var(--text-muted);
-	background: color-mix(in srgb, var(--text) 8%, transparent);
-}
-/*
- * Status is a different axis from type, so it gets a different shape: a pill
- * with a hairline rather than a filled tag. Draft is deliberately the quietest
- * — most rules are drafts, and colouring the common case colours everything.
- */
-.status {
-	display: inline-block;
-	border-radius: 999px;
-	padding: 0 0.4375rem;
-	font-size: 0.6875rem;
-	font-weight: 500;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
 	line-height: 1.25rem;
 	white-space: nowrap;
 	color: var(--text-muted);
-	border: 1px solid var(--border-strong);
+}
+
+/*
+ * Status is a different axis from type, so it takes a different form: a
+ * bracketed token with no box at all, the way a log line reports state. Draft
+ * and open are deliberately the quietest — most rules are drafts, and
+ * colouring the common case colours everything.
+ */
+.status {
+	display: inline-block;
+	padding: 0;
+	border: 0;
+	background: none;
+	font-size: 0.6875rem;
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	line-height: 1.25rem;
+	white-space: nowrap;
+	color: var(--text-muted);
 	/*
 	 * Presentation only. The DOM keeps the raw enum value (`draft`, `merged`),
 	 * which is what the API returns and what tests assert on.
 	 */
-	text-transform: capitalize;
+	text-transform: uppercase;
+}
+.status::before {
+	content: "[";
+	color: var(--text-faint);
+}
+.status::after {
+	content: "]";
+	color: var(--text-faint);
 }
 /*
- * Proposed is outlined, verified is filled. Teal and the do-green sit ~40 deg
- * apart, which is enough to tell apart in isolation but not enough when the two
- * pills land in adjacent rows of the same column. Weight carries the difference
- * that hue alone should not have to: in flight reads lighter than settled.
+ * Weight carries what hue alone should not have to: in flight reads lighter
+ * than settled, so a proposed and a verified pill are told apart by a reader
+ * who sees neither colour.
  */
 .status-proposed {
 	color: var(--accent);
-	border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-	background: none;
 }
 .status-verified {
 	color: var(--ok);
-	border-color: color-mix(in srgb, var(--ok) 45%, transparent);
-	background: color-mix(in srgb, var(--ok) var(--tint), var(--bg));
+	font-weight: 700;
 }
 .status-abandoned {
 	color: var(--text-faint);
-	border-color: var(--border);
-	background: none;
 }
 .status-merged {
 	color: var(--ok);
-	border-color: color-mix(in srgb, var(--ok) 45%, transparent);
-	background: color-mix(in srgb, var(--ok) var(--tint), var(--bg));
+	font-weight: 700;
 }
 .status-closed,
 .status-failed {
 	color: var(--alert);
-	border-color: color-mix(in srgb, var(--alert) 45%, transparent);
-	background: color-mix(in srgb, var(--alert) var(--tint), var(--bg));
+	font-weight: 700;
 }
 
 /*
- * The pill as a button. It keeps its pill shape rather than taking a control's:
- * the height every other button gets would leave it taller than the pills
- * beside it in the same column, and the raised-surface hover would drop a
- * Failed pill to neutral grey at exactly the moment it is pointed at. Hover
- * deepens the pill's own colour instead, which is why the selector doubles the
- * class — `button:hover` outranks a single one.
+ * The token as a button. It keeps its own shape rather than taking a control's:
+ * the height every other button gets would leave it taller than the tokens
+ * beside it in the same column, and a raised-surface hover would drop a Failed
+ * token to neutral at exactly the moment it is pointed at. Hover underlines
+ * instead, which is why the selector doubles the class — `button:hover`
+ * outranks a single one.
  */
 .status-button {
 	min-height: 0;
+	padding: 0;
+	border: 0;
+	background: none;
 }
 .status.status-button:hover {
-	border-color: color-mix(in srgb, currentcolor 70%, transparent);
-	background: color-mix(in srgb, currentcolor 22%, var(--bg));
+	background: none;
+	border: 0;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+.status.status-button:active:not(:disabled) {
+	transform: none;
 }
 
 /* --------------------------------------------------- selection controls -- */
@@ -1158,7 +1326,6 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	max-width: 22rem;
 }
 .bulk-progress {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
 	font-variant-numeric: tabular-nums;
 	color: var(--text-muted);
@@ -1238,61 +1405,109 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	}
 }
 
-/* --------------------------------------------------------- drawer/dialog -- */
+/* --------------------------------------------------------------- overlay -- */
 
-.scrim {
+/*
+ * One overlay shape for the whole app: a centred window over a scrim.
+ *
+ * A panel and a dialog differ only in what fills the foot. Two geometries in
+ * one app — a window in the middle and a surface pinned to an edge — read as
+ * one of them having missed, and the reader has no way to tell which was
+ * meant.
+ */
+.overlay {
 	position: fixed;
 	inset: 0;
+	z-index: 30;
 	background: var(--scrim);
-	z-index: 20;
+	display: flex;
+	/*
+	 * Scrolls, and the window is centred by `margin: auto` rather than by
+	 * `align-items`/`place-items`. Centring alignment distributes an oversized
+	 * item's overflow to both sides, and the half that goes past the scroll
+	 * origin cannot be reached by any scrollbar — so a window taller or wider
+	 * than the viewport loses its own title bar. Auto margins centre the same
+	 * way while collapsing to zero on the overflowing side, which keeps the
+	 * whole surface reachable.
+	 */
+	overflow: auto;
+	padding: 1.5rem;
 	animation: fade-in 0.14s ease;
 }
-
-.drawer {
-	position: fixed;
-	inset: 0 0 0 auto;
-	z-index: 21;
-	width: min(38rem, 100vw);
+.window {
+	margin: auto;
+	background: var(--surface);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--r);
+	box-shadow: var(--shadow-dialog);
+	width: min(48rem, 100%);
+	/*
+	 * Both caps are hard. A flex column will otherwise grow past a set height
+	 * to fit children that cannot shrink, and a child with a long unbreakable
+	 * string will otherwise push the window past `width` — either of which
+	 * puts an edge of it outside the viewport, which is what a reader sees as
+	 * a window that failed to centre.
+	 */
+	max-width: 100%;
+	max-height: 100%;
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	background: var(--surface);
-	box-shadow: var(--shadow-drawer);
-	animation: slide-in 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+	animation: dialog-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.drawer-head {
+/* The surface takes focus itself when it holds nothing focusable yet. */
+.window:focus-visible {
+	outline-offset: -3px;
+}
+.window-head {
 	display: flex;
 	align-items: flex-start;
 	gap: 0.75rem;
-	padding: 0.75rem var(--gutter);
-	border-bottom: 1px solid var(--border);
-	background: var(--surface);
+	min-width: 0;
+	padding: 0.625rem var(--gutter);
+	border-bottom: 1px solid var(--border-strong);
+	background: var(--bg-sunken);
 	flex: none;
 }
-.drawer-head h2 {
+.window-head h2 {
 	margin: 0;
 	flex: 1;
-	font-size: 0.875rem;
 	min-width: 0;
+	font-size: 0.8125rem;
+	letter-spacing: 0.04em;
 	overflow-wrap: anywhere;
 }
-.drawer-body {
+.window-body {
 	flex: 1;
+	min-width: 0;
 	overflow-y: auto;
-	padding: 0.75rem var(--gutter) 2rem;
+	padding: 0.75rem var(--gutter) 1.5rem;
 	min-height: 0;
 }
-.drawer-body h3 {
-	font-size: 0.6875rem;
+.window-body h3 {
+	font-size: 0.625rem;
 	font-weight: 700;
 	text-transform: uppercase;
-	letter-spacing: 0.09em;
+	letter-spacing: 0.12em;
 	color: var(--text-faint);
 	margin: 1.25rem 0 0.375rem;
 	padding-bottom: 0.25rem;
 	border-bottom: 1px solid var(--border);
 }
-.drawer-body h3:first-child {
+.window-body h3:first-child {
 	margin-top: 0;
+}
+/* Pinned: a long promotion plan must not hide its own confirm button. */
+.window-foot {
+	display: flex;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	align-items: center;
+	padding: 0.625rem var(--gutter);
+	border-top: 1px solid var(--border-strong);
+	background: var(--bg-sunken);
+	flex: none;
 }
 
 .btn-close {
@@ -1305,65 +1520,17 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	line-height: 1;
 	color: var(--text-muted);
 	background: none;
-	border: 0;
-	border-radius: var(--r-sm);
+	border: 1px solid transparent;
+	border-radius: var(--r);
 	flex: none;
 }
 .btn-close:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--text) 10%, transparent);
 	color: var(--text);
-	border: 0;
+	border-color: transparent;
 }
 
-.dialog-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 30;
-	background: var(--scrim);
-	display: grid;
-	place-items: center;
-	padding: 1.5rem;
-	animation: fade-in 0.14s ease;
-}
-.dialog {
-	background: var(--surface);
-	border-radius: var(--r-lg);
-	box-shadow: var(--shadow-dialog);
-	width: min(44rem, 100%);
-	max-height: min(80dvh, 48rem);
-	display: flex;
-	flex-direction: column;
-	animation: dialog-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.dialog-head {
-	padding: 0.875rem var(--gutter) 0.625rem;
-	border-bottom: 1px solid var(--border);
-	flex: none;
-}
-.dialog-head h2 {
-	margin: 0;
-	font-size: 0.9375rem;
-}
-.dialog-body {
-	padding: 0.875rem var(--gutter);
-	overflow-y: auto;
-	flex: 1;
-	min-height: 0;
-}
-/* Sticky footer: a long promotion plan must not hide its own confirm button. */
-.dialog-foot {
-	display: flex;
-	gap: 0.5rem;
-	justify-content: flex-end;
-	align-items: center;
-	padding: 0.625rem var(--gutter);
-	border-top: 1px solid var(--border);
-	background: var(--bg-sunken);
-	border-radius: 0 0 var(--r-lg) var(--r-lg);
-	flex: none;
-}
-
-/* ------------------------------------------------------- drawer contents -- */
+/* ------------------------------------------------------- window contents -- */
 
 .meta-line {
 	display: flex;
@@ -1378,7 +1545,7 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	font-size: 0.75rem;
 }
 
-.drawer-actions {
+.panel-actions {
 	display: flex;
 	gap: 0.5rem;
 	align-items: center;
@@ -1424,7 +1591,6 @@ tbody tr:has(input[type="checkbox"]:checked) td {
 	padding: 0.125rem 0;
 }
 .link-list a {
-	font-family: var(--font-mono);
 	font-size: 0.75rem;
 	overflow-wrap: anywhere;
 }
@@ -1488,7 +1654,6 @@ a.quote-author:hover {
 	margin-right: 0.25rem;
 }
 .quote-anchor {
-	font-family: var(--font-mono);
 	overflow-wrap: anywhere;
 }
 .quote-body {
@@ -1524,7 +1689,6 @@ a.quote-author:hover {
 	margin: 0 0 0.5rem;
 	max-height: 12rem;
 	overflow: auto;
-	font-family: var(--font-mono);
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 }
@@ -1565,7 +1729,6 @@ a.quote-author:hover {
 	margin-top: 0.25rem;
 }
 .plan-file-path {
-	font-family: var(--font-mono);
 	font-size: 0.6875rem;
 	color: var(--text-muted);
 	margin: 0.1875rem 0 0 1.375rem;
@@ -1638,33 +1801,36 @@ a.quote-author:hover {
 /* ---------------------------------------------------------- settings -- */
 
 /*
- * Settings is a centred window over the app.
- *
- * It borrows `.dialog-backdrop` and `.dialog` for the backdrop, surface, and
- * shadow, and overrides the size: a rail beside a pane wants width and height
- * in equal measure, which a surface pinned to one edge cannot give. The height
- * is fixed rather than fitted to the content, because the rail and the pane
+ * Settings is the same window every other overlay is, sized differently: a
+ * rail beside a pane wants width and height in equal measure. The height is
+ * fixed rather than fitted to the content, because the rail and the pane
  * scroll independently — a window that grew with the config would put the
  * rail's own scrollbar out of reach.
  */
 .settings-modal {
-	width: min(62rem, 100%);
+	width: min(64rem, 100%);
 	height: min(88dvh, 46rem);
-	max-height: none;
 }
 
-.settings-head {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
-	padding: 0.75rem var(--gutter) 0.625rem;
-	border-bottom: 1px solid var(--border);
-	flex: none;
+/*
+ * The rail stops being a column when there is no room for one beside a pane of
+ * fields. Below this the two stack and the rail keeps a capped, scrollable
+ * height, because a 15rem track plus a readable measure cannot both fit and
+ * the grid would otherwise force the window wider than the viewport.
+ */
+.settings-split {
+	min-width: 0;
 }
-.settings-head h2 {
-	margin: 0;
-	flex: 1;
-	font-size: 0.9375rem;
+@media (max-width: 52rem) {
+	.settings-split {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
+	}
+	.settings-rail {
+		border-right: 0;
+		border-bottom: 1px solid var(--border);
+		max-height: 9rem;
+	}
 }
 
 /*
@@ -1725,7 +1891,6 @@ a.quote-author:hover {
 }
 
 .rail-group {
-	font-family: var(--font-mono);
 	font-size: 0.625rem;
 	font-weight: 700;
 	letter-spacing: 0.1em;
@@ -1756,7 +1921,7 @@ a.quote-author:hover {
 	color: var(--text);
 	background: none;
 	border: 0;
-	border-radius: var(--r-sm);
+	border-radius: var(--r);
 }
 .rail-item:hover:not(:disabled) {
 	background: color-mix(in srgb, var(--text) var(--tint-row), transparent);
@@ -1862,13 +2027,12 @@ a.quote-author:hover {
 
 /* State that is a property of the row rather than an action on it. */
 .chip {
-	font-family: var(--font-mono);
 	font-size: 0.625rem;
 	font-weight: 600;
 	letter-spacing: 0.06em;
 	text-transform: uppercase;
 	padding: 0.05rem 0.35rem;
-	border-radius: var(--r-sm);
+	border-radius: var(--r);
 	color: var(--text-muted);
 	background: color-mix(in srgb, var(--text) var(--tint-row), transparent);
 	border: 1px solid var(--border);
@@ -1886,7 +2050,7 @@ a.quote-author:hover {
 	padding: 0.625rem var(--gutter);
 	border-top: 1px solid var(--border);
 	background: var(--bg-sunken);
-	border-radius: 0 0 var(--r-lg) var(--r-lg);
+	border-radius: 0 0 var(--r) var(--r);
 	flex: none;
 }
 
@@ -1955,7 +2119,6 @@ a.quote-author:hover {
 }
 
 .field textarea {
-	font-family: var(--font-mono);
 	font-size: 0.8125rem;
 	resize: vertical;
 }

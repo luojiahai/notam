@@ -2,7 +2,8 @@ import type { RuleDetail } from "../../../src/shared/api.ts";
 import { RULE_TYPE_LABELS } from "../../../src/shared/rule-types.ts";
 import { useRule } from "../api/hooks.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
-import { Drawer } from "./Drawer.tsx";
+import { Confidence } from "./Confidence.tsx";
+import { Panel } from "./Panel.tsx";
 
 /**
  * The fragment of a comment URL worth showing — `#discussion_r123` — falling
@@ -15,13 +16,15 @@ function commentLabel(url: string): string {
 }
 
 /** Read-only. Editing a rule's text is out of scope for v1; re-analysis is the recovery path. */
-export function RuleDrawerView({ rule }: { rule: RuleDetail }) {
+export function RulePanelView({ rule }: { rule: RuleDetail }) {
 	return (
 		<>
 			<p className="meta-line">
 				<Badge>{RULE_TYPE_LABELS[rule.type]}</Badge>
 				<StatusPill status={rule.status} />
-				<span>confidence {rule.confidence.toFixed(2)}</span>
+				<span className="meta-confidence">
+					confidence <Confidence value={rule.confidence} />
+				</span>
 			</p>
 
 			<h3>Rationale</h3>
@@ -61,7 +64,7 @@ export function RuleDrawerView({ rule }: { rule: RuleDetail }) {
 	);
 }
 
-export function RuleDrawer({
+export function RulePanel({
 	ruleId,
 	onClose,
 }: {
@@ -70,14 +73,14 @@ export function RuleDrawer({
 }) {
 	const rule = useRule(ruleId);
 	return (
-		<Drawer title={rule.data?.directive ?? "Rule"} onClose={onClose}>
+		<Panel title={rule.data?.directive ?? "Rule"} onClose={onClose}>
 			{rule.error && (
 				<p className="notice notice-error" role="alert">
 					{rule.error.message}
 				</p>
 			)}
 			{rule.isPending && <p className="secondary">Loading…</p>}
-			{rule.data && <RuleDrawerView rule={rule.data} />}
-		</Drawer>
+			{rule.data && <RulePanelView rule={rule.data} />}
+		</Panel>
 	);
 }

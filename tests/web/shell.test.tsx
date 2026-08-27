@@ -70,7 +70,7 @@ describe("Shell", () => {
 			</Shell>,
 		);
 		expect(
-			screen.getByText("Notes On Team Agreements & Methods"),
+			screen.getByText("notes on team agreements & methods"),
 		).toBeDefined();
 		// The expansion is chrome, not the page's heading. Moving it inside the
 		// `h1` would rewrite the accessible name of the only level-one heading
@@ -430,7 +430,7 @@ function entryDetailWithRule(status: RuleStatus): EntryDetail {
  * rounds of review because nothing exercised it directly. These assertions are
  * data-level: they check the mapping's output against the query-key families
  * without touching a QueryClient. The next block, `applyServerEvent`, covers
- * the "rules" case behaviourally (a mounted drawer actually refetching);
+ * the "rules" case behaviourally (a mounted panel actually refetching);
  * these cover the rest by asserting the mapping itself, once and for all
  * event shapes including the two the switch does not special-case
  * ("hello", "heartbeat").
@@ -482,7 +482,7 @@ describe("invalidationsFor", () => {
 		]);
 
 		// A throttled tick refreshes the rows and the counts, but not an open
-		// drawer: the terminal event reconciles that once, rather than twice a
+		// panel: the terminal event reconciles that once, rather than twice a
 		// second for the length of the sync.
 		expect(invalidationsFor({ ...syncEvent, phase: "progress" })).toEqual([
 			["entries"],
@@ -566,7 +566,7 @@ describe("applyServerEvent", () => {
 		expect(seen).toEqual([null, null, null]);
 	});
 
-	test("a rules event refetches both an open rule drawer and an open entry drawer's embedded rule status", async () => {
+	test("a rules event refetches both an open rule panel and an open entry panel's embedded rule status", async () => {
 		let status: RuleStatus = "draft";
 		globalThis.fetch = ((input: unknown) => {
 			const path = String(input);
@@ -585,7 +585,7 @@ describe("applyServerEvent", () => {
 			defaultOptions: { queries: { retry: false } },
 		});
 
-		function Drawers() {
+		function Panels() {
 			const rule = useRule("r1");
 			const entry = useEntry("e1");
 			return (
@@ -602,7 +602,7 @@ describe("applyServerEvent", () => {
 
 		render(
 			<QueryClientProvider client={client}>
-				<Drawers />
+				<Panels />
 			</QueryClientProvider>,
 		);
 

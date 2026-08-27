@@ -94,7 +94,7 @@ describe("read routes", () => {
 		harness.close();
 	});
 
-	test("GET /api/entries/:id returns the conversation for the drawer", async () => {
+	test("GET /api/entries/:id returns the conversation for the panel", async () => {
 		const harness = testContext();
 		const response = await harness.app.request(
 			`/api/entries/${harness.entryId}`,
