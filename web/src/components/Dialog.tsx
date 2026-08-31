@@ -11,6 +11,7 @@ export function Dialog({
 	onConfirm,
 	onCancel,
 	confirmDisabled = false,
+	confirmDanger = false,
 	children,
 }: {
 	title: string;
@@ -18,6 +19,7 @@ export function Dialog({
 	onConfirm: () => void;
 	onCancel: () => void;
 	confirmDisabled?: boolean;
+	confirmDanger?: boolean;
 	children: ReactNode;
 }) {
 	// Cancel, not confirm: a click that lands outside a window can only ever
@@ -49,7 +51,7 @@ export function Dialog({
 					</button>
 					<button
 						type="button"
-						className="btn-primary"
+						className={confirmDanger ? "btn-danger" : "btn-primary"}
 						onClick={onConfirm}
 						disabled={confirmDisabled}
 					>
@@ -58,5 +60,39 @@ export function Dialog({
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/**
+ * The commonest decision in the app: a yes/no question whose consequence fits
+ * on a single line. It is the same window every other overlay renders in,
+ * because the browser's own confirm box takes no styling, holds no focus trap,
+ * and stops the whole page while it waits for an answer.
+ */
+export function ConfirmDialog({
+	title,
+	message,
+	confirmLabel,
+	confirmDanger,
+	onConfirm,
+	onCancel,
+}: {
+	title: string;
+	message: string;
+	confirmLabel: string;
+	confirmDanger?: boolean;
+	onConfirm: () => void;
+	onCancel: () => void;
+}) {
+	return (
+		<Dialog
+			title={title}
+			confirmLabel={confirmLabel}
+			confirmDanger={confirmDanger}
+			onConfirm={onConfirm}
+			onCancel={onCancel}
+		>
+			<p>{message}</p>
+		</Dialog>
 	);
 }

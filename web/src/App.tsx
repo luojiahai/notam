@@ -191,16 +191,21 @@ export function App() {
 	// The failure comes from the repository summary rather than from a
 	// transient event, so it survives a reload and is cleared by this
 	// repository's own next sync rather than by any other repository's.
+	// Distinct texts only, because two of these can fail against the same
+	// unreachable server and say so in the same words, and the same sentence
+	// twice is noise rather than a second warning.
 	const lastSync = repo?.sync.last ?? null;
 	const warnings = [
-		...(meta.data?.warnings ?? []),
-		...(lastSync?.outcome === "failed" && lastSync.error
-			? [lastSync.error]
-			: []),
-		...(sync.error ? [sync.error.message] : []),
-		...(cancelSync.error ? [cancelSync.error.message] : []),
-		...(cancelAnalysis.error ? [cancelAnalysis.error.message] : []),
-		...(cancelRepoAnalysis.error ? [cancelRepoAnalysis.error.message] : []),
+		...new Set([
+			...(meta.data?.warnings ?? []),
+			...(lastSync?.outcome === "failed" && lastSync.error
+				? [lastSync.error]
+				: []),
+			...(sync.error ? [sync.error.message] : []),
+			...(cancelSync.error ? [cancelSync.error.message] : []),
+			...(cancelAnalysis.error ? [cancelAnalysis.error.message] : []),
+			...(cancelRepoAnalysis.error ? [cancelRepoAnalysis.error.message] : []),
+		]),
 	];
 
 	return (

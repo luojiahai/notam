@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type {
 	ConfigDocument,
 	ConfigResponse,
@@ -22,6 +22,7 @@ import {
 	restoreRepo,
 } from "../lib/config.ts";
 import { useModalSurface } from "../lib/modal.ts";
+import { ConfirmDialog } from "./Dialog.tsx";
 import {
 	ArchivedPane,
 	costLabel,
@@ -271,10 +272,13 @@ export function SettingsForm({
  * that is the only one in the app not to close where the others do is a window
  * the reader has to remember a rule about.
  *
- * Nothing is lost by closing: this form stages the whole document and reaches
- * the file only on Save, and the window reads the config fresh every time it
- * opens. The press and the release both have to land outside, so dragging a
- * selection out of a field does not count as leaving.
+ * Closing a clean window costs nothing, because the form stages the whole
+ * document and reaches the file only on Save, and the window reads the config
+ * fresh every time it opens — so a reopen gives back everything closing it
+ * cost. A window with staged edits asks first: those edits are the one thing
+ * closing would destroy, and the file has never seen them. The press and the
+ * release both have to land outside, so dragging a selection out of a field
+ * does not count as leaving.
  */
 
 export function SettingsWindow({
@@ -323,6 +327,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
 	const [draft, setDraft] = useState<ConfigDocument | null>(null);
 	const [results, setResults] = useState<Record<string, HostTestResult>>({});
+	const [confirmingClose, setConfirmingClose] = useState(false);
 
 	// Re-seeded whenever the server hands back a new document — after a save, a
 	// rename, or a delete — so the form shows what was actually written rather
@@ -331,6 +336,14 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 	useEffect(() => {
 		if (saved !== null) setDraft(structuredClone(saved));
 	}, [saved]);
+
+	// A window that never read the file has nothing staged on top of it, so the
+	// loading and error states are clean by construction rather than by check.
+	const dirty = draft !== null && saved !== null && isDirty(draft, saved);
+	const requestClose = useCallback(() => {
+		if (dirty) setConfirmingClose(true);
+		else onClose();
+	}, [dirty, onClose]);
 
 	if (config.isPending) {
 		return (
@@ -358,7 +371,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
 	const hash = response.hash;
 	return (
-		<SettingsWindow onClose={onClose}>
+		<SettingsWindow onClose={requestClose}>
 			<SettingsForm
 				response={response}
 				draft={draft}
@@ -398,6 +411,16 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 					null
 				}
 			/>
+			{confirmingClose && (
+				<ConfirmDialog
+					title="Discard unsaved changes"
+					message="This window has unsaved changes. Closing it discards them; Save is what writes the file."
+					confirmLabel="Discard and close"
+					confirmDanger
+					onConfirm={onClose}
+					onCancel={() => setConfirmingClose(false)}
+				/>
+			)}
 		</SettingsWindow>
 	);
 }

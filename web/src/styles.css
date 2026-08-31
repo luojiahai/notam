@@ -43,7 +43,7 @@
 
 	--text: #101215;
 	--text-muted: #4b5157;
-	--text-faint: #63696f;
+	--text-faint: #5d6369;
 
 	/*
 	 * Amber. `--ok` is green (hue ~145) and `--alert` red (~0), which is the
@@ -336,6 +336,16 @@ input[type="checkbox"] {
 	margin: 0;
 	cursor: pointer;
 	vertical-align: middle;
+}
+
+/* The padding is the target a pointer actually has to hit; the negative margin
+   takes that padding back out of the layout so the row keeps its height. */
+.check-hit {
+	display: inline-grid;
+	place-items: center;
+	padding: 0.3125rem;
+	margin: -0.3125rem;
+	cursor: pointer;
 }
 
 /* --------------------------------------------------------------- buttons -- */
@@ -1064,10 +1074,15 @@ input[type="search"]::-webkit-search-cancel-button {
 	background: color-mix(in srgb, var(--accent) var(--tint), var(--bg));
 	font-weight: 700;
 }
+/*
+ * Weight, not transparency, separates a chip's count from its label: a 0.75
+ * alpha over the tint an active chip fills itself with drops the count below
+ * AA, and the chip is a control you read the number off.
+ */
 .chip-count {
 	font-size: 0.6875rem;
 	font-variant-numeric: tabular-nums;
-	opacity: 0.75;
+	font-weight: 400;
 }
 
 /* ----------------------------------------------------------------- table -- */
@@ -1745,8 +1760,12 @@ a.quote-author:hover {
 	max-height: 14rem;
 	overflow: auto;
 }
-.plan-file[data-excluded="true"] {
-	opacity: 0.5;
+/*
+ * Only the body dims. The head holds the checkbox that puts the file back in
+ * the plan, and fading the way out of a state is how someone gets stuck in it.
+ */
+.plan-file[data-excluded="true"] .plan-file-body {
+	opacity: 0.65;
 }
 
 /* ---------------------------------------------------------------- motion -- */
