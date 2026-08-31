@@ -153,16 +153,18 @@ export function RulesTable(props: RulesTableProps) {
 						<thead>
 							<tr>
 								<th>
-									<input
-										type="checkbox"
-										aria-label="Select all rules"
-										checked={allSelected}
-										onChange={() =>
-											allSelected
-												? selection.clear()
-												: selection.setAll(props.rules)
-										}
-									/>
+									<label className="check-hit">
+										<input
+											type="checkbox"
+											aria-label="Select all rules"
+											checked={allSelected}
+											onChange={() =>
+												allSelected
+													? selection.clear()
+													: selection.setAll(props.rules)
+											}
+										/>
+									</label>
 								</th>
 								<th>Type</th>
 								<th>Directive</th>
@@ -176,12 +178,14 @@ export function RulesTable(props: RulesTableProps) {
 							{props.rules.map((rule) => (
 								<tr key={rule.id}>
 									<td>
-										<input
-											type="checkbox"
-											aria-label={`Select ${rule.directive}`}
-											checked={selection.has(rule.id)}
-											onChange={() => selection.toggle(rule)}
-										/>
+										<label className="check-hit">
+											<input
+												type="checkbox"
+												aria-label={`Select ${rule.directive}`}
+												checked={selection.has(rule.id)}
+												onChange={() => selection.toggle(rule)}
+											/>
+										</label>
 									</td>
 									<td>
 										<Badge>{rule.type}</Badge>

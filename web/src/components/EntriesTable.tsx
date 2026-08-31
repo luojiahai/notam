@@ -224,16 +224,18 @@ export function EntriesTable(props: EntriesTableProps) {
 						<thead>
 							<tr>
 								<th>
-									<input
-										type="checkbox"
-										aria-label="Select all entries"
-										checked={allSelected}
-										onChange={() =>
-											allSelected
-												? selection.clear()
-												: selection.setAll(props.entries)
-										}
-									/>
+									<label className="check-hit">
+										<input
+											type="checkbox"
+											aria-label="Select all entries"
+											checked={allSelected}
+											onChange={() =>
+												allSelected
+													? selection.clear()
+													: selection.setAll(props.entries)
+											}
+										/>
+									</label>
 								</th>
 								<th>PR</th>
 								<th>Title</th>
@@ -249,12 +251,14 @@ export function EntriesTable(props: EntriesTableProps) {
 							{props.entries.map((entry) => (
 								<tr key={entry.id}>
 									<td>
-										<input
-											type="checkbox"
-											aria-label={`Select #${entry.number}`}
-											checked={selection.has(entry.id)}
-											onChange={() => selection.toggle(entry)}
-										/>
+										<label className="check-hit">
+											<input
+												type="checkbox"
+												aria-label={`Select #${entry.number}`}
+												checked={selection.has(entry.id)}
+												onChange={() => selection.toggle(entry)}
+											/>
+										</label>
 									</td>
 									<td className="mono">
 										<a href={entry.url} target="_blank" rel="noreferrer">

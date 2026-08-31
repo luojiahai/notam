@@ -12,6 +12,7 @@ import {
 	updateHost,
 	updateRepo,
 } from "../lib/config.ts";
+import { ConfirmDialog } from "./Dialog.tsx";
 
 /**
  * The right-hand side of the settings window: whichever one entity is
@@ -55,6 +56,56 @@ function Field({
 			</label>
 			{hint !== undefined && <span className="field-hint">{hint}</span>}
 		</div>
+	);
+}
+
+/**
+ * A number field that keeps what was typed and commits only what parses.
+ *
+ * The draft therefore never holds `NaN` or a number nobody chose: a box that is
+ * empty or half-typed is a string that has not parsed yet, not a value. Leaving
+ * it that way is not a way to lose the number either, because blur puts the
+ * last committed one back — so a field abandoned mid-edit resolves to the
+ * number that was already there rather than to a zero the user never asked for.
+ *
+ * It carries no accessible name of its own. It renders inside `Field`'s label,
+ * which is the association.
+ */
+function NumericInput({
+	value,
+	onValue,
+}: {
+	value: number;
+	onValue: (next: number) => void;
+}) {
+	const [text, setText] = useState(String(value));
+	const [prevValue, setPrevValue] = useState(value);
+
+	/*
+		A change that came from somewhere else — discarding the draft, or a save
+		round-trip — has to reach the box. A change this box caused must not,
+		because the value arriving back is the one the text already says, and
+		reformatting it under the cursor would fight whoever is typing.
+	*/
+	if (prevValue !== value) {
+		setPrevValue(value);
+		if (Number(text) !== value) setText(String(value));
+	}
+
+	return (
+		<input
+			type="text"
+			inputMode="numeric"
+			value={text}
+			onChange={(event) => {
+				const next = event.target.value;
+				setText(next);
+				// `Number("")` is 0, which is a number the user did not type.
+				const parsed = Number(next);
+				if (next.trim() !== "" && Number.isFinite(parsed)) onValue(parsed);
+			}}
+			onBlur={() => setText(String(value))}
+		/>
 	);
 }
 
@@ -182,6 +233,7 @@ export function HostPane({
 	onTest: (hostId: string) => void;
 	testing: boolean;
 }) {
+	const [confirming, setConfirming] = useState(false);
 	const host = draft.hosts[index];
 	if (host === undefined) return null;
 	const status = response.status.hosts.find((h) => h.id === host.id);
@@ -219,14 +271,11 @@ export function HostPane({
 					className="btn-plain btn-sm btn-danger"
 					aria-label={`Remove host ${host.id}`}
 					onClick={() => {
-						if (
-							cost.repos > 0 &&
-							!window.confirm(
-								`Removing ${host.id} also archives ${cost.repos} ${
-									cost.repos === 1 ? "repository" : "repositories"
-								} and ${costLabel(cost)}. They are kept and come back if you add it again. Continue?`,
-							)
-						) {
+						// A host with nothing under it costs nothing to remove, and a
+						// dialog whose answer is never in doubt is one people learn to
+						// dismiss without reading.
+						if (cost.repos > 0) {
+							setConfirming(true);
 							return;
 						}
 						onChange(removeHost(draft, index));
@@ -302,6 +351,23 @@ export function HostPane({
 					)}
 				</p>
 			</div>
+
+			{confirming && (
+				<ConfirmDialog
+					title="Remove"
+					confirmLabel="Remove"
+					confirmDanger
+					message={`Removing ${host.id} also archives ${cost.repos} ${
+						cost.repos === 1 ? "repository" : "repositories"
+					} and ${costLabel(cost)}. They are kept and come back if you add it again.`}
+					onCancel={() => setConfirming(false)}
+					onConfirm={() => {
+						setConfirming(false);
+						onChange(removeHost(draft, index));
+						onRemoved();
+					}}
+				/>
+			)}
 		</>
 	);
 }
@@ -321,6 +387,7 @@ export function RepoPane({
 	onRename: (repoId: string, next: string) => void;
 	onRemoved: () => void;
 }) {
+	const [confirming, setConfirming] = useState(false);
 	const repo = draft.repos[index];
 	if (repo === undefined) return null;
 	// The document holds `(host, name)` and the lifecycle routes take an id, so
@@ -349,13 +416,11 @@ export function RepoPane({
 					className="btn-plain btn-sm btn-danger"
 					aria-label={`Remove ${repo.name || "new repository"}`}
 					onClick={() => {
-						if (
-							row !== null &&
-							row.entries + row.rules > 0 &&
-							!window.confirm(
-								`Removing ${repo.name} archives ${costLabel(row)}. They are kept and come back if you add it again. Continue?`,
-							)
-						) {
+						// A repository the user has typed but not yet saved has no row
+						// behind it, and one with an empty row has nothing to lose, so
+						// neither is worth stopping over.
+						if (row !== null && row.entries + row.rules > 0) {
+							setConfirming(true);
 							return;
 						}
 						onChange(removeRepo(draft, index));
@@ -433,16 +498,10 @@ export function RepoPane({
 					label="Window (days)"
 					hint="How far back the first backfill reaches."
 				>
-					<input
-						type="text"
-						inputMode="numeric"
-						value={String(repo.window_days)}
-						onChange={(event) =>
-							onChange(
-								updateRepo(draft, index, {
-									window_days: Number(event.target.value) || 0,
-								}),
-							)
+					<NumericInput
+						value={repo.window_days}
+						onValue={(next) =>
+							onChange(updateRepo(draft, index, { window_days: next }))
 						}
 					/>
 				</Field>
@@ -465,6 +524,23 @@ export function RepoPane({
 					/>
 				</Field>
 			</div>
+
+			{/* The row carries the numbers the question is about, so there is
+				nothing to ask without it. */}
+			{confirming && row !== null && (
+				<ConfirmDialog
+					title="Remove"
+					confirmLabel="Remove"
+					confirmDanger
+					message={`Removing ${repo.name} archives ${costLabel(row)}. They are kept and come back if you add it again.`}
+					onCancel={() => setConfirming(false)}
+					onConfirm={() => {
+						setConfirming(false);
+						onChange(removeRepo(draft, index));
+						onRemoved();
+					}}
+				/>
+			)}
 		</>
 	);
 }
@@ -491,33 +567,23 @@ export function ProcessPane({
 			<div className="pane-fields">
 				<p className="secondary">Applied the next time NOTAM starts.</p>
 				<Field label="Concurrency" hint="Entries analysed at once, 1 to 16.">
-					<input
-						type="text"
-						inputMode="numeric"
-						value={String(draft.analysis.concurrency)}
-						onChange={(event) =>
+					<NumericInput
+						value={draft.analysis.concurrency}
+						onValue={(next) =>
 							onChange({
 								...draft,
-								analysis: {
-									...draft.analysis,
-									concurrency: Number(event.target.value) || 0,
-								},
+								analysis: { ...draft.analysis, concurrency: next },
 							})
 						}
 					/>
 				</Field>
 				<Field label="Timeout (seconds)">
-					<input
-						type="text"
-						inputMode="numeric"
-						value={String(draft.analysis.timeout_seconds)}
-						onChange={(event) =>
+					<NumericInput
+						value={draft.analysis.timeout_seconds}
+						onValue={(next) =>
 							onChange({
 								...draft,
-								analysis: {
-									...draft.analysis,
-									timeout_seconds: Number(event.target.value) || 0,
-								},
+								analysis: { ...draft.analysis, timeout_seconds: next },
 							})
 						}
 					/>
@@ -544,16 +610,9 @@ export function ProcessPane({
 					/>
 				</Field>
 				<Field label="Port">
-					<input
-						type="text"
-						inputMode="numeric"
-						value={String(draft.server.port)}
-						onChange={(event) =>
-							onChange({
-								...draft,
-								server: { port: Number(event.target.value) || 0 },
-							})
-						}
+					<NumericInput
+						value={draft.server.port}
+						onValue={(next) => onChange({ ...draft, server: { port: next } })}
 					/>
 				</Field>
 			</div>
@@ -583,6 +642,7 @@ export function ArchivedPane({
 	onDelete: () => void;
 	confirmDelete: string;
 }) {
+	const [confirming, setConfirming] = useState(false);
 	return (
 		<>
 			<div className="pane-head">
@@ -603,14 +663,26 @@ export function ArchivedPane({
 						type="button"
 						className="btn-danger"
 						aria-label={`Delete ${nameForAction} permanently`}
-						onClick={() => {
-							if (window.confirm(confirmDelete)) onDelete();
-						}}
+						onClick={() => setConfirming(true)}
 					>
 						Delete permanently
 					</button>
 				</div>
 			</div>
+
+			{confirming && (
+				<ConfirmDialog
+					title="Delete permanently"
+					confirmLabel="Delete permanently"
+					confirmDanger
+					message={confirmDelete}
+					onCancel={() => setConfirming(false)}
+					onConfirm={() => {
+						setConfirming(false);
+						onDelete();
+					}}
+				/>
+			)}
 		</>
 	);
 }

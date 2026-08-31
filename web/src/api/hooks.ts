@@ -1,4 +1,5 @@
 import {
+	keepPreviousData,
 	type UseQueryResult,
 	useMutation,
 	useQuery,
@@ -83,6 +84,14 @@ export function useRepos(): UseQueryResult<RepoSummary[]> {
 	});
 }
 
+/**
+ * `useEntries` and `useRules` keep the previous page's rows on screen while the
+ * next one loads. Every keystroke in a filter is a new query key, so with
+ * nothing held the table would drop to a skeleton on each character typed.
+ *
+ * Switching repositories is unaffected, because App keys each tab on the
+ * repository id and the remount starts the hook fresh with nothing to hold.
+ */
 export function useEntries(
 	repoId: string | null,
 	state: AnalysisState | "",
@@ -91,6 +100,7 @@ export function useEntries(
 	return useQuery({
 		enabled: repoId !== null,
 		queryKey: queryKeys.entries(repoId ?? "", state, q),
+		placeholderData: keepPreviousData,
 		queryFn: () =>
 			request(
 				EntriesResponseSchema,
@@ -115,6 +125,7 @@ export function useRules(
 	return useQuery({
 		enabled: repoId !== null,
 		queryKey: queryKeys.rules(repoId ?? "", status, q),
+		placeholderData: keepPreviousData,
 		queryFn: () =>
 			request(
 				RulesResponseSchema,

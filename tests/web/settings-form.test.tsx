@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import type { ConfigDocument, ConfigResponse } from "../../src/shared/api.ts";
 import {
@@ -105,23 +105,20 @@ function Stateful({
 	);
 }
 
-/** Replaces window.confirm for one call, and reports whether it was asked. */
-function withConfirm<T>(
-	answer: boolean,
-	fn: () => T,
-): { asked: string | null } {
-	const original = window.confirm;
-	let asked: string | null = null;
-	window.confirm = (message?: string) => {
-		asked = message ?? "";
-		return answer;
-	};
-	try {
-		fn();
-	} finally {
-		window.confirm = original;
-	}
-	return { asked };
+/**
+ * The confirm that is open. The form is rendered on its own here rather than in
+ * its window, so the only dialog on screen is the question being asked.
+ */
+function confirmDialog(): HTMLElement {
+	return screen.getByRole("dialog");
+}
+
+/**
+ * Answers the open confirm. Scoped to the dialog because a trigger button and
+ * the button that answers for it are named the same thing on purpose.
+ */
+function answer(name: string): void {
+	fireEvent.click(within(confirmDialog()).getByRole("button", { name }));
 }
 
 describe("SettingsForm", () => {
@@ -238,21 +235,22 @@ describe("SettingsForm", () => {
 
 	test("says what removing a repository would archive, in numbers", () => {
 		let next: ConfigDocument | null = null;
-		const { asked } = withConfirm(true, () => {
-			render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
-			fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
-		});
-		expect(asked).toContain("42 entries and 3 verified rules");
+		render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
+		fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
+		expect(confirmDialog().textContent).toContain(
+			"42 entries and 3 verified rules",
+		);
+		answer("Remove");
 		expect(next).not.toBeNull();
 	});
 
 	test("leaves the document alone when that removal is declined", () => {
 		let next: ConfigDocument | null = null;
-		withConfirm(false, () => {
-			render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
-			fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
-		});
+		render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
+		fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
+		answer("Cancel");
 		expect(next).toBeNull();
+		expect(screen.queryByRole("dialog")).toBeNull();
 	});
 
 	test("fixes a saved repository's host, which is half its identity", () => {
@@ -294,39 +292,34 @@ describe("SettingsForm", () => {
 
 	test("says what removing a host takes with it, repositories included", () => {
 		let next: ConfigDocument | null = null;
-		const { asked } = withConfirm(false, () => {
-			render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
-			select("github");
-			fireEvent.click(
-				screen.getByRole("button", { name: "Remove host github" }),
-			);
-		});
-		expect(asked).toContain("1 repository");
-		expect(asked).toContain("42 entries and 3 verified rules");
+		render(<SettingsForm {...props({ onChange: (doc) => (next = doc) })} />);
+		select("github");
+		fireEvent.click(screen.getByRole("button", { name: "Remove host github" }));
+		expect(confirmDialog().textContent).toContain("1 repository");
+		expect(confirmDialog().textContent).toContain(
+			"42 entries and 3 verified rules",
+		);
+		answer("Cancel");
 		expect(next).toBeNull();
 	});
 
 	test("removes a host with nothing under it without asking", () => {
 		let next: ConfigDocument | null = null;
-		const { asked } = withConfirm(false, () => {
-			render(
-				<SettingsForm
-					{...props({
-						onChange: (doc) => (next = doc),
-						draft: { ...DOC, repos: [] },
-						response: {
-							...RESPONSE,
-							config: { ...DOC, repos: [] },
-							status: { ...RESPONSE.status, repos: [] },
-						},
-					})}
-				/>,
-			);
-			fireEvent.click(
-				screen.getByRole("button", { name: "Remove host github" }),
-			);
-		});
-		expect(asked).toBeNull();
+		render(
+			<SettingsForm
+				{...props({
+					onChange: (doc) => (next = doc),
+					draft: { ...DOC, repos: [] },
+					response: {
+						...RESPONSE,
+						config: { ...DOC, repos: [] },
+						status: { ...RESPONSE.status, repos: [] },
+					},
+				})}
+			/>,
+		);
+		fireEvent.click(screen.getByRole("button", { name: "Remove host github" }));
+		expect(screen.queryByRole("dialog")).toBeNull();
 		expect(next).not.toBeNull();
 	});
 
@@ -430,10 +423,9 @@ describe("SettingsForm", () => {
 	});
 
 	test("falls back to a pane that still exists when the selected one goes", () => {
-		withConfirm(true, () => {
-			render(<Stateful initial={DOC} />);
-			fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
-		});
+		render(<Stateful initial={DOC} />);
+		fireEvent.click(screen.getByRole("button", { name: "Remove acme/mono" }));
+		answer("Remove");
 		// Nothing is selected any more, so the form picks again rather than
 		// rendering an empty pane against an index that no longer resolves.
 		expect(
@@ -482,43 +474,55 @@ describe("SettingsForm", () => {
 
 	test("confirms before destroying an archived repository for good", () => {
 		const deleted: string[] = [];
-		const { asked } = withConfirm(true, () => {
-			render(
-				<SettingsForm
-					{...props({
-						onDeleteRepo: (id) => deleted.push(id),
-						response: {
-							...RESPONSE,
-							status: {
-								...RESPONSE.status,
-								archived_repos: [
-									{
-										id: "r_2",
-										host_id: "github",
-										name: "acme/website",
-										path_globs: [],
-										default_branch: "main",
-										window_days: 180,
-										prompt_template: null,
-										archived_at: "2026-08-23T09:00:00.000Z",
-										entries: 5,
-										rules: 1,
-										verified_rules: 1,
-									},
-								],
-							},
+		render(
+			<SettingsForm
+				{...props({
+					onDeleteRepo: (id) => deleted.push(id),
+					response: {
+						...RESPONSE,
+						status: {
+							...RESPONSE.status,
+							archived_repos: [
+								{
+									id: "r_2",
+									host_id: "github",
+									name: "acme/website",
+									path_globs: [],
+									default_branch: "main",
+									window_days: 180,
+									prompt_template: null,
+									archived_at: "2026-08-23T09:00:00.000Z",
+									entries: 5,
+									rules: 1,
+									verified_rules: 1,
+								},
+							],
 						},
-					})}
-				/>,
-			);
-			select("acme/website");
-			fireEvent.click(
-				screen.getByRole("button", {
-					name: "Delete acme/website permanently",
-				}),
-			);
-		});
-		expect(asked).toContain("cannot be undone");
+					},
+				})}
+			/>,
+		);
+		select("acme/website");
+		fireEvent.click(
+			screen.getByRole("button", { name: "Delete acme/website permanently" }),
+		);
+		expect(confirmDialog().textContent).toContain("cannot be undone");
+		answer("Delete permanently");
 		expect(deleted).toEqual(["r_2"]);
+	});
+
+	test("holds an emptied numeric field, and puts the number back on blur", () => {
+		const changes: ConfigDocument[] = [];
+		render(
+			<SettingsForm {...props({ onChange: (doc) => changes.push(doc) })} />,
+		);
+		select("Process");
+		const port = screen.getByLabelText("Port") as HTMLInputElement;
+		fireEvent.change(port, { target: { value: "" } });
+		// An empty box is a string that has not parsed, not a port of zero.
+		expect(port.value).toBe("");
+		expect(changes).toHaveLength(0);
+		fireEvent.blur(port);
+		expect(port.value).toBe("4317");
 	});
 });
