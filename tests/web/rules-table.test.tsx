@@ -40,6 +40,7 @@ function build(overrides: Partial<Props> = {}) {
 	const calls = {
 		abandon: [] as string[][],
 		verify: [] as string[][],
+		remove: [] as string[][],
 		promote: [] as string[][],
 		status: [] as string[],
 		q: [] as string[],
@@ -55,6 +56,7 @@ function build(overrides: Partial<Props> = {}) {
 		onOpenRule: (id) => calls.opened.push(id),
 		onAbandon: (ids) => calls.abandon.push(ids),
 		onVerify: (ids) => calls.verify.push(ids),
+		onDelete: (ids) => calls.remove.push(ids),
 		onCreatePromotion: (ids) => calls.promote.push(ids),
 		loading: false,
 		...overrides,
@@ -230,6 +232,88 @@ describe("RulesTable", () => {
 		expect((abandon as HTMLButtonElement).disabled).toBe(true);
 		await userEvent.click(abandon);
 		expect(calls.abandon).toEqual([]);
+	});
+
+	test("Delete is offered only once the whole selection is abandoned", async () => {
+		const calls = draw({ rules: [rule({ status: "abandoned" })] });
+		const button = screen.getByRole("button", { name: /^delete$/i });
+		expect((button as HTMLButtonElement).disabled).toBe(true);
+
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		expect((button as HTMLButtonElement).disabled).toBe(false);
+
+		await userEvent.click(button);
+		await userEvent.click(
+			screen.getByRole("button", { name: /delete permanently/i }),
+		);
+		expect(calls.remove).toEqual([["ru_1"]]);
+	});
+
+	test("Delete is refused when the selection still holds a live rule", async () => {
+		draw({
+			rules: [rule({ status: "abandoned" }), rule({ id: "ru_2" })],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		expect(
+			(screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement)
+				.disabled,
+		).toBe(true);
+	});
+
+	test("the confirm dialog counts the selection and cancelling deletes nothing", async () => {
+		const calls = draw({
+			rules: [
+				rule({ status: "abandoned" }),
+				rule({
+					id: "ru_2",
+					directive: "Prefer explicit timeouts.",
+					status: "abandoned",
+				}),
+			],
+		});
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+		expect(
+			screen.getByText("Permanently delete 2 rules? This cannot be undone."),
+		).toBeDefined();
+
+		await userEvent.click(screen.getByRole("button", { name: /^cancel$/i }));
+		expect(calls.remove).toEqual([]);
+		expect(screen.queryByRole("dialog")).toBeNull();
+	});
+
+	test("the confirm dialog says one rule in the singular", async () => {
+		draw({ rules: [rule({ status: "abandoned" })] });
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+		expect(
+			screen.getByText("Permanently delete 1 rule? This cannot be undone."),
+		).toBeDefined();
+	});
+
+	test("deleting drops the selection it acted on", async () => {
+		const calls = draw({ rules: [rule({ status: "abandoned" })] });
+		await userEvent.click(
+			screen.getByRole("checkbox", { name: /select all/i }),
+		);
+		await userEvent.click(screen.getByRole("button", { name: /^delete$/i }));
+		await userEvent.click(
+			screen.getByRole("button", { name: /delete permanently/i }),
+		);
+		expect(calls.remove).toEqual([["ru_1"]]);
+		expect(screen.getByText("0 selected")).toBeDefined();
+		expect(
+			(screen.getByRole("button", { name: /^delete$/i }) as HTMLButtonElement)
+				.disabled,
+		).toBe(true);
 	});
 
 	test("a rejected transition is shown verbatim in the bulk bar", () => {

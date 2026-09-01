@@ -463,6 +463,8 @@ export const RuleStatusRequestSchema = z.object({
 	status: z.enum(["verified", "abandoned"]),
 });
 
+export const RuleDeleteRequestSchema = z.object({ rule_ids: idList });
+
 export const PromotionRequestSchema = z.object({
 	rule_ids: idList,
 	title: z.string().min(1).optional(),

@@ -158,6 +158,19 @@ export function deleteDraftRulesForEntry(
 		.run(entryId).changes;
 }
 
+/**
+ * Unconditional destruction, with no opinion about which rules deserve it and
+ * nothing left behind. Call it ONLY from `core/rules/` — that module decides
+ * which rules may be destroyed, and a second copy of that judgement here would
+ * be a second place for them to disagree.
+ */
+export function deleteRulesByIds(db: Database, ids: string[]): number {
+	if (ids.length === 0) return 0;
+	const placeholders = ids.map(() => "?").join(",");
+	return db.query(`DELETE FROM rules WHERE id IN (${placeholders})`).run(...ids)
+		.changes;
+}
+
 function countBy(
 	db: Database,
 	column: "entry_id" | "promotion_id",

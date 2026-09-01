@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type {
 	RuleCounts,
 	RuleStatus,
@@ -7,6 +7,7 @@ import type {
 import { useSelection } from "../state/selection.ts";
 import { Badge, StatusPill } from "./Badge.tsx";
 import { Confidence } from "./Confidence.tsx";
+import { ConfirmDialog } from "./Dialog.tsx";
 import { type Chip, FilterChips } from "./FilterChips.tsx";
 import { TableEmpty, TableSkeleton } from "./TableState.tsx";
 
@@ -20,6 +21,7 @@ export type RulesTableProps = {
 	onOpenRule: (ruleId: string) => void;
 	onAbandon: (ruleIds: string[]) => void;
 	onVerify: (ruleIds: string[]) => void;
+	onDelete: (ruleIds: string[]) => void;
 	onCreatePromotion: (ruleIds: string[]) => void;
 	loading: boolean;
 	/** The last mutation failure, verbatim from the server. */
@@ -40,6 +42,7 @@ const STATUS_LABELS: Record<RuleStatus, string> = {
  */
 export function RulesTable(props: RulesTableProps) {
 	const selection = useSelection<RuleSummary>();
+	const [confirmingDelete, setConfirmingDelete] = useState(false);
 	const visibleIds = props.rules.map((rule) => rule.id);
 	const allSelected =
 		visibleIds.length > 0 && visibleIds.every((id) => selection.has(id));
@@ -68,6 +71,9 @@ export function RulesTable(props: RulesTableProps) {
 	const allProposed =
 		selected.length > 0 && selected.every((rule) => rule.status === "proposed");
 	const anyAbandoned = selected.some((rule) => rule.status === "abandoned");
+	const allAbandoned =
+		selected.length > 0 &&
+		selected.every((rule) => rule.status === "abandoned");
 
 	const chips: Chip[] = (
 		["draft", "proposed", "verified", "abandoned"] as RuleStatus[]
@@ -97,7 +103,7 @@ export function RulesTable(props: RulesTableProps) {
 				<span className="spacer" />
 				{/*
 					The selection controls sit here rather than in a footer of their
-					own, matching the entries tab. Four chips and three buttons will
+					own, matching the entries tab. Four chips and four buttons will
 					not fit beside them on a narrow window, so they are grouped: the
 					set drops to a second line together instead of shedding one
 					button at a time.
@@ -128,6 +134,19 @@ export function RulesTable(props: RulesTableProps) {
 						onClick={() => props.onAbandon(selection.ids)}
 					>
 						Abandon
+					</button>
+					{/*
+						Deletion is destruction, so it is offered only once the selection
+						has already been parked: abandoning and deleting are two separate
+						decisions, and this button is never the one that ends a live rule.
+					*/}
+					<button
+						type="button"
+						className="btn-danger"
+						disabled={!allAbandoned}
+						onClick={() => setConfirmingDelete(true)}
+					>
+						Delete
 					</button>
 					{selection.size > 0 && !allDraft && (
 						<span className="bulk-hint">Only draft rules can be promoted.</span>
@@ -222,6 +241,25 @@ export function RulesTable(props: RulesTableProps) {
 					</table>
 				)}
 			</div>
+
+			{confirmingDelete && (
+				<ConfirmDialog
+					title="Delete permanently"
+					confirmLabel="Delete permanently"
+					confirmDanger
+					message={`Permanently delete ${selection.size} rule${
+						selection.size === 1 ? "" : "s"
+					}? This cannot be undone.`}
+					onCancel={() => setConfirmingDelete(false)}
+					onConfirm={() => {
+						setConfirmingDelete(false);
+						props.onDelete(selection.ids);
+						// The rows are on their way out, and a selection that outlived
+						// them would keep Delete lit over ids the server no longer has.
+						selection.clear();
+					}}
+				/>
+			)}
 		</>
 	);
 }
