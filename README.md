@@ -342,6 +342,12 @@ Re-analysing an entry throws away its `draft` rules and replaces them. It leaves
 `proposed`, `verified`, and `abandoned` ones alone — those have escaped into a
 pull request or into a decision, and a re-run does not get to rewrite them.
 
+An `abandoned` rule is the only one you can delete outright, and doing so is a
+second confirmed action rather than part of abandoning it, the same way
+permanently deleting an archived repository is. Nothing is kept behind, and a
+rules pull request whose rules all go keeps its own row, because it was opened
+on GitHub whatever became of what went into it.
+
 Everything lives in two files: `~/.notam/config.yaml` and `~/.notam/notam.db`.
 Migrations run at startup, are forward-only, and take a timestamped backup of
 the database first.

@@ -1,6 +1,10 @@
 import { Hono } from "hono";
-import { transitionRules } from "../../core/rules/state.ts";
-import { RuleStatusRequestSchema, RuleStatusSchema } from "../../shared/api.ts";
+import { deleteRules, transitionRules } from "../../core/rules/state.ts";
+import {
+	RuleDeleteRequestSchema,
+	RuleStatusRequestSchema,
+	RuleStatusSchema,
+} from "../../shared/api.ts";
 import { listRules, listRulesByIds } from "../../store/rules.ts";
 import { readBody } from "../body.ts";
 import type { AppContext } from "../context.ts";
@@ -33,7 +37,7 @@ export function ruleRoutes(ctx: AppContext): Hono {
 	/**
 	 * "Abandon" and "Mark verified", and nothing else. The legality of the move
 	 * is decided by core/rules/state.ts — an illegal one throws
-	 * RuleTransitionError, which the error mapper turns into a 409 and which
+	 * RuleLifecycleError, which the error mapper turns into a 409 and which
 	 * rolls the whole selection back, so a mixed batch is all-or-nothing.
 	 */
 	app.post("/rules/status", async (c) => {
@@ -53,6 +57,29 @@ export function ruleRoutes(ctx: AppContext): Hono {
 			ctx.bus.publish({ type: "rules", repo_id: repoId });
 		}
 		return c.json(toRuleSummaries(ctx.db, updated));
+	});
+
+	/**
+	 * Destruction, on rules already abandoned and on nothing else. Which rules
+	 * qualify is core/rules/state.ts' judgement, and a selection holding one that
+	 * does not is refused whole with the same 409 an illegal transition earns.
+	 *
+	 * The answer is the ids that are gone rather than rows: there is nothing left
+	 * to serialise, and a summary of a rule the caller can no longer fetch would
+	 * only invite it to be cached.
+	 */
+	app.post("/rules/delete", async (c) => {
+		const body = await readBody(c, RuleDeleteRequestSchema);
+		for (const id of body.rule_ids) requireRule(ctx.db, id);
+		const rules = listRulesByIds(ctx.db, body.rule_ids);
+		const deleted = deleteRules(
+			ctx.db,
+			rules.map((rule) => rule.id),
+		);
+		for (const repoId of new Set(deleted.map((rule) => rule.repo_id))) {
+			ctx.bus.publish({ type: "rules", repo_id: repoId });
+		}
+		return c.json(deleted.map((rule) => rule.id));
 	});
 
 	return app;

@@ -1,6 +1,10 @@
 import type { Database } from "bun:sqlite";
 import type { RuleRow, RuleStatus } from "../../shared/types.ts";
-import { getRule, updateRuleStatus } from "../../store/rules.ts";
+import {
+	deleteRulesByIds,
+	getRule,
+	updateRuleStatus,
+} from "../../store/rules.ts";
 
 /**
  * `abandoned` is reachable from anywhere and is terminal: it
@@ -17,8 +21,8 @@ export const LEGAL_TRANSITIONS: Record<RuleStatus, readonly RuleStatus[]> = {
 	abandoned: [],
 };
 
-export class RuleTransitionError extends Error {
-	override name = "RuleTransitionError";
+export class RuleLifecycleError extends Error {
+	override name = "RuleLifecycleError";
 }
 
 /** A same-state move is not a transition; callers that want idempotence must check first. */
@@ -39,7 +43,7 @@ function promotionLinkFor(
 ): string | null | undefined {
 	if (to === "proposed") {
 		if (!options?.promotionId) {
-			throw new RuleTransitionError(
+			throw new RuleLifecycleError(
 				`rule ${ruleId} cannot become proposed without a promotion id`,
 			);
 		}
@@ -57,9 +61,9 @@ function transitionWithin(
 	options?: { promotionId?: string },
 ): RuleRow {
 	const rule = getRule(db, ruleId);
-	if (!rule) throw new RuleTransitionError(`no rule with id ${ruleId}`);
+	if (!rule) throw new RuleLifecycleError(`no rule with id ${ruleId}`);
 	if (!canTransition(rule.status, to)) {
-		throw new RuleTransitionError(
+		throw new RuleLifecycleError(
 			`rule ${ruleId} cannot move from ${rule.status} to ${to}`,
 		);
 	}
@@ -67,7 +71,7 @@ function transitionWithin(
 	updateRuleStatus(db, ruleId, to, link, now.toISOString());
 	const after = getRule(db, ruleId);
 	if (!after)
-		throw new RuleTransitionError(`rule ${ruleId} vanished mid-transition`);
+		throw new RuleLifecycleError(`rule ${ruleId} vanished mid-transition`);
 	return after;
 }
 
@@ -93,4 +97,37 @@ export function transitionRules(
 	return db.transaction(() =>
 		ruleIds.map((id) => transitionWithin(db, id, to, now, options)),
 	)();
+}
+
+/**
+ * Destroying a rule is a second, deliberate act on one already parked, so only
+ * an `abandoned` rule may go: it is the status nothing follows, and therefore
+ * the only one where deleting interrupts nothing.
+ *
+ * The forgetting is total — no tombstone and no audit row. A promotion the rule
+ * belonged to keeps its own row even when that empties it, because its pull
+ * request was opened on GitHub whatever became of the rules that went into it.
+ *
+ * All or nothing, like `transitionRules`: one rule that may not go takes the
+ * whole selection with it.
+ */
+export function deleteRules(db: Database, ruleIds: string[]): RuleRow[] {
+	if (ruleIds.length === 0) return [];
+	return db.transaction(() => {
+		const rows = ruleIds.map((id) => {
+			const rule = getRule(db, id);
+			if (!rule) throw new RuleLifecycleError(`no rule with id ${id}`);
+			if (rule.status !== "abandoned") {
+				throw new RuleLifecycleError(
+					`rule ${id} is ${rule.status}, and only an abandoned rule can be deleted`,
+				);
+			}
+			return rule;
+		});
+		deleteRulesByIds(
+			db,
+			rows.map((rule) => rule.id),
+		);
+		return rows;
+	})();
 }

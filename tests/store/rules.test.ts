@@ -7,6 +7,7 @@ import {
 	countRulesByPromotionIds,
 	countRulesByStatus,
 	deleteDraftRulesForEntry,
+	deleteRulesByIds,
 	getRule,
 	insertRules,
 	listRules,
@@ -274,6 +275,36 @@ describe("deleteDraftRulesForEntry", () => {
 
 	test("returns 0 when the entry has no drafts", () => {
 		expect(deleteDraftRulesForEntry(db, entry.id)).toBe(0);
+	});
+});
+
+describe("deleteRulesByIds", () => {
+	test("removes exactly the ids it was given and reports how many went", () => {
+		const rows = insertRules(
+			db,
+			repo.id,
+			entry.id,
+			[
+				newRule({ directive: "one", file_slug: "d1" }),
+				newRule({ directive: "two", file_slug: "d2" }),
+				newRule({ directive: "three", file_slug: "d3" }),
+			],
+			SEED_NOW,
+		);
+		const [first, second] = rows;
+		if (!first || !second) throw new Error("missing rules");
+
+		expect(deleteRulesByIds(db, [first.id, second.id])).toBe(2);
+		expect(listRulesByEntry(db, entry.id).map((r) => r.directive)).toEqual([
+			"three",
+		]);
+	});
+
+	test("an id that is not there and an empty list are both no-ops", () => {
+		insertRules(db, repo.id, entry.id, [newRule()], SEED_NOW);
+		expect(deleteRulesByIds(db, ["ru_nope"])).toBe(0);
+		expect(deleteRulesByIds(db, [])).toBe(0);
+		expect(listRulesByEntry(db, entry.id)).toHaveLength(1);
 	});
 });
 

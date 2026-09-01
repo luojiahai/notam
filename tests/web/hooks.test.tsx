@@ -9,6 +9,7 @@ import type {
 } from "../../src/shared/api.ts";
 import {
 	useAnalyse,
+	useDeleteRules,
 	useEntry,
 	useRule,
 	useSetRuleStatus,
@@ -110,6 +111,21 @@ function RulePanel() {
 	);
 }
 
+function DeletablePanel() {
+	const rule = useRule("r1");
+	const remove = useDeleteRules();
+	return (
+		<div>
+			<span data-testid="status">
+				{rule.error ? "gone" : (rule.data?.status ?? "loading")}
+			</span>
+			<button type="button" onClick={() => remove.mutate(["r1"])}>
+				delete
+			</button>
+		</div>
+	);
+}
+
 function EntryPanel() {
 	const entry = useEntry("e1");
 	const analyse = useAnalyse();
@@ -153,6 +169,45 @@ describe("mutation invalidation reaches the detail queries", () => {
 		fireEvent.click(screen.getByRole("button", { name: "abandon" }));
 		await waitFor(() =>
 			expect(screen.getByTestId("status").textContent).toBe("abandoned"),
+		);
+	});
+
+	test("deleting a rule refetches an open rule detail that is now gone", async () => {
+		let deleted = false;
+		globalThis.fetch = ((input: unknown) => {
+			const path = String(input);
+			if (path === "/api/rules/delete") {
+				deleted = true;
+				return Promise.resolve(Response.json(["r1"]));
+			}
+			if (path === "/api/rules/r1") {
+				return Promise.resolve(
+					deleted
+						? Response.json(
+								{ error: { message: "No rule with id r1" } },
+								{ status: 404 },
+							)
+						: Response.json(ruleDetail("abandoned")),
+				);
+			}
+			return Promise.resolve(
+				new Response(`unexpected ${path}`, { status: 404 }),
+			);
+		}) as typeof fetch;
+
+		const queries = client();
+		render(
+			<QueryClientProvider client={queries}>
+				<DeletablePanel />
+			</QueryClientProvider>,
+		);
+
+		await waitFor(() =>
+			expect(screen.getByTestId("status").textContent).toBe("abandoned"),
+		);
+		fireEvent.click(screen.getByRole("button", { name: "delete" }));
+		await waitFor(() =>
+			expect(screen.getByTestId("status").textContent).toBe("gone"),
 		);
 	});
 

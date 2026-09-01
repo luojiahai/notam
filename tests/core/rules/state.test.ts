@@ -2,8 +2,9 @@ import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
 	canTransition,
+	deleteRules,
 	LEGAL_TRANSITIONS,
-	RuleTransitionError,
+	RuleLifecycleError,
 	transitionRule,
 	transitionRules,
 } from "../../../src/core/rules/state.ts";
@@ -13,7 +14,10 @@ import type {
 	RepoRow,
 	RuleStatus,
 } from "../../../src/shared/types.ts";
-import { insertPromotion } from "../../../src/store/promotions.ts";
+import {
+	getPromotion,
+	insertPromotion,
+} from "../../../src/store/promotions.ts";
 import { getRule, insertRules } from "../../../src/store/rules.ts";
 import { SEED_NOW, seedDatabase } from "../../helpers/seed.ts";
 
@@ -101,7 +105,7 @@ describe("transitionRule", () => {
 	test("draft -> proposed without a promotion id is refused", () => {
 		const rule = draft();
 		expect(() => transitionRule(db, rule.id, "proposed", LATER)).toThrow(
-			RuleTransitionError,
+			RuleLifecycleError,
 		);
 		expect(getRule(db, rule.id)?.status).toBe("draft");
 	});
@@ -136,7 +140,7 @@ describe("transitionRule", () => {
 		const rule = draft();
 		transitionRule(db, rule.id, "abandoned", LATER);
 		expect(() => transitionRule(db, rule.id, "draft", LATER)).toThrow(
-			RuleTransitionError,
+			RuleLifecycleError,
 		);
 	});
 
@@ -164,7 +168,7 @@ describe("transitionRules", () => {
 
 		expect(() =>
 			transitionRules(db, [a.id, b.id], "proposed", LATER, { promotionId }),
-		).toThrow(RuleTransitionError);
+		).toThrow(RuleLifecycleError);
 		// a must not have moved: a half-promoted selection is exactly the
 		// half-committed state promotion forbids.
 		expect(getRule(db, a.id)?.status).toBe("draft");
@@ -172,5 +176,57 @@ describe("transitionRules", () => {
 
 	test("an empty list is a no-op", () => {
 		expect(transitionRules(db, [], "abandoned", LATER)).toEqual([]);
+	});
+});
+
+describe("deleteRules", () => {
+	function at(status: RuleStatus, slug: string) {
+		const rule = draft({ directive: slug, file_slug: slug });
+		if (status !== "draft") {
+			transitionRule(db, rule.id, "proposed", LATER, { promotionId });
+		}
+		if (status === "verified" || status === "abandoned") {
+			transitionRule(db, rule.id, status, LATER);
+		}
+		return rule;
+	}
+
+	test("removes every abandoned rule in the selection", () => {
+		const a = at("abandoned", "a");
+		const b = at("abandoned", "b");
+		const gone = deleteRules(db, [a.id, b.id]);
+		expect(gone.map((rule) => rule.id)).toEqual([a.id, b.id]);
+		expect(getRule(db, a.id)).toBeNull();
+		expect(getRule(db, b.id)).toBeNull();
+	});
+
+	test("a rule in any other status takes the whole batch with it", () => {
+		for (const status of ["draft", "proposed", "verified"] as RuleStatus[]) {
+			const keeper = at("abandoned", `keeper-${status}`);
+			const live = at(status, `live-${status}`);
+
+			expect(() => deleteRules(db, [keeper.id, live.id])).toThrow(
+				RuleLifecycleError,
+			);
+			expect(getRule(db, keeper.id)).not.toBeNull();
+			expect(getRule(db, live.id)?.status).toBe(status);
+		}
+	});
+
+	test("an unknown rule id takes the whole batch with it", () => {
+		const rule = at("abandoned", "survivor");
+		expect(() => deleteRules(db, [rule.id, "ru_nope"])).toThrow(/ru_nope/);
+		expect(getRule(db, rule.id)).not.toBeNull();
+	});
+
+	test("an empty list is a no-op", () => {
+		expect(deleteRules(db, [])).toEqual([]);
+	});
+
+	test("the promotion a deleted rule was in survives with no members left", () => {
+		const rule = at("abandoned", "promoted");
+		expect(getRule(db, rule.id)?.promotion_id).toBe(promotionId);
+		deleteRules(db, [rule.id]);
+		expect(getPromotion(db, promotionId)?.pr_number).toBe(7);
 	});
 });

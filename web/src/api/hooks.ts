@@ -269,6 +269,24 @@ export function useSetRuleStatus() {
 	});
 }
 
+/**
+ * Permanent, and only ever offered for rules already abandoned. It answers with
+ * the ids it destroyed, so there is nothing to seed a cache from — the
+ * invalidations below are the whole update.
+ */
+export function useDeleteRules() {
+	const client = useQueryClient();
+	return useMutation<string[], Error, string[]>({
+		mutationFn: (ruleIds) =>
+			post(z.array(z.string()), "/api/rules/delete", { rule_ids: ruleIds }),
+		onSuccess: () => {
+			void client.invalidateQueries({ queryKey: ["rules"] });
+			void client.invalidateQueries({ queryKey: ["rule"] });
+			void client.invalidateQueries({ queryKey: queryKeys.repos });
+		},
+	});
+}
+
 export function usePlanPromotion() {
 	return useMutation<PromotionPlanView, Error, string[]>({
 		mutationFn: (ruleIds) =>

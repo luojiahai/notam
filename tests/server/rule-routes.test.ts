@@ -136,6 +136,69 @@ describe("rule routes", () => {
 		harness.close();
 	});
 
+	test("POST /api/rules/delete removes an abandoned selection and publishes a rules event", async () => {
+		const harness = testContext();
+		const rules = seedRules(harness);
+		const ids = rules.map((rule) => rule.id);
+		await harness.app.request("/api/rules/status", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: ids, status: "abandoned" }),
+		});
+		let rulesEvents = 0;
+		harness.ctx.bus.subscribe((event) => {
+			if (event.type === "rules") rulesEvents++;
+		});
+		const response = await harness.app.request("/api/rules/delete", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: ids }),
+		});
+		expect(response.status).toBe(200);
+		const returned = (await response.json()) as string[];
+		expect(returned.toSorted()).toEqual(ids.toSorted());
+		for (const id of ids) expect(getRule(harness.db, id)).toBeNull();
+		expect(rulesEvents).toBe(1);
+		harness.close();
+	});
+
+	test("deleting a rule that is not abandoned is a 409 and removes nothing", async () => {
+		const harness = testContext();
+		const rules = seedRules(harness);
+		const ids = rules.map((rule) => rule.id);
+		const response = await harness.app.request("/api/rules/delete", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: ids }),
+		});
+		expect(response.status).toBe(409);
+		const body = (await response.json()) as { error: { message: string } };
+		expect(body.error.message).toContain("only an abandoned rule");
+		expect(getRule(harness.db, ids[0] as string)?.status).toBe("draft");
+		harness.close();
+	});
+
+	test("deleting an unknown rule id is a 404 in the shared envelope, and removes nothing", async () => {
+		const harness = testContext();
+		const rules = seedRules(harness);
+		const ids = rules.map((rule) => rule.id);
+		await harness.app.request("/api/rules/status", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: ids, status: "abandoned" }),
+		});
+		const response = await harness.app.request("/api/rules/delete", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ rule_ids: [...ids, "ru_nope"] }),
+		});
+		expect(response.status).toBe(404);
+		const body = (await response.json()) as { error: { message: string } };
+		expect(body.error.message).toBe("No rule with id ru_nope");
+		expect(getRule(harness.db, ids[0] as string)?.status).toBe("abandoned");
+		harness.close();
+	});
+
 	test("an illegal transition is a 409 and changes nothing", async () => {
 		const harness = testContext();
 		const rules = seedRules(harness);

@@ -6,7 +6,7 @@ import {
 } from "../core/config/load.ts";
 import { GitHubError } from "../core/github/client.ts";
 import { PromotionError } from "../core/promotion/index.ts";
-import { RuleTransitionError } from "../core/rules/state.ts";
+import { RuleLifecycleError } from "../core/rules/state.ts";
 import { formatZodError } from "../shared/zod.ts";
 
 export class HttpError extends Error {
@@ -42,7 +42,7 @@ export function statusFor(error: unknown): number {
 	if (error instanceof HttpError) return error.status;
 	if (error instanceof z.ZodError) return 400;
 	if (error instanceof PromotionError) return 400;
-	if (error instanceof RuleTransitionError) return 409;
+	if (error instanceof RuleLifecycleError) return 409;
 	if (error instanceof ConfigValidationError) return 400;
 	if (error instanceof ConfigConflictError) return 409;
 	if (error instanceof GitHubError) return 502;
